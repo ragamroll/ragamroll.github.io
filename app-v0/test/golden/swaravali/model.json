@@ -1,0 +1,3304 @@
+[
+  {
+    "type": "raga",
+    "key": [
+      "c12",
+      "0"
+    ]
+  },
+  {
+    "type": "tala",
+    "props": {
+      "tala": [
+        8,
+        [
+          1,
+          5,
+          7
+        ]
+      ],
+      "beat": 4,
+      "measure": 32,
+      "accents": [
+        1,
+        17,
+        25
+      ]
+    }
+  },
+  {
+    "type": "tala",
+    "props": {
+      "tala": [
+        8,
+        [
+          1,
+          5,
+          7
+        ]
+      ],
+      "beat": 1,
+      "measure": 8,
+      "accents": [
+        1,
+        5,
+        7
+      ]
+    }
+  },
+  {
+    "type": "raga",
+    "key": [
+      "c12",
+      "0"
+    ]
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 2,
+    "midi": 67,
+    "absLen": 2
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 2,
+    "midi": 65,
+    "absLen": 2
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 2,
+    "midi": 71,
+    "absLen": 2
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 2,
+    "midi": 61,
+    "absLen": 2
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 2,
+    "midi": 67,
+    "absLen": 2
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 4,
+    "midi": 67,
+    "absLen": 4
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 4,
+    "midi": 67,
+    "absLen": 4
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 2,
+    "midi": 72,
+    "absLen": 2
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 2,
+    "midi": 71,
+    "absLen": 2
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 2,
+    "midi": 68,
+    "absLen": 2
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 2,
+    "midi": 67,
+    "absLen": 2
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 2,
+    "midi": 67,
+    "absLen": 2
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 2,
+    "midi": 67,
+    "absLen": 2
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 2,
+    "midi": 67,
+    "absLen": 2
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "P",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 2,
+    "midi": 64,
+    "absLen": 2
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 2,
+    "midi": 67,
+    "absLen": 2
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 2,
+    "midi": 68,
+    "absLen": 2
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 2,
+    "midi": 67,
+    "absLen": 2
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 2,
+    "midi": 67,
+    "absLen": 2
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 2,
+    "midi": 67,
+    "absLen": 2
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 2,
+    "midi": 67,
+    "absLen": 2
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "n",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 70,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 2,
+    "midi": 72,
+    "absLen": 2
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "s",
+    "octave": 6,
+    "relLen": 1,
+    "midi": 72,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "N",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 71,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "d",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 68,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "p",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 67,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "m",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 65,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "G",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 64,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "r",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 61,
+    "absLen": 1
+  },
+  {
+    "type": "note",
+    "swara": "S",
+    "octave": 5,
+    "relLen": 1,
+    "midi": 60,
+    "absLen": 1
+  }
+]

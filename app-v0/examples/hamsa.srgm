@@ -1,0 +1,32 @@
+
+% Lines starting with % are comments and are ignored
+
+% Vathapi Ganapathim Bhaje
+
+% Jfugue tempo and instrument
+T160 I[ALTO_SAX] 
+
+% All talas in their default jati are supported
+Tala=adi,4
+
+% A limited set of ragas are only supported. However using C12 notation
+% all ragas can be notated. 
+Raga=hamsadhwani,4
+
+% Set the octave to 5 and unit length to 1
+L=1 O=5
+
+% empty measure to get prepared
+z32
+G6 R4 R2                   S2 <N2          P3 >R3 <N2 >R4 S <N >S R
+G2 S R G P G4 R2           G R S <N        P3 >R3 <N2 >R4 S <N >S R
+G4 P2        G4 R2         G R S <N        P3 >R3 <N2 >R4 S <N >S R
+G P G G R S R G R R S <N  >G R S <N        P3 >R3 <N2 >R4 S <N >S R
+G2 P2 N2 P2 G2 R2          G R S <N        P3 >R3 <N2 >R4 S <N >S R
+G P N >S R2 S R S <N P P   G R S <N        P3 >R3 <N2 >R4 S <N >S R
+G P N >S R G G R S <N P P  G R S <N        P3 >R3 <N2 >R4 S <N >S R
+G2 R2 G2 P6 N4 				   >S R S <N P2 G P G R3 S <N >S R
+G2 R2 G2 P6 P N >S R G R S R S <N >S <N P G N P G R S R
+>G4 R2 S <N P2 G R G R S <N                P3 >R3 <N2 >R4 S <N >S R
+G12 G R R S R14 <N2
+>S32

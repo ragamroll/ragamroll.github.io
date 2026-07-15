@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RagaM-Roll</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <meta name="theme-color" content="#1a1a1a" />
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; background:#1a1a1a; color:#eee; }
+    .toolbar { display:flex; gap:.5rem; align-items:center; padding:.5rem; border-bottom:1px solid #333; }
+    .toolbar .readout { margin-left:auto; opacity:.7; font-size:.85rem; }
+    .diagnostics { margin:.5rem; padding:.5rem; border:1px solid #a63; border-radius:4px; background:#241a10; color:#eda; font-size:.85rem; }
+    .diagnostics ul { margin:.25rem 0 0; padding-left:1.25rem; }
+    .cols { display:grid; grid-template-columns:1fr 1fr; gap:.5rem; padding:.5rem; }
+    .editor, .pane {
+      font-family: ui-monospace, "Menlo", "Consolas", monospace;
+      font-size: 15px; line-height: 1.2; white-space: pre; overflow:auto;
+      background:#111; color:#eee; border:1px solid #333; border-radius:4px;
+      padding:.5rem; height: 45vh; margin:0;
+    }
+    .editor { width:100%; resize:none; }
+    .pane.notation { margin:.5rem; height:auto; max-height:35vh; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module" src="./app.js"></script>
+  <script type="module">
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
+  </script>
+</body>
+</html>
