@@ -53,6 +53,12 @@ export function formatIntervals(c12swaras) {
   return swaraIntervals(c12swaras).map((e) => `${e.swara}=${e.delta}`).join(' ');
 }
 
+// Zero-pad a single-digit mela raga name so string sorting is numeric:
+// mela_1 -> mela_01, mela_10 unchanged, non-mela names unchanged.
+export function padMelaName(name) {
+  return String(name).replace(/^(mela_)(\d)$/, '$10$2');
+}
+
 export function formatTala(entry) {
   if (!entry) return '';
   const [aksharas, accents] = entry;

@@ -17,17 +17,26 @@
     .transport button:disabled { opacity:.4; cursor:default; }
     .diagnostics { margin:.5rem; padding:.5rem; border:1px solid #a63; border-radius:4px; background:#241a10; color:#eda; font-size:.85rem; }
     .diagnostics ul { margin:.25rem 0 0; padding-left:1.25rem; }
-    .reference { border-bottom:1px solid #333; max-height:45vh; overflow:auto; padding:.5rem; }
-    .reference-head { display:flex; justify-content:space-between; align-items:center; }
-    .reference-body { display:grid; grid-template-columns:2fr 1fr; gap:1rem; }
-    .reference h4 { margin:.4rem 0; }
-    .reference input[type=search] { width:100%; margin-bottom:.4rem; }
+    .dialog-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.6);
+      display:flex; align-items:flex-start; justify-content:center; padding:4vh 1rem; z-index:1000; }
+    .dialog-box { background:#1a1a1a; border:1px solid #444; border-radius:6px;
+      width:min(760px,100%); max-height:88vh; display:flex; flex-direction:column;
+      box-shadow:0 8px 40px rgba(0,0,0,.6); }
+    .dialog-head { display:flex; justify-content:space-between; align-items:center;
+      padding:.6rem .8rem; border-bottom:1px solid #333; }
+    .dialog-head button { cursor:pointer; background:#333; color:#eee; border:1px solid #555; border-radius:4px; }
+    .dialog-body { overflow:auto; padding:.5rem .8rem; }
+    .dialog-search { width:100%; padding:.35rem .5rem; margin-bottom:.4rem;
+      background:#111; color:#eee; border:1px solid #444; border-radius:4px; }
+    .dialog-count { opacity:.6; font-size:.8rem; margin-bottom:.3rem; }
     .ref-list { list-style:none; margin:0; padding:0; font-family:ui-monospace,monospace; font-size:13px; }
-    .ref-list li { display:grid; grid-template-columns:9rem 1fr; gap:.3rem 1rem; padding:.15rem 0; border-bottom:1px solid #222; }
+    .ref-list li { display:grid; grid-template-columns:10rem 1fr; column-gap:.8rem;
+      padding:.3rem 0; border-bottom:1px solid #222; align-items:baseline; }
+    .ref-cols { display:flex; flex-direction:column; gap:.1rem; overflow-x:auto; }
     .ref-name { font-weight:bold; }
     .ref-seq { color:#9cf; }
-    .ref-map { color:#9c9; grid-column:2; }
-    .ref-int { color:#cc9; grid-column:2; }
+    .ref-map { color:#9c9; }
+    .ref-int { color:#cc9; }
     .cols { display:grid; grid-template-columns:1fr 1fr; gap:.5rem; padding:.5rem; }
     .editor, .pane {
       font-family: ui-monospace, "Menlo", "Consolas", monospace;
