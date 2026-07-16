@@ -1,15 +1,16 @@
 import { h, render } from './vendor/preact.module.js';
 import { useState, useEffect, useMemo, useCallback, useRef } from './vendor/hooks.module.js';
 import { html } from './vendor/htm-preact.js';
-import { parse } from './core/parser.js';
+import { parse, TALA_MAP } from './core/parser.js';
 import { seqToLine } from './core/renderers/notation.js';
 import { seqToRoll } from './core/renderers/roll.js';
-import { setRagas } from './core/raga-base.js';
+import { setRagas, getRagas } from './core/raga-base.js';
 import { Editor } from './components/Editor.js';
 import { NotationPane } from './components/NotationPane.js';
 import { RollPane } from './components/RollPane.js';
 import { Toolbar } from './components/Toolbar.js';
 import { Diagnostics } from './components/Diagnostics.js';
+import { ReferencePanel } from './components/ReferencePanel.js';
 import { buildSequence } from './core/midi/sequence.js';
 import { writeSMF } from './core/midi/smf.js';
 import { createPlayer } from './audio/player.js';
@@ -137,9 +138,16 @@ function App() {
 
   useEffect(() => () => { cancelAnimationFrame(rafRef.current); playerRef.current?.dispose(); }, []);
 
+  // --- Read-only raga/tala reference browser ---
+  const [showReference, setShowReference] = useState(false);
+  const onToggleReference = useCallback(() => setShowReference((v) => !v), []);
+
   return html`
     <${Toolbar} raga=${raga} tala=${tala} examples=${EXAMPLES}
-                onOpen=${onOpen} onSave=${onSave} onExportMidi=${onExportMidi} onExample=${onExample} />
+                onOpen=${onOpen} onSave=${onSave} onExportMidi=${onExportMidi} onExample=${onExample}
+                onToggleReference=${onToggleReference} />
+    ${showReference && html`<${ReferencePanel} ragas=${getRagas()} talas=${TALA_MAP}
+                                               onClose=${() => setShowReference(false)} />`}
     <${Transport} state=${playState} canPlay=${noteCount > 0}
                   onPlay=${onPlay} onPause=${onPause} onStop=${onStop} />
     <${Diagnostics} items=${model.diagnostics} />

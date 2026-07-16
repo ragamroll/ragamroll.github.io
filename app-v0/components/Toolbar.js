@@ -1,8 +1,9 @@
 import { html } from '../vendor/htm-preact.js';
-export function Toolbar({ raga, tala, onOpen, onSave, onExportMidi, examples, onExample }) {
+export function Toolbar({ raga, tala, onOpen, onSave, onExportMidi, examples, onExample, onToggleReference }) {
   return html`<div class="toolbar">
     <button onClick=${onSave}>Save</button>
     <button onClick=${onExportMidi}>Export MIDI</button>
+    <button onClick=${onToggleReference}>Ragas & Talas</button>
     <label class="fileopen">Open
       <input type="file" accept=".srgm,.txt" style="display:none"
         onChange=${e => e.target.files[0] && onOpen(e.target.files[0])} />

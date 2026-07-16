@@ -17,6 +17,16 @@
     .transport button:disabled { opacity:.4; cursor:default; }
     .diagnostics { margin:.5rem; padding:.5rem; border:1px solid #a63; border-radius:4px; background:#241a10; color:#eda; font-size:.85rem; }
     .diagnostics ul { margin:.25rem 0 0; padding-left:1.25rem; }
+    .reference { border-bottom:1px solid #333; max-height:45vh; overflow:auto; padding:.5rem; }
+    .reference-head { display:flex; justify-content:space-between; align-items:center; }
+    .reference-body { display:grid; grid-template-columns:2fr 1fr; gap:1rem; }
+    .reference h4 { margin:.4rem 0; }
+    .reference input[type=search] { width:100%; margin-bottom:.4rem; }
+    .ref-list { list-style:none; margin:0; padding:0; font-family:ui-monospace,monospace; font-size:13px; }
+    .ref-list li { display:grid; grid-template-columns:9rem 1fr; gap:.3rem 1rem; padding:.15rem 0; border-bottom:1px solid #222; }
+    .ref-name { font-weight:bold; }
+    .ref-seq { color:#9cf; }
+    .ref-map { color:#9c9; grid-column:2; }
     .cols { display:grid; grid-template-columns:1fr 1fr; gap:.5rem; padding:.5rem; }
     .editor, .pane {
       font-family: ui-monospace, "Menlo", "Consolas", monospace;
