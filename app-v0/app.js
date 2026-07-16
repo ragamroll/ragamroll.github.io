@@ -83,6 +83,11 @@ function App() {
   const notationRef = useRef(null);
   const rafRef = useRef(0);
   const [playState, setPlayState] = useState('stopped');
+  // Playback-only: drops tala events from the player schedule on the next
+  // Play-from-stopped. Does not affect MIDI export, rendering, or timeline
+  // length (totalSeconds is melody-cursor-based).
+  const [talaMuted, setTalaMuted] = useState(false);
+  const onToggleTalaMute = useCallback(() => setTalaMuted(m => !m), []);
 
   const noteCount = useMemo(() => model.events.filter(e => e.type === 'note' && !e.rest).length, [model]);
 
@@ -116,7 +121,9 @@ function App() {
         const seq = buildSequence(model);
         if (totalSeconds(seq) <= 0) return;
         player.onended = () => onStop();
-        player.load(scheduleEvents(seq), totalSeconds(seq));
+        // Mute filters the schedule only; totalSeconds stays unchanged so the
+        // timeline/scroll behaves identically with tala muted or audible.
+        player.load(scheduleEvents(seq).filter(e => !(talaMuted && e.track === 'tala')), totalSeconds(seq));
       }
       await player.play();
       setPlayState('playing');
@@ -128,7 +135,7 @@ function App() {
       console.error('playback failed', e);
       onStop();
     }
-  }, [model, playState, loop, onStop]);
+  }, [model, playState, loop, onStop, talaMuted]);
 
   const onPause = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
@@ -151,7 +158,8 @@ function App() {
     ${dialog && html`<${ReferenceDialog} mode=${dialog} ragas=${getRagas()} talas=${TALA_MAP}
                                          onClose=${onCloseDialog} />`}
     <${Transport} state=${playState} canPlay=${noteCount > 0}
-                  onPlay=${onPlay} onPause=${onPause} onStop=${onStop} />
+                  onPlay=${onPlay} onPause=${onPause} onStop=${onStop}
+                  talaMuted=${talaMuted} onToggleTalaMute=${onToggleTalaMute} />
     <${Diagnostics} items=${model.diagnostics} />
     <div class="cols">
       <${Editor} value=${text} onInput=${setText} />
