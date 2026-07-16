@@ -5,12 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>RagaM-Roll</title>
   <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icons/icon-192.png" />
   <meta name="theme-color" content="#1a1a1a" />
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; font-family: system-ui, sans-serif; background:#1a1a1a; color:#eee; }
     .toolbar { display:flex; gap:.5rem; align-items:center; padding:.5rem; border-bottom:1px solid #333; }
     .toolbar .readout { margin-left:auto; opacity:.7; font-size:.85rem; }
+    .transport { display:flex; gap:.4rem; align-items:center; padding:.35rem .5rem; border-bottom:1px solid #333; }
+    .transport button { font-size:1rem; padding:.15rem .5rem; cursor:pointer; }
+    .transport button:disabled { opacity:.4; cursor:default; }
     .diagnostics { margin:.5rem; padding:.5rem; border:1px solid #a63; border-radius:4px; background:#241a10; color:#eda; font-size:.85rem; }
     .diagnostics ul { margin:.25rem 0 0; padding-left:1.25rem; }
     .cols { display:grid; grid-template-columns:1fr 1fr; gap:.5rem; padding:.5rem; }

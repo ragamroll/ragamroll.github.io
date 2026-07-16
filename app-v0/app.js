@@ -1,5 +1,5 @@
 import { h, render } from './vendor/preact.module.js';
-import { useState, useEffect, useMemo, useCallback } from './vendor/hooks.module.js';
+import { useState, useEffect, useMemo, useCallback, useRef } from './vendor/hooks.module.js';
 import { html } from './vendor/htm-preact.js';
 import { parse } from './core/parser.js';
 import { seqToLine } from './core/renderers/notation.js';
@@ -12,6 +12,10 @@ import { Toolbar } from './components/Toolbar.js';
 import { Diagnostics } from './components/Diagnostics.js';
 import { buildSequence } from './core/midi/sequence.js';
 import { writeSMF } from './core/midi/smf.js';
+import { createPlayer } from './audio/player.js';
+import { scheduleEvents, totalSeconds } from './audio/schedule.js';
+import { scrollPos } from './audio/scroll.js';
+import { Transport } from './components/Transport.js';
 
 const EXAMPLES = ['swaravali', 'hamsa', 'vathapi'];
 const LS_KEY = 'ragamroll.srgm';
@@ -71,15 +75,79 @@ function App() {
     const r = await fetch(`./examples/${name}.srgm`); setDocName(baseName(name)); setText(await r.text());
   }, []);
 
+  // --- Playback: player instance, scroll refs, rAF loop, transport handlers ---
+  const playerRef = useRef(null);
+  if (!playerRef.current) playerRef.current = createPlayer('tone');
+  const rollRef = useRef(null);
+  const notationRef = useRef(null);
+  const rafRef = useRef(0);
+  const [playState, setPlayState] = useState('stopped');
+
+  const noteCount = useMemo(() => model.events.filter(e => e.type === 'note' && !e.rest).length, [model]);
+
+  const applyScroll = useCallback(() => {
+    const pos = playerRef.current.position();
+    for (const r of [rollRef.current, notationRef.current]) {
+      if (r) r.scrollTop = scrollPos(pos, r.scrollHeight, r.clientHeight);
+    }
+    return pos;
+  }, []);
+
+  // Idempotent: may fire from both the rAF pos>=1 guard and the backend's
+  // onended callback for the same end — cancel/stop/reset are all safe twice.
+  const onStop = useCallback(() => {
+    cancelAnimationFrame(rafRef.current);
+    playerRef.current.stop();
+    setPlayState('stopped');
+    for (const r of [rollRef.current, notationRef.current]) { if (r) r.scrollTop = 0; }
+  }, []);
+
+  const loop = useCallback(() => {
+    const pos = applyScroll();
+    if (pos >= 1) { onStop(); return; }
+    rafRef.current = requestAnimationFrame(loop);
+  }, [applyScroll, onStop]);
+
+  const onPlay = useCallback(async () => {
+    const player = playerRef.current;
+    try {
+      if (playState !== 'paused') { // stopped → build + load; paused → just resume
+        const seq = buildSequence(model);
+        if (totalSeconds(seq) <= 0) return;
+        player.onended = () => onStop();
+        player.load(scheduleEvents(seq), totalSeconds(seq));
+      }
+      await player.play();
+      setPlayState('playing');
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(loop);
+    } catch (e) {
+      // Tone.start()/play() can reject (e.g. AudioContext unlock denied);
+      // without this it'd be an unhandled rejection with UI stuck mid-state.
+      console.error('playback failed', e);
+      onStop();
+    }
+  }, [model, playState, loop, onStop]);
+
+  const onPause = useCallback(() => {
+    cancelAnimationFrame(rafRef.current);
+    playerRef.current.pause();
+    setPlayState('paused');
+  }, []);
+
+  useEffect(() => () => { cancelAnimationFrame(rafRef.current); playerRef.current?.dispose(); }, []);
+
   return html`
     <${Toolbar} raga=${raga} tala=${tala} examples=${EXAMPLES}
                 onOpen=${onOpen} onSave=${onSave} onExportMidi=${onExportMidi} onExample=${onExample} />
+    <${Transport} state=${playState} canPlay=${noteCount > 0}
+                  onPlay=${onPlay} onPause=${onPause} onStop=${onStop} />
     <${Diagnostics} items=${model.diagnostics} />
     <div class="cols">
       <${Editor} value=${text} onInput=${setText} />
-      <${RollPane} text=${roll} />
+      <${RollPane} text=${roll} scrollRef=${rollRef} />
     </div>
-    <${NotationPane} text=${notation} />
+    <${NotationPane} text=${notation} scrollRef=${notationRef} />
   `;
 }
 

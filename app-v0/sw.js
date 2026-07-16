@@ -1,9 +1,11 @@
-const CACHE = 'ragamroll-v2';
+const CACHE = 'ragamroll-v3';
 const ASSETS = [
   './', './index.html', './app.js', './manifest.webmanifest',
   './vendor/preact.module.js', './vendor/hooks.module.js', './vendor/htm.module.js', './vendor/htm-preact.js',
+  './vendor/tone.js',
   './components/Editor.js', './components/NotationPane.js', './components/RollPane.js', './components/Toolbar.js',
-  './components/Diagnostics.js',
+  './components/Diagnostics.js', './components/Transport.js',
+  './audio/schedule.js', './audio/scroll.js', './audio/backend.js', './audio/backends/tone.js', './audio/player.js',
   './core/parser.js', './core/tuning.js', './core/raga-base.js', './core/raga-base.json',
   './core/renderers/notation.js', './core/renderers/roll.js',
   './core/midi/gm.js', './core/midi/smf.js', './core/midi/sequence.js', './core/midi/tala.js',
