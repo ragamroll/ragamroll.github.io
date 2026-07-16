@@ -15,6 +15,14 @@ import { writeSMF } from './core/midi/smf.js';
 
 const EXAMPLES = ['swaravali', 'hamsa', 'vathapi'];
 const LS_KEY = 'ragamroll.srgm';
+const LS_NAME = 'ragamroll.docname';
+const DEFAULT_NAME = 'ragamroll';
+
+// Derive a document base-name (no extension) from an opened file / example name.
+function baseName(name) {
+  const stripped = String(name || '').replace(/\.[^./\\]+$/, '').trim();
+  return stripped || DEFAULT_NAME;
+}
 
 function useDebounced(value, ms) {
   const [v, setV] = useState(value);
@@ -24,9 +32,11 @@ function useDebounced(value, ms) {
 
 function App() {
   const [text, setText] = useState(() => localStorage.getItem(LS_KEY) || '');
+  const [docName, setDocName] = useState(() => localStorage.getItem(LS_NAME) || DEFAULT_NAME);
   const debounced = useDebounced(text, 150);
 
   useEffect(() => { localStorage.setItem(LS_KEY, text); }, [text]);
+  useEffect(() => { localStorage.setItem(LS_NAME, docName); }, [docName]);
 
   const model = useMemo(() => {
     try { return parse(debounced); } catch { return { events: [], seqProps: {}, diagnostics: [] }; }
@@ -38,25 +48,27 @@ function App() {
   const raga = useMemo(() => { const e = [...model.events].reverse().find(e => e.type === 'raga'); return e ? e.key.join(',') : ''; }, [model]);
   const tala = useMemo(() => { const e = [...model.events].reverse().find(e => e.type === 'tala'); return e ? `beat ${e.props.beat}` : ''; }, [model]);
 
-  const onOpen = useCallback(async (file) => setText(await file.text()), []);
+  // Opening a file / picking an example remembers its name, so Save and Export
+  // suggest the same base name instead of a fixed "ragamroll".
+  const onOpen = useCallback(async (file) => { setDocName(baseName(file.name)); setText(await file.text()); }, []);
   const onSave = useCallback(() => {
     const blob = new Blob([text], { type: 'text/plain' });
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = 'ragamroll.srgm'; a.click();
+    a.href = URL.createObjectURL(blob); a.download = docName + '.srgm'; a.click();
     URL.revokeObjectURL(a.href);
-  }, [text]);
+  }, [text, docName]);
   const onExportMidi = useCallback(() => {
     const bytes = writeSMF(buildSequence(model));
     const blob = new Blob([bytes], { type: 'audio/midi' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'ragamroll-' + new Date().toISOString().replace(/[:.]/g, '-') + '.mid';  // spec §4.5: timestamped export
+    a.download = docName + '.mid';
     a.click();
     URL.revokeObjectURL(a.href);
-  }, [model]);
+  }, [model, docName]);
   const onExample = useCallback(async (name) => {
     if (!name) return;
-    const r = await fetch(`./examples/${name}.srgm`); setText(await r.text());
+    const r = await fetch(`./examples/${name}.srgm`); setDocName(baseName(name)); setText(await r.text());
   }, []);
 
   return html`
