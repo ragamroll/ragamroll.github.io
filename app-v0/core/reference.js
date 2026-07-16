@@ -1,4 +1,6 @@
 // Pure formatters for the raga/tala reference browser. No DOM, no framework.
+import { PITCH_CLASS } from './tuning.js';
+
 const SWARA_ORDER = ['S', 'r', 'R', 'g', 'G', 'm', 'M', 'P', 'd', 'D', 'n', 'N'];
 const orderIndex = (s) => {
   const i = SWARA_ORDER.indexOf(s);
@@ -32,6 +34,23 @@ export function formatSwaraSeq(c12swaras) {
 
 export function formatRagaSwaras(c12swaras) {
   return ragaSwaras(c12swaras).map((e) => `${e.swara}=${e.note}`).join(' ');
+}
+
+// [{swara, delta}] — semitone distance of each swara above Sa, mod 12.
+// Built on ragaSwaras() so Z-exclusion, case-dedup, and canonical order are
+// shared and the intervals line up with the swara sequence / note map.
+export function swaraIntervals(c12swaras) {
+  const pc = (x) => PITCH_CLASS[x] ?? 0;
+  const saPc = pc(c12swaras?.S ?? 'C');
+  return ragaSwaras(c12swaras).map(({ swara, note }) => ({
+    swara,
+    delta: (pc(note) - saPc + 12) % 12,
+  }));
+}
+
+// "S=0 R=2 G=4 P=7 N=11" — swara=delta, space-joined. Empty/missing map -> "".
+export function formatIntervals(c12swaras) {
+  return swaraIntervals(c12swaras).map((e) => `${e.swara}=${e.delta}`).join(' ');
 }
 
 export function formatTala(entry) {

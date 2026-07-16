@@ -1,10 +1,10 @@
 import { html } from '../vendor/htm-preact.js';
 import { useState } from '../vendor/hooks.module.js';
-import { formatSwaraSeq, formatRagaSwaras, formatTala } from '../core/reference.js';
+import { formatSwaraSeq, formatRagaSwaras, formatIntervals, formatTala } from '../core/reference.js';
 
 export function ReferencePanel({ ragas, talas, onClose }) {
   const [q, setQ] = useState('');
-  const ragaNames = Object.keys(ragas || {}).sort();
+  const ragaNames = Object.keys(ragas || {}).sort((a, b) => a.localeCompare(b));
   const needle = q.trim().toLowerCase();
   const filtered = needle ? ragaNames.filter((n) => n.toLowerCase().includes(needle)) : ragaNames;
   const talaNames = Object.keys(talas || {});
@@ -24,6 +24,7 @@ export function ReferencePanel({ ragas, talas, onClose }) {
             <span class="ref-name">${n}</span>
             <span class="ref-seq">${formatSwaraSeq(ragas[n].C12_SWARAS)}</span>
             <span class="ref-map">${formatRagaSwaras(ragas[n].C12_SWARAS)}</span>
+            <span class="ref-int">${formatIntervals(ragas[n].C12_SWARAS)}</span>
           </li>`)}
         </ul>
       </section>
