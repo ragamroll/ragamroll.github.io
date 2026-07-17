@@ -14,8 +14,8 @@ Tala=adi,1
 % A limited set of ragas are only supported. However using C12 notation
 % all ragas can be notated. 
 
-% This is Raga Mayamalavagoula, pitch of Sa is set to C
-Raga=c12,0
+% This is Raga Mayamalavagowla, pitch of Sa is set to C
+Raga=Mayamalavagowla,0
 
 % Set the octave to 5 and unit length to 1
 L=1 O=5
@@ -23,59 +23,58 @@ L=1 O=5
 % empty measure to get prepared
 
 %1
-S r G m P d N >s		 s <N d P m G r S
+S R G M P D N >S		 S <N D P M G R S
 
 %3
-S r S r S r G m			 S r G m P d N >s
-s <N >s <N >s <N d P		 >s <N d P m G r S
+S R S R S R G M			 S R G M P D N >S
+S <N >S <N >S <N D P		 >S <N D P M G R S
 
 
 %7
-S r G S r G S r 		 S r G m P d N >s
-s <N d >s <N d >s <N 		 >s <N d P m G r S
+S R G S R G S R 		 S R G M P D N >S
+S <N D >S <N D >S <N 		 >S <N D P M G R S
 
 %11
-S r G m S r G m 		S r G m P d N >s
-s <N d P >s <N d P 		>s <N d P m G r S
+S R G M S R G M 		S R G M P D N >S
+S <N D P >S <N D P 		>S <N D P M G R S
 
 %15
-S r G m P2 S r	 		S r G m P d N >s
-s <N d P m2 >s <N 	       >s <N d P m G r S
+S R G M P2 S R	 		S R G M P D N >S
+S <N D P M2 >S <N 	       >S <N D P M G R S
 
 %19
-S r G m P d S r			S r G m P d N >s
-s <N d P m G  >s <N 		>s <N d P m G r S
+S R G M P D S R			S R G M P D N >S
+S <N D P M G  >S <N 		>S <N D P M G R S
 
 %23
-S r G m P d N2			S r G m P d N >s
-s <N d P m G r2 		>s <N d P m G r S
+S R G M P D N2			S R G M P D N >S
+S <N D P M G R2 		>S <N D P M G R S
 
 %27
-S r G m P m G r			S r G m P d N >s
-s <N d p m p d N		 >s <N d P m G r S
+S R G M P M G R			S R G M P D N >S
+S <N D P M P D N		 >S <N D P M G R S
 
 %31
-S r G m P m d P			S r G m P d N >s
-s <N d p m p G m		 >s <N d P m G r S
+S R G M P M D P			S R G M P D N >S
+S <N D P M P G M		 >S <N D P M G R S
 
 %35
-S r G m P2 G m 			P4 P4 
-G m P d N d P m			G m P G m G r S
+S R G M P2 G M 			P4 P4 
+G M P D N D P M			G M P G M G R S
 
 %39
->s2 <N d N2 d P			d2 p m p2 p2
-G m P d N d P m			G m P G m G r S
+>S2 <N D N2 D P			D2 P M P2 P2
+G M P D N D P M			G M P G M G R S
 
 %43
->s s <N d N N d P		d d p m p2 p2
-G m P d N d P m			G m P G m G r S
+>S S <N D N N D P		D D P M P2 P2
+G M P D N D P M			G M P G M G R S
 
 %47
-S r G r G2 G m 			p m p2 d p d2
-m p d p d N d p			m p d p m G r S
+S R G R G2 G M 			P M P2 D P D2
+M P D P D N D P			M P D P M G R S
 
 %51
-S r G m p2 p2			d d p2 m m p2
-d n >s2 s <N d p		>s <N d p m G r S
-
+S R G M P2 P2			D D P2 M M P2
+D N >S2 S <N D P		>S <N D P M G R S
 
