@@ -1,4 +1,4 @@
-const CACHE = 'ragamroll-a5e90ae';
+const CACHE = 'ragamroll-2ba2c9c';
 const ASSETS = [
   './', './index.html', './app.js', './version.js', './manifest.webmanifest',
   './vendor/preact.module.js', './vendor/hooks.module.js', './vendor/htm.module.js', './vendor/htm-preact.js',

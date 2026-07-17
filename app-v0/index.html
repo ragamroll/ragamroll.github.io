@@ -16,7 +16,6 @@
     .toolbar .readout { margin-left:auto; opacity:.7; font-size:.85rem; }
     .toolbar .app-badge { font-weight:bold; font-size:.95rem; background:#222; border:1px solid #444;
       border-radius:10px; padding:.12rem .55rem; margin-right:.25rem; }
-    .toolbar .app-badge .ver { color:#9cf; font-weight:normal; font-size:.78rem; font-family:ui-monospace,monospace; }
     .transport { display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; padding:.35rem .5rem; border-bottom:1px solid #333; }
     .transport button { font-size:1rem; padding:.15rem .5rem; cursor:pointer; }
     .transport button:disabled { opacity:.4; cursor:default; }
@@ -80,13 +79,13 @@
     .roll-line { white-space:pre; }    /* keep ascii columns aligned */
     .roll-line.active { background:#2b4; color:#111; }
     .footer { display:flex; gap:.6rem; align-items:center; padding:.35rem .6rem; border-top:1px solid #333; font-size:.75rem; opacity:.7; }
-    .footer .copyright { margin-left:auto; }
+    .footer .build { margin-left:auto; }  /* build timestamp + version, pushed right */
+    .footer .ver { color:#9cf; font-family:ui-monospace,monospace; }
     /* Mobile portrait: keep the toolbar uncrowded — no burger needed once Save/
        Export moved to the transport and Open+Examples merged. Readout drops to
-       its own line; the badge version collapses into the tooltip. */
+       its own line. The version now lives in the footer, shown at every width. */
     @media (max-width:560px) {
       .toolbar { flex-wrap:wrap; }
-      .toolbar .app-badge .ver { display:none; }
       .toolbar .readout { margin-left:0; flex-basis:100%; }
     }
   </style>
