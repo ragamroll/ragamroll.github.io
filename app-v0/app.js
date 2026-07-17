@@ -84,7 +84,7 @@ function App() {
     URL.revokeObjectURL(a.href);
   }, [model, docName]);
   const onExample = useCallback(async (name) => {
-    if (!name) return;
+    if (!name) { setExampleValue(''); return; }
     stopRef.current();
     const r = await fetch(`./examples/${name}.srgm`); setExampleValue(name); setDocName(baseName(name)); setText(await r.text());
   }, []);
