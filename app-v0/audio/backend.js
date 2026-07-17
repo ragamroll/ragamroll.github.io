@@ -14,6 +14,7 @@
  * @property {() => void} pause            // freeze; position() holds
  * @property {() => void} stop             // stop + reset position() to 0
  * @property {() => number} position       // 0..1 fraction of totalSec elapsed
+ * @property {() => number} latency        // output latency in seconds (for A/V sync compensation); 0 if unknown
  * @property {() => void} dispose          // release audio resources
  * @property {?(() => void)} onended       // fires exactly once when playback reaches the end; the backend then enters a stopped state and position() reads 1 until load()/stop() resets it
  */

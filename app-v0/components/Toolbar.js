@@ -1,6 +1,8 @@
 import { html } from '../vendor/htm-preact.js';
-export function Toolbar({ raga, tala, onOpen, onSave, onExportMidi, examples, onExample, onOpenRagas, onOpenTalas }) {
+import { VERSION } from '../version.js';
+export function Toolbar({ raga, tala, onOpen, onSave, onExportMidi, examples, exampleValue, onExample, onOpenRagas, onOpenTalas }) {
   return html`<div class="toolbar">
+    <span class="app-badge">RagaM-Roll <span class="ver">${VERSION}</span></span>
     <button onClick=${onSave}>Save</button>
     <button onClick=${onExportMidi}>Export MIDI</button>
     <button onClick=${onOpenRagas}>Ragas</button>
@@ -9,7 +11,7 @@ export function Toolbar({ raga, tala, onOpen, onSave, onExportMidi, examples, on
       <input type="file" accept=".srgm,.txt" style="display:none"
         onChange=${e => e.target.files[0] && onOpen(e.target.files[0])} />
     </label>
-    <select onChange=${e => onExample(e.target.value)}>
+    <select value=${exampleValue} onChange=${e => onExample(e.target.value)}>
       <option value="">Examples…</option>
       ${examples.map(x => html`<option value=${x}>${x}</option>`)}
     </select>

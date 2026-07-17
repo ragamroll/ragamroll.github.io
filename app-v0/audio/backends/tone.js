@@ -56,6 +56,13 @@ export function createToneBackend() {
       const s = transport().seconds;
       return s < 1e-6 ? 0 : Math.min(1, s / total);
     },
+    latency() {
+      // Output latency of the real AudioContext, for A/V sync compensation.
+      // Guarded: 0 when the context / fields are unavailable (e.g. old browsers).
+      const c = Tone.getContext && Tone.getContext();
+      const raw = c && c.rawContext;
+      return (raw && (raw.outputLatency ?? raw.baseLatency)) || 0;
+    },
     dispose() {
       const tr = transport();
       tr.cancel();
