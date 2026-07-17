@@ -229,13 +229,14 @@ function App() {
 
   return html`
     <${Toolbar} raga=${raga} tala=${tala} examples=${EXAMPLES} exampleValue=${exampleValue}
-                onOpen=${onOpen} onSave=${onSave} onExportMidi=${onExportMidi} onExample=${onExample}
+                onOpen=${onOpen} onExample=${onExample}
                 onOpenRagas=${onOpenRagas} onOpenTalas=${onOpenTalas} />
     ${dialog && html`<${ReferenceDialog} mode=${dialog} ragas=${getRagas()} talas=${TALA_MAP}
                                          onClose=${onCloseDialog} />`}
     <${Transport} state=${playState} canPlay=${noteCount > 0}
                   onPlay=${onPlay} onPause=${onPause} onStop=${onStop}
-                  talaMuted=${talaMuted} onToggleTalaMute=${onToggleTalaMute} />
+                  talaMuted=${talaMuted} onToggleTalaMute=${onToggleTalaMute}
+                  onSave=${onSave} onExportMidi=${onExportMidi} />
     <${Diagnostics} items=${model.diagnostics} />
     <div class="workspace" ref=${wsRef}>
       <div class="cols" ref=${colsRef}

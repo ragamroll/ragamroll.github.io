@@ -17,10 +17,23 @@
     .toolbar .app-badge { font-weight:bold; font-size:.95rem; background:#222; border:1px solid #444;
       border-radius:10px; padding:.12rem .55rem; margin-right:.25rem; }
     .toolbar .app-badge .ver { color:#9cf; font-weight:normal; font-size:.78rem; font-family:ui-monospace,monospace; }
-    .transport { display:flex; gap:.4rem; align-items:center; padding:.35rem .5rem; border-bottom:1px solid #333; }
+    .transport { display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; padding:.35rem .5rem; border-bottom:1px solid #333; }
     .transport button { font-size:1rem; padding:.15rem .5rem; cursor:pointer; }
     .transport button:disabled { opacity:.4; cursor:default; }
+    .transport .doc-btn { font-size:.85rem; }
+    .transport-play { display:flex; gap:.4rem; align-items:center; margin-left:auto; }  /* push playback to the right */
     .transport .tala-mute { font-size:.85rem; margin-left:.4rem; }
+    /* Unified Open ▾ menu */
+    .openmenu { position:relative; display:inline-flex; }
+    .openmenu-btn { cursor:pointer; }
+    .openmenu-pop { position:absolute; top:100%; left:0; margin-top:.25rem; z-index:900;
+      background:#1a1a1a; border:1px solid #444; border-radius:6px; min-width:11rem; padding:.25rem;
+      display:flex; flex-direction:column; box-shadow:0 8px 30px rgba(0,0,0,.5); }
+    .openmenu-item { display:block; width:100%; text-align:left; background:none; border:0; color:#eee;
+      padding:.35rem .5rem; border-radius:4px; cursor:pointer; font:inherit; }
+    .openmenu-item:hover { background:#2a2a3a; }
+    .openmenu-item.current { color:#9cf; }
+    .openmenu-sep { opacity:.5; font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; padding:.35rem .5rem .15rem; }
     .diagnostics { margin:.5rem; padding:.5rem; border:1px solid #a63; border-radius:4px; background:#241a10; color:#eda; font-size:.85rem; max-height:20vh; overflow:auto; }
     .diagnostics ul { margin:.25rem 0 0; padding-left:1.25rem; }
     .dialog-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.6);
@@ -62,6 +75,14 @@
     .roll-line.active { background:#2b4; color:#111; }
     .footer { display:flex; gap:.6rem; align-items:center; padding:.35rem .6rem; border-top:1px solid #333; font-size:.75rem; opacity:.7; }
     .footer .copyright { margin-left:auto; }
+    /* Mobile portrait: keep the toolbar uncrowded — no burger needed once Save/
+       Export moved to the transport and Open+Examples merged. Readout drops to
+       its own line; the badge version collapses into the tooltip. */
+    @media (max-width:560px) {
+      .toolbar { flex-wrap:wrap; }
+      .toolbar .app-badge .ver { display:none; }
+      .toolbar .readout { margin-left:0; flex-basis:100%; }
+    }
   </style>
 </head>
 <body>
