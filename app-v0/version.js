@@ -1,2 +1,2 @@
-export const VERSION = 'e102faa';
-export const BUILD_DATE = '2026-07-16';
+export const VERSION = 'a5e90ae+dirty';
+export const BUILD_DATE = '2026-07-17';

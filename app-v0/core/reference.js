@@ -53,6 +53,12 @@ export function formatIntervals(c12swaras) {
   return swaraIntervals(c12swaras).map((e) => `${e.swara}=${e.delta}`).join(' ');
 }
 
+// "0 2 4 7 11" — bare semitone deltas, space-joined. The swara-less form used
+// as the primary line in the raga browser. Empty/missing map -> "".
+export function formatIntervalNumbers(c12swaras) {
+  return swaraIntervals(c12swaras).map((e) => e.delta).join(' ');
+}
+
 // Zero-pad a single-digit mela raga name so string sorting is numeric:
 // mela_1 -> mela_01, mela_10 unchanged, non-mela names unchanged.
 export function padMelaName(name) {

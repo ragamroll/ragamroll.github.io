@@ -45,6 +45,12 @@
       padding:.6rem .8rem; border-bottom:1px solid #333; }
     .dialog-head button { cursor:pointer; background:#333; color:#eee; border:1px solid #555; border-radius:4px; }
     .dialog-body { overflow:auto; padding:.5rem .8rem; }
+    /* Sticky control strip: stays put while the raga list scrolls beneath it.
+       Negative margins + matching padding let its background cover the
+       dialog-body padding so scrolled rows never peek above it. Room here for
+       more filter controls later. */
+    .ref-controls { position:sticky; top:0; z-index:2; background:#1a1a1a;
+      margin:-.5rem -.8rem .35rem; padding:.5rem .8rem .1rem; }
     .dialog-search { width:100%; padding:.35rem .5rem; margin-bottom:.4rem;
       background:#111; color:#eee; border:1px solid #444; border-radius:4px; }
     .dialog-count { opacity:.6; font-size:.8rem; margin-bottom:.3rem; }

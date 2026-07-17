@@ -1,6 +1,6 @@
 import { html } from '../vendor/htm-preact.js';
 import { useState, useEffect } from '../vendor/hooks.module.js';
-import { formatSwaraSeq, formatRagaSwaras, formatIntervals, formatTala, padMelaName } from '../core/reference.js';
+import { formatSwaraSeq, formatIntervalNumbers, formatTala, padMelaName } from '../core/reference.js';
 
 // A read-only modal reference: mode 'ragas' shows a searchable raga list,
 // mode 'talas' shows the tala list. Closes on ✕, backdrop click, or Escape.
@@ -25,16 +25,17 @@ export function ReferenceDialog({ mode, ragas, talas, onClose }) {
       ? names.filter((n) => padMelaName(n).toLowerCase().includes(needle) || n.toLowerCase().includes(needle))
       : names;
     body = html`<div>
-      <input class="dialog-search" type="search" placeholder="filter ragas…" value=${q}
-             autofocus onInput=${(e) => setQ(e.target.value)} />
-      <div class="dialog-count">${filtered.length} / ${names.length} ragas</div>
+      <div class="ref-controls">
+        <input class="dialog-search" type="search" placeholder="filter ragas…" value=${q}
+               autofocus onInput=${(e) => setQ(e.target.value)} />
+        <div class="dialog-count">${filtered.length} / ${names.length} ragas</div>
+      </div>
       <ul class="ref-list">
         ${filtered.map((n) => html`<li key=${n}>
           <span class="ref-name">${padMelaName(n)}</span>
           <div class="ref-cols">
             <span class="ref-seq">${formatSwaraSeq(ragas[n].C12_SWARAS)}</span>
-            <span class="ref-map">${formatRagaSwaras(ragas[n].C12_SWARAS)}</span>
-            <span class="ref-int">${formatIntervals(ragas[n].C12_SWARAS)}</span>
+            <span class="ref-int">${formatIntervalNumbers(ragas[n].C12_SWARAS)}</span>
           </div>
         </li>`)}
       </ul>
