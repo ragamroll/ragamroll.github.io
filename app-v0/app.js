@@ -18,6 +18,7 @@ import { createPlayer } from './audio/player.js';
 import { scheduleEvents, totalSeconds, midiToFreq } from './audio/schedule.js';
 import { PITCH_CLASS } from './core/tuning.js';
 import { stepForLetter, stepFreq, P_STEP } from './core/shruti.js';
+import { melaOfScale } from './core/melakarta.js';
 import { scrollPos, playheadScroll } from './audio/scroll.js';
 import { buildRowTimes, rowAt } from './audio/rowtimes.js';
 import { Transport } from './components/Transport.js';
@@ -101,9 +102,21 @@ function App() {
 
   const notation = useMemo(() => { try { return seqToLine(model.events, 1, 3, true); } catch { return ''; } }, [model]);
   const roll = useMemo(() => { try { return seqToRoll(model.events, model.seqProps); } catch { return ''; } }, [model]);
+  // Tempo override (null = the composition's T directive, else 120). Applied by
+  // cloning the model with meta.tempo replaced, so audio (buildSequence) and the
+  // playhead (buildRowTimes) both use it and stay in sync.
+  const compositionTempo = useMemo(() => (model.meta?.tempo > 0 ? model.meta.tempo : 120), [model]);
+  const [tempoOverride, setTempoOverride] = useState(null);
+  const effectiveTempo = tempoOverride ?? compositionTempo;
+  const onTempo = useCallback((v) => { if (v >= 20 && v <= 400) setTempoOverride(v); }, []);
+  const onResetTempo = useCallback(() => setTempoOverride(null), []);
+  const effModel = useMemo(
+    () => (tempoOverride ? { ...model, meta: { ...model.meta, tempo: tempoOverride } } : model),
+    [model, tempoOverride]);
+
   // Exact audio start-second of each roll row (rests included) — the playhead's
-  // row->time map. Same source model as the audio, so the two can't drift.
-  const rowTimes = useMemo(() => { try { return buildRowTimes(model); } catch { return []; } }, [model]);
+  // row->time map. Same (tempo-effective) model as the audio, so the two can't drift.
+  const rowTimes = useMemo(() => { try { return buildRowTimes(effModel); } catch { return []; } }, [effModel]);
 
   const raga = useMemo(() => { const e = [...model.events].reverse().find(e => e.type === 'raga'); return e ? e.key.join(',') : ''; }, [model]);
   const tala = useMemo(() => { const e = [...model.events].reverse().find(e => e.type === 'tala'); return e ? `beat ${e.props.beat}` : ''; }, [model]);
@@ -188,6 +201,13 @@ function App() {
   const [timbre, setTimbre] = useState('soft-am');
   const onTimbre = useCallback((t) => setTimbre(t), []);
   const saBase = useMemo(() => saBaseOf(model, getRagas()), [model]);
+  // When a scale override is active, the toolbar shows IT (the mela) instead of
+  // the composition's raga — the pitches you actually hear.
+  const scaleLabel = useMemo(() => {
+    if (!scale) return null;
+    const m = melaOfScale(getRagas(), scale);
+    return m ? `${m.n} · ${m.name}` : 'custom';
+  }, [scale]);
   // Sa reference pitch: null = auto (the raga's natural Sa, MIDI 60+saBase, so
   // playback is unshifted and goldens/MIDI stay exact); a MIDI number pins Sa to
   // an absolute 12-EDO note and transposes all audio (melody+drone+retune) to it.
@@ -257,9 +277,9 @@ function App() {
     const player = playerRef.current;
     try {
       if (playState !== 'paused') { // stopped → build + load; paused → just resume
-        const seq = buildSequence(model);
+        const seq = buildSequence(effModel);
         if (totalSeconds(seq) <= 0) return;
-        applyPlaybackPitch(seq, model, scale, saBase, shift);   // scale override + Sa transpose (audio only)
+        applyPlaybackPitch(seq, effModel, scale, saBase, shift);   // scale override + Sa transpose (audio only)
         player.onended = () => onStop();
         // Tala keeps its own live-adjustable track volume — schedule every event
         // (even at 0) so raising the slider mid-playback brings the tala in.
@@ -279,7 +299,7 @@ function App() {
       console.error('playback failed', e);
       onStop();
     }
-  }, [model, rowTimes, playState, loop, onStop, talaLevel, scale, saBase, shift]);
+  }, [effModel, rowTimes, playState, loop, onStop, talaLevel, scale, saBase, shift]);
 
   const onPause = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
@@ -330,7 +350,7 @@ function App() {
     <${Toolbar} raga=${raga} tala=${tala} examples=${EXAMPLES} exampleValue=${exampleValue}
                 onOpen=${onOpen} onExample=${onExample}
                 onOpenRagas=${onOpenRagas} onOpenTalas=${onOpenTalas}
-                onOpenScale=${onOpenScale} scaleActive=${!!scale}
+                onOpenScale=${onOpenScale} scaleActive=${!!scale} scaleLabel=${scaleLabel}
                 timbre=${timbre} onTimbre=${onTimbre} />
     ${(dialog === 'ragas' || dialog === 'talas') && html`<${ReferenceDialog} mode=${dialog}
                                          ragas=${getRagas()} talas=${TALA_MAP} onClose=${onCloseDialog} />`}
@@ -339,6 +359,7 @@ function App() {
                                                  ragas=${getRagas()} />`}
     <${Transport} state=${playState} canPlay=${noteCount > 0}
                   onPlay=${onPlay} onPause=${onPause} onStop=${onStop}
+                  tempo=${effectiveTempo} onTempo=${onTempo} tempoOverridden=${tempoOverride != null} onResetTempo=${onResetTempo}
                   masterVol=${masterVol} onMasterVol=${onMasterVol}
                   melodyMuted=${melodyMuted} onToggleMelody=${onToggleMelody}
                   talaVol=${talaVol} onTalaVol=${onTalaVol} talaMuted=${talaMuted} onToggleTala=${onToggleTala}

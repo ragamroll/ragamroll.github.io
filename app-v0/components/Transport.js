@@ -5,10 +5,17 @@ import { html } from '../vendor/htm-preact.js';
 // margin-left:auto so it aligns above the roll it drives.
 const pct = (v) => Math.round(v * 100);
 
-export function Transport({ state, canPlay, onPlay, onPause, onStop, talaVol, onTalaVol, talaMuted, onToggleTala, melodyMuted, onToggleMelody, onSave, onExportMidi, droneVol, onDroneVol, droneMuted, onToggleDrone, masterVol, onMasterVol }) {
+export function Transport({ state, canPlay, onPlay, onPause, onStop, talaVol, onTalaVol, talaMuted, onToggleTala, melodyMuted, onToggleMelody, onSave, onExportMidi, droneVol, onDroneVol, droneMuted, onToggleDrone, masterVol, onMasterVol, tempo, onTempo, tempoOverridden, onResetTempo }) {
   return html`<span class="transport">
     <button class="doc-btn" title="Save the .srgm source" onClick=${onSave}>Save</button>
     <button class="doc-btn" title="Export the melody as a .mid file" onClick=${onExportMidi}>Export MIDI</button>
+    <label class=${'tempo' + (tempoOverridden ? ' on' : '')}
+           title="Tempo (BPM) — overrides the composition's tempo for playback (next play)">
+      ♩ <input type="number" min="20" max="400" step="1" value=${tempo}
+               onInput=${(e) => onTempo(Number(e.target.value))} />
+      ${tempoOverridden ? html`<button class="tempo-reset" title="Reset to composition tempo"
+                                        onClick=${onResetTempo}>↺</button>` : ''}
+    </label>
     <span class="transport-play">
       <button title="Play"  onClick=${onPlay}  disabled=${state === 'playing' || !canPlay}>▶</button>
       <button title="Pause" onClick=${onPause} disabled=${state !== 'playing'}>⏸</button>

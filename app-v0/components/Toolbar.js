@@ -6,7 +6,7 @@ const TIMBRES = [
   ['reed', 'Reed'],
 ];
 
-export function Toolbar({ raga, tala, onOpen, examples, exampleValue, onExample, onOpenRagas, onOpenTalas, onOpenScale, scaleActive, timbre, onTimbre }) {
+export function Toolbar({ raga, tala, onOpen, examples, exampleValue, onExample, onOpenRagas, onOpenTalas, onOpenScale, scaleActive, scaleLabel, timbre, onTimbre }) {
   return html`<div class="toolbar">
     <span class="app-badge">RagaM-Roll</span>
     <${OpenMenu} examples=${examples} exampleValue=${exampleValue} onOpen=${onOpen} onExample=${onExample} />
@@ -19,6 +19,8 @@ export function Toolbar({ raga, tala, onOpen, examples, exampleValue, onExample,
         ${TIMBRES.map(([v, label]) => html`<option key=${v} value=${v}>${label}</option>`)}
       </select>
     </label>
-    <span class="readout">raga: ${raga || '—'} · tala: ${tala || '—'}</span>
+    <span class="readout">${scaleLabel
+      ? html`<span class="ovr">scale: ${scaleLabel}</span>`
+      : html`raga: ${raga || '—'}`} · tala: ${tala || '—'}</span>
   </div>`;
 }
