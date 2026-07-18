@@ -18,6 +18,12 @@ export const PITCH_CLASS = {
   'B': 11, 'Cb': 11,
 };
 
+// MIDI -> note name, JFugue octave convention (C5 = 60). Sharps only.
+const SHARP_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+export function midiToName(midi) {
+  return SHARP_NAMES[((midi % 12) + 12) % 12] + Math.floor(midi / 12);
+}
+
 export function noteToMidi(name, octave, semitones = 0) {
   if (name == null || name === 'R') return 0;      // rest
   const pc = PITCH_CLASS[name];

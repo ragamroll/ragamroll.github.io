@@ -24,6 +24,10 @@
     .transport .vol { display:inline-flex; align-items:center; gap:.3rem; font-size:.8rem;
       margin-left:.5rem; white-space:nowrap; opacity:.9; }
     .transport .vol input[type=range] { width:5rem; cursor:pointer; accent-color:#6c9; }
+    .transport .vol .vol-toggle { font:inherit; font-size:.8rem; cursor:pointer; background:#2a2a2a;
+      color:#eee; border:1px solid #555; border-radius:4px; padding:.1rem .4rem; }
+    .transport .vol .vol-toggle[aria-pressed=true] { border-color:#6c9; color:#9fc; }
+    .transport .vol.muted input[type=range] { opacity:.4; accent-color:#777; }
     /* Unified Open ▾ menu */
     .openmenu { position:relative; display:inline-flex; }
     .openmenu-btn { cursor:pointer; }
@@ -65,29 +69,34 @@
     .ref-int { color:#cc9; }
     /* Scale ⚙ / Drone toggles */
     .toolbar .scale-btn.active { border-color:#6c9; color:#9fc; }
+    .toolbar .timbre { display:inline-flex; align-items:center; gap:.25rem; font-size:.9rem; }
+    .toolbar .timbre select { background:#222; color:#eee; border:1px solid #444; border-radius:4px;
+      padding:.15rem .3rem; font:inherit; cursor:pointer; }
     /* Experimental 53-EDO scale dialog */
-    .scale-box { width:min(880px,100%); }
-    .scale-hint { font-size:.8rem; opacity:.75; margin:.1rem 0 .6rem; }
-    .shruti-strip { display:flex; gap:3px; overflow-x:auto; padding:.2rem 0 .5rem; }
-    .shruti-box { flex:0 0 auto; min-width:2.6rem; display:flex; flex-direction:column; align-items:center;
-      gap:.1rem; padding:.3rem .2rem; border:1px solid #333; border-radius:5px; background:#141414;
-      color:#ddd; font:inherit; cursor:pointer; }
-    .shruti-box .sh-step { font-size:.62rem; opacity:.5; font-family:ui-monospace,monospace; }
-    .shruti-box .sh-name { font-size:.8rem; font-family:ui-monospace,monospace; }
-    .shruti-box .sh-alt  { font-size:.68rem; opacity:.55; font-family:ui-monospace,monospace; min-height:.8rem; }
-    .shruti-box .sh-mark { font-size:.72rem; font-weight:bold; min-height:1rem; color:#9fc; }
-    .shruti-box.r-rg { background:#12181a; }
-    .shruti-box.r-m  { background:#181416; }
-    .shruti-box.r-dn { background:#141810; }
-    .shruti-box.fixed { cursor:default; border-color:#555; }
-    .shruti-box.fixed .sh-mark { color:#777; }
-    .shruti-box:not(.fixed):hover { border-color:#66c; }
-    .shruti-box.picked { border-color:#6c9; background:#183028; color:#fff; }
-    .shruti-box.twin-off { opacity:.35; }
-    .scale-readout { font-family:ui-monospace,monospace; font-size:.9rem; margin:.3rem 0 .6rem;
-      display:flex; flex-direction:column; gap:.15rem; }
-    .scale-readout .lbl { display:inline-block; width:4.5rem; opacity:.55; font-size:.72rem; }
-    .scale-readout .val { color:#9fc; }
+    .scale-box { width:min(680px,96vw); }
+    .sa-pitch { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; margin:.1rem 0 .5rem;
+      padding-bottom:.5rem; border-bottom:1px solid #333; }
+    .sa-pitch label, .mela-row label { font-size:.9rem; }
+    .sa-pitch select, .mela-row select { margin-left:.35rem; background:#111; color:#eee; border:1px solid #444;
+      border-radius:4px; padding:.2rem .35rem; font:inherit; }
+    .sa-pitch .sa-note { font-size:.72rem; opacity:.6; }
+    /* Mela picker + a/b table */
+    .mela-row { display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; margin:.2rem 0 .6rem; }
+    .mela-row .mela-step { cursor:pointer; background:#2a2a2a; color:#eee; border:1px solid #555;
+      border-radius:4px; padding:.15rem .45rem; font:inherit; }
+    .mela-row .mela-step:disabled { opacity:.35; cursor:default; }
+    .mela-row .mela-chakra { font-size:.78rem; opacity:.6; margin-left:.2rem; }
+    .mela-table { border-collapse:collapse; width:100%; font-family:ui-monospace,monospace; margin:.2rem 0 .7rem; }
+    .mela-table th { text-align:right; font-weight:normal; opacity:.55; font-size:.72rem; padding:.2rem .5rem .2rem 0; }
+    .mela-table td { text-align:center; padding:.2rem .3rem; font-size:.85rem; }
+    .mela-table .mt-swara td { font-weight:bold; }
+    .mela-table .mt-variety td { color:#9fc; }
+    .mela-table .mt-edo td, .mela-table .mt-cents td { opacity:.7; font-size:.78rem; }
+    .mela-table .fixed-dot { opacity:.4; }
+    .mela-table .ab { display:inline-flex; gap:2px; }
+    .mela-table .ab-btn { cursor:pointer; background:#1a1a1a; color:#bbb; border:1px solid #444;
+      border-radius:3px; width:1.4rem; padding:.1rem 0; font:inherit; font-size:.78rem; }
+    .mela-table .ab-btn.on { background:#183028; border-color:#6c9; color:#cfe; }
     .scale-actions { display:flex; gap:.5rem; justify-content:flex-end; padding-top:.3rem; border-top:1px solid #333; }
     .scale-actions button { cursor:pointer; background:#2a2a2a; color:#eee; border:1px solid #555;
       border-radius:4px; padding:.3rem .7rem; }

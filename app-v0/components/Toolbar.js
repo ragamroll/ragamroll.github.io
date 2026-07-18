@@ -1,6 +1,12 @@
 import { html } from '../vendor/htm-preact.js';
 import { OpenMenu } from './OpenMenu.js';
-export function Toolbar({ raga, tala, onOpen, examples, exampleValue, onExample, onOpenRagas, onOpenTalas, onOpenScale, scaleActive }) {
+const TIMBRES = [
+  ['soft-am', 'Soft'],
+  ['bowed-fm', 'Bowed'],
+  ['reed', 'Reed'],
+];
+
+export function Toolbar({ raga, tala, onOpen, examples, exampleValue, onExample, onOpenRagas, onOpenTalas, onOpenScale, scaleActive, timbre, onTimbre }) {
   return html`<div class="toolbar">
     <span class="app-badge">RagaM-Roll</span>
     <${OpenMenu} examples=${examples} exampleValue=${exampleValue} onOpen=${onOpen} onExample=${onExample} />
@@ -8,6 +14,11 @@ export function Toolbar({ raga, tala, onOpen, examples, exampleValue, onExample,
     <button onClick=${onOpenTalas}>Talas</button>
     <button class=${'scale-btn' + (scaleActive ? ' active' : '')} onClick=${onOpenScale}
             title="Experimental: override the scale pitches (53-EDO)">Scale ⚙${scaleActive ? ' •' : ''}</button>
+    <label class="timbre" title="Melody instrument voice (applies on next play)">🎻
+      <select value=${timbre} onChange=${(e) => onTimbre(e.target.value)}>
+        ${TIMBRES.map(([v, label]) => html`<option key=${v} value=${v}>${label}</option>`)}
+      </select>
+    </label>
     <span class="readout">raga: ${raga || '—'} · tala: ${tala || '—'}</span>
   </div>`;
 }

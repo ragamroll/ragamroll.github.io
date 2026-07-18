@@ -15,6 +15,10 @@
  * @property {() => void} stop             // stop + reset position() to 0
  * @property {() => number} position       // 0..1 fraction of totalSec elapsed
  * @property {() => number} latency        // output latency in seconds (for A/V sync compensation); 0 if unknown
+ * @property {(vol: number) => void} setMasterVolume  // master output level 0..1 (1 = 0 dB, 0 = silence); scales melody+tala+drone. Live
+ * @property {(vol: number) => void} setTalaVolume    // tala track volume 0..1; live on a playing piece
+ * @property {(muted: boolean) => void} setMelodyMuted // mute/unmute the melody track; live (solo tala+drone)
+ * @property {(name: string) => void} setTimbre       // melody voice preset ('bowed-fm'|'soft-am'|'reed'); applies on next load()
  * @property {(freqs: number[], vol?: number) => void} setDrone  // constant drone at these freqs, vol 0..1; vol<=0 / empty = off. Same freqs + new vol changes loudness without re-voicing. Independent of the transport
  * @property {() => void} droneOff         // silence the drone
  * @property {() => void} dispose          // release audio resources (incl. drone)

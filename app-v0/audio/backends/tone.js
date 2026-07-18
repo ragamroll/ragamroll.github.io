@@ -7,35 +7,85 @@ import { midiToFreq } from '../schedule.js';
 // NOTE: Tone.Transport is a GLOBAL singleton — only one player instance is
 // supported; a second createPlayer() would clobber the first one's schedules.
 const transport = () => (Tone.Transport ?? Tone.getTransport());
+const destination = () => (Tone.Destination ?? Tone.getDestination());
 
-// Volume-fraction (0..1) -> Tone dB. 1 -> ~-4 dB (headroom under 0), lower
-// fractions taper logarithmically; 0 is handled by the caller (off).
-const volToDb = (v) => 20 * Math.log10(v) - 4;
+// Volume-fraction (0..1) -> Tone dB. 0 -> silence. Linear-log; used for master.
+const gainDb = (v) => (v > 0 ? 20 * Math.log10(v) : -Infinity);
+// Tala/drone taper: square the slider so the softer band spans more of the
+// travel — the old low end now sits around mid-slider (~-12 dB at 0.5).
+const trackDb = (v) => gainDb(v * v);
+// Tala sits a further -8 dB under the taper (it should stay under the melody).
+const talaDb = (v) => trackDb(v) - 8;
+// Drone variant: extra headroom since its three S/P/>S voices sum.
+const droneDb = (v) => trackDb(v) - 14;
+
+// Melody voice factory. Each returns a PolySynth with triggerAttackRelease +
+// dispose + volume, tuned so the envelope carries a gentle sustained tone
+// rather than the stock pluck.
+function makeMelody(timbre) {
+  switch (timbre) {
+    case 'reed': {      // filtered MonoSynth — soft, mellow reed
+      const s = new Tone.PolySynth(Tone.MonoSynth).toDestination();
+      s.set({ oscillator: { type: 'triangle' },   // few harmonics → gentle
+              envelope: { attack: 0.14, decay: 0.2, sustain: 0.8, release: 0.6 },
+              filter: { Q: 0.5, type: 'lowpass', rolloff: -24 },
+              filterEnvelope: { attack: 0.18, decay: 0.3, sustain: 0.5, release: 0.6,
+                                baseFrequency: 180, octaves: 2 } });
+      return s;
+    }
+    case 'soft-am': {   // AM, gentle reed/soft pad
+      const s = new Tone.PolySynth(Tone.AMSynth).toDestination();
+      s.set({ harmonicity: 2, oscillator: { type: 'sine' }, modulation: { type: 'sine' },
+              envelope: { attack: 0.08, decay: 0.2, sustain: 0.85, release: 0.6 },
+              modulationEnvelope: { attack: 0.2, decay: 0, sustain: 1, release: 0.5 } });
+      return s;
+    }
+    case 'bowed-fm':
+    default: {          // FM, bowed-string swell
+      const s = new Tone.PolySynth(Tone.FMSynth).toDestination();
+      s.set({ harmonicity: 2, modulationIndex: 6, oscillator: { type: 'sine' }, modulation: { type: 'sine' },
+              envelope: { attack: 0.12, decay: 0.1, sustain: 0.9, release: 0.4, attackCurve: 'sine' },
+              modulationEnvelope: { attack: 0.2, decay: 0.2, sustain: 0.8, release: 0.4 } });
+      return s;
+    }
+  }
+}
 
 export function createToneBackend() {
-  let synth = null;
+  let synth = null;      // melody voice
+  let tala = null;       // tala voice — separate so its volume is live
   let drone = null;      // separate sustained voice; survives load/play/stop
   let droneKey = '';     // freqs signature — lets volume change without re-voicing
+  let timbre = 'soft-am';   // melody voice preset; applied on the next load()
+  let melodyMuted = false;  // remembered so a reload keeps the melody muted
   let total = 0;
   let ended = false;
   const b = {
     onended: null,
-    // opts.talaGain (0..1) scales the tala track velocity; melody is fixed.
+    // opts.talaGain (0..1) is the tala track's initial live volume.
     load(events, totalSec, opts = {}) {
       const talaGain = opts.talaGain != null ? opts.talaGain : 1;
       b.disposeMelody();   // keep the drone playing across sequence reloads
       total = totalSec;
       ended = false;
-      synth = new Tone.PolySynth(Tone.Synth).toDestination();
+      synth = makeMelody(timbre);
+      synth.volume.value = melodyMuted ? -Infinity : 0;   // melody mute (hear tala/drone alone)
+      tala = new Tone.PolySynth(Tone.Synth).toDestination();
+      // Pluck-ish tala: triangle osc, fast attack, short-ish body.
+      tala.set({ oscillator: { type: 'triangle' },
+                 envelope: { attack: 0.01, decay: 0.25, sustain: 0.4, release: 0.6 } });
+      tala.volume.value = talaDb(talaGain);     // live-adjustable via setTalaVolume
       const tr = transport();
       tr.cancel();
       tr.position = 0;
       for (const e of events) {
-        const vel = e.track === 'tala' ? 0.7 * talaGain : 0.8;
+        const isTala = e.track === 'tala';
+        const dest = isTala ? tala : synth;
+        const vel = isTala ? 0.7 : 0.8;         // fixed velocity; loudness is the track volume
         // e.freq: experimental 53-EDO retune; falls back to 12-TET midi.
         const freq = e.freq != null ? e.freq : midiToFreq(e.midi);
         tr.schedule((time) => {
-          synth.triggerAttackRelease(freq, e.durSec, time, vel);
+          dest.triggerAttackRelease(freq, e.durSec, time, vel);
         }, e.startSec);
       }
       if (totalSec > 0) {
@@ -80,7 +130,7 @@ export function createToneBackend() {
     setDrone(freqs, vol = 0.5) {
       if (!freqs || !freqs.length || vol <= 0) { b.droneOff(); return; }
       const key = freqs.join(',');
-      const db = volToDb(vol);
+      const db = droneDb(vol);
       if (drone && key === droneKey) { drone.volume.value = db; return; }  // live volume
       b.droneOff();
       Tone.start();
@@ -91,6 +141,22 @@ export function createToneBackend() {
       drone.triggerAttack(freqs);
       droneKey = key;
     },
+    // Master output level (0..1): scales everything — melody, tala, drone.
+    // 1 → 0 dB (unattenuated), 0 → silence. Live.
+    setMasterVolume(vol) {
+      destination().volume.value = gainDb(vol);
+    },
+    // Tala track volume (0..1), live — takes effect on a currently playing piece.
+    setTalaVolume(vol) {
+      if (tala) tala.volume.value = talaDb(vol);
+    },
+    // Melody mute (live) — lets the user solo tala + drone to set their levels.
+    setMelodyMuted(muted) {
+      melodyMuted = muted;
+      if (synth) synth.volume.value = muted ? -Infinity : 0;
+    },
+    // Melody voice preset ('bowed-fm' | 'soft-am' | 'reed'); applies next load.
+    setTimbre(name) { timbre = name; },
     droneOff() {
       if (!drone) return;
       try { drone.releaseAll ? drone.releaseAll() : drone.triggerRelease(); } catch {}
@@ -103,6 +169,7 @@ export function createToneBackend() {
       tr.cancel();
       tr.stop();
       if (synth) { synth.dispose(); synth = null; }
+      if (tala) { tala.dispose(); tala = null; }
     },
     dispose() {
       b.disposeMelody();

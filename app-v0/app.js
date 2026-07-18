@@ -17,7 +17,7 @@ import { writeSMF } from './core/midi/smf.js';
 import { createPlayer } from './audio/player.js';
 import { scheduleEvents, totalSeconds, midiToFreq } from './audio/schedule.js';
 import { PITCH_CLASS } from './core/tuning.js';
-import { stepForLetter, stepFreq, P_STEP, OCTAVE_STEP } from './core/shruti.js';
+import { stepForLetter, stepFreq, P_STEP } from './core/shruti.js';
 import { scrollPos, playheadScroll } from './audio/scroll.js';
 import { buildRowTimes, rowAt } from './audio/rowtimes.js';
 import { Transport } from './components/Transport.js';
@@ -47,31 +47,38 @@ function saBaseOf(model, ragas) {
   return (PITCH_CLASS[saNote] ?? 0) + semis;
 }
 
-// Mutate a built sequence's melody notes with an experimental 53-EDO frequency
-// (n.freq) per swara. MIDI export never reads n.freq, so goldens are untouched;
-// only the audio path (schedule.js) carries it. Iterates model.events with the
-// SAME filter buildSequence uses, so the notes line up by index.
-function retuneMelody(seq, model, scale, saBase) {
+// Mutate a built sequence's melody notes with an experimental playback pitch
+// (n.freq): a 53-EDO scale override and/or a whole-audio semitone transpose
+// (from a user-set Sa). MIDI export never reads n.freq, so goldens are
+// untouched; only the audio path (schedule.js) carries it. Iterates
+// model.events with the SAME filter buildSequence uses → notes align by index.
+function applyPlaybackPitch(seq, model, scale, saBase, shift) {
+  if (!scale && !shift) return;                 // pure 12-TET, no override → default path
   const notes = seq.tracks[0].notes;
-  const PER = seq.ppq / 2;                     // buildSequence: 1 length-unit = eighth
+  const PER = seq.ppq / 2;                       // buildSequence: 1 length-unit = eighth
   let i = 0;
   for (const e of model.events) {
     if (e.type !== 'note' || e.rest) continue;
     if (Math.round(e.absLen * PER) <= 0) continue;
-    const step = stepForLetter(scale, e.swara);
-    if (step != null && notes[i]) {
-      const m = notes[i].pitch;
-      const saMidi = m - mod12(m - saBase);     // Sa at this note's octave
-      notes[i].freq = stepFreq(midiToFreq(saMidi), step);
+    const m = notes[i]?.pitch;
+    if (m != null) {
+      const step = scale ? stepForLetter(scale, e.swara) : null;
+      if (step != null) {
+        const saMidi = m - mod12(m - saBase) + shift;   // Sa at this note's octave, transposed
+        notes[i].freq = stepFreq(midiToFreq(saMidi), step);
+      } else if (shift) {
+        notes[i].freq = midiToFreq(m + shift);          // 12-TET note, transposed
+      }
     }
     i++;
   }
 }
 
-// Low sustained Sa/Pa/Sa drone voices (frequencies) for the current raga's Sa.
-function droneFreqs(saBase) {
-  const saFreq = midiToFreq(48 + mod12(saBase));   // Sa near C4
-  return [saFreq / 2, stepFreq(saFreq, P_STEP - OCTAVE_STEP), saFreq];  // Sa↓, Pa↓, Sa
+// Sustained drone voices (frequencies) for a given Sa MIDI: S · P · >S
+// (Sa, Pa above Sa, upper Sa an octave up).
+function droneFreqs(saMidi) {
+  const saFreq = midiToFreq(saMidi);
+  return [saFreq, stepFreq(saFreq, P_STEP), saFreq * 2];   // S, P, >S
 }
 
 function useDebounced(value, ms) {
@@ -150,18 +157,45 @@ function App() {
   // Playback-only: drops tala events from the player schedule on the next
   // Play-from-stopped. Does not affect MIDI export, rendering, or timeline
   // length (totalSeconds is melody-cursor-based).
-  // Tala volume 0..1 (0 = silent). Baked into the schedule, so it applies on the
-  // next Play-from-stopped — same timing/scroll regardless of the level.
+  // Master output level 0..1 (live) — scales melody + tala + drone together.
+  const [masterVol, setMasterVol] = useState(1);
+  const onMasterVol = useCallback((v) => setMasterVol(v), []);
+
+  // Tala volume 0..1 (live, own synth) plus a mute toggle that keeps the set
+  // level so the user need not slide back to zero and up again. Dragging the
+  // slider also unmutes (intent to hear). Effective level = muted ? 0 : vol.
   const [talaVol, setTalaVol] = useState(0.5);
-  const onTalaVol = useCallback((v) => setTalaVol(v), []);
+  const [talaMuted, setTalaMuted] = useState(false);
+  const onTalaVol = useCallback((v) => { setTalaVol(v); setTalaMuted(false); }, []);
+  const onToggleTala = useCallback(() => setTalaMuted((m) => !m), []);
+  const talaLevel = talaMuted ? 0 : talaVol;
+
+  // Melody mute — solo tala + drone to dial their levels. Live during playback.
+  const [melodyMuted, setMelodyMuted] = useState(false);
+  const onToggleMelody = useCallback(() => setMelodyMuted((m) => !m), []);
 
   // Experimental 53-EDO scale override (null = ragabase 12-TET) and a constant
-  // Sa/Pa drone (volume 0..1, live). Both are playback-only; rendering + MIDI unchanged.
+  // Sa/Pa drone. Drone has a set level + a mute toggle (default off but level
+  // preset), so one click turns it on at the chosen volume. Playback-only.
   const [scale, setScale] = useState(null);
   const onApplyScale = useCallback((s) => setScale(s), []);
-  const [droneVol, setDroneVol] = useState(0);
-  const onDroneVol = useCallback((v) => setDroneVol(v), []);
+  const [droneVol, setDroneVol] = useState(0.5);
+  const [droneMuted, setDroneMuted] = useState(true);
+  const onDroneVol = useCallback((v) => { setDroneVol(v); setDroneMuted(false); }, []);
+  const onToggleDrone = useCallback(() => setDroneMuted((m) => !m), []);
+  const droneLevel = droneMuted ? 0 : droneVol;
+  // Melody instrument voice (applies on the next Play — the synth is rebuilt at load).
+  const [timbre, setTimbre] = useState('soft-am');
+  const onTimbre = useCallback((t) => setTimbre(t), []);
   const saBase = useMemo(() => saBaseOf(model, getRagas()), [model]);
+  // Sa reference pitch: null = auto (the raga's natural Sa, MIDI 60+saBase, so
+  // playback is unshifted and goldens/MIDI stay exact); a MIDI number pins Sa to
+  // an absolute 12-EDO note and transposes all audio (melody+drone+retune) to it.
+  const autoSaMidi = 60 + saBase;
+  const [saPitch, setSaPitch] = useState(null);
+  const onSetSa = useCallback((m) => setSaPitch(m), []);
+  const saMidi = saPitch != null ? saPitch : autoSaMidi;
+  const shift = saPitch != null ? saPitch - autoSaMidi : 0;
 
   const noteCount = useMemo(() => model.events.filter(e => e.type === 'note' && !e.rest).length, [model]);
 
@@ -225,15 +259,11 @@ function App() {
       if (playState !== 'paused') { // stopped → build + load; paused → just resume
         const seq = buildSequence(model);
         if (totalSeconds(seq) <= 0) return;
-        if (scale) retuneMelody(seq, model, scale, saBase);   // 53-EDO override (audio only)
+        applyPlaybackPitch(seq, model, scale, saBase, shift);   // scale override + Sa transpose (audio only)
         player.onended = () => onStop();
-        // Tala volume 0 drops the tala events entirely; >0 scales their velocity
-        // via talaGain. totalSeconds is unchanged either way, so timeline/scroll
-        // behave identically at any tala level.
-        player.load(
-          scheduleEvents(seq).filter(e => !(talaVol <= 0 && e.track === 'tala')),
-          totalSeconds(seq),
-          { talaGain: talaVol });
+        // Tala keeps its own live-adjustable track volume — schedule every event
+        // (even at 0) so raising the slider mid-playback brings the tala in.
+        player.load(scheduleEvents(seq), totalSeconds(seq), { talaGain: talaLevel });
         // Snapshot what was loaded: the playhead must follow the PLAYING audio
         // even if the user edits (and rowTimes rebuilds) mid-playback.
         loadedTotalRef.current = totalSeconds(seq);
@@ -249,7 +279,7 @@ function App() {
       console.error('playback failed', e);
       onStop();
     }
-  }, [model, rowTimes, playState, loop, onStop, talaVol, scale, saBase]);
+  }, [model, rowTimes, playState, loop, onStop, talaLevel, scale, saBase, shift]);
 
   const onPause = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
@@ -262,8 +292,13 @@ function App() {
   // Constant drone: on/off toggle, re-voiced when the raga's Sa changes. Kept
   // outside the transport so it plays independently of start/stop.
   useEffect(() => {
-    playerRef.current.setDrone(droneVol > 0 ? droneFreqs(saBase) : null, droneVol);
-  }, [droneVol, saBase]);
+    playerRef.current.setDrone(droneLevel > 0 ? droneFreqs(saMidi) : null, droneLevel);
+  }, [droneLevel, saMidi]);
+
+  useEffect(() => { playerRef.current.setMasterVolume(masterVol); }, [masterVol]);
+  useEffect(() => { playerRef.current.setTalaVolume(talaLevel); }, [talaLevel]);
+  useEffect(() => { playerRef.current.setTimbre(timbre); }, [timbre]);
+  useEffect(() => { playerRef.current.setMelodyMuted(melodyMuted); }, [melodyMuted]);
 
   // --- Dialogs (one open at a time): read-only raga/tala refs + Scale override ---
   const [dialog, setDialog] = useState(null);   // null | 'ragas' | 'talas' | 'scale'
@@ -295,14 +330,19 @@ function App() {
     <${Toolbar} raga=${raga} tala=${tala} examples=${EXAMPLES} exampleValue=${exampleValue}
                 onOpen=${onOpen} onExample=${onExample}
                 onOpenRagas=${onOpenRagas} onOpenTalas=${onOpenTalas}
-                onOpenScale=${onOpenScale} scaleActive=${!!scale} />
+                onOpenScale=${onOpenScale} scaleActive=${!!scale}
+                timbre=${timbre} onTimbre=${onTimbre} />
     ${(dialog === 'ragas' || dialog === 'talas') && html`<${ReferenceDialog} mode=${dialog}
                                          ragas=${getRagas()} talas=${TALA_MAP} onClose=${onCloseDialog} />`}
-    ${dialog === 'scale' && html`<${ScaleDialog} scale=${scale} onApply=${onApplyScale} onClose=${onCloseDialog} />`}
+    ${dialog === 'scale' && html`<${ScaleDialog} scale=${scale} onApply=${onApplyScale} onClose=${onCloseDialog}
+                                                 saPitch=${saPitch} autoSaMidi=${autoSaMidi} onSetSa=${onSetSa}
+                                                 ragas=${getRagas()} />`}
     <${Transport} state=${playState} canPlay=${noteCount > 0}
                   onPlay=${onPlay} onPause=${onPause} onStop=${onStop}
-                  talaVol=${talaVol} onTalaVol=${onTalaVol}
-                  droneVol=${droneVol} onDroneVol=${onDroneVol}
+                  masterVol=${masterVol} onMasterVol=${onMasterVol}
+                  melodyMuted=${melodyMuted} onToggleMelody=${onToggleMelody}
+                  talaVol=${talaVol} onTalaVol=${onTalaVol} talaMuted=${talaMuted} onToggleTala=${onToggleTala}
+                  droneVol=${droneVol} onDroneVol=${onDroneVol} droneMuted=${droneMuted} onToggleDrone=${onToggleDrone}
                   onSave=${onSave} onExportMidi=${onExportMidi} />
     <${Diagnostics} items=${model.diagnostics} />
     <div class="workspace" ref=${wsRef}>
