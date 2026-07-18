@@ -1,14 +1,15 @@
-const CACHE = 'ragamroll-2ba2c9c';
+const CACHE = 'ragamroll-2005c0b';
 const ASSETS = [
   './', './index.html', './app.js', './version.js', './manifest.webmanifest',
   './vendor/preact.module.js', './vendor/hooks.module.js', './vendor/htm.module.js', './vendor/htm-preact.js',
   './vendor/tone.js',
   './components/Editor.js', './components/NotationPane.js', './components/RollPane.js', './components/Toolbar.js',
   './components/Diagnostics.js', './components/Transport.js', './components/ReferenceDialog.js', './components/Splitter.js',
-  './components/Footer.js', './components/OpenMenu.js',
+  './components/Footer.js', './components/OpenMenu.js', './components/ScaleDialog.js',
   './audio/schedule.js', './audio/scroll.js', './audio/backend.js', './audio/backends/tone.js', './audio/player.js',
   './audio/rowtimes.js',
   './core/parser.js', './core/tuning.js', './core/raga-base.js', './core/raga-base.json', './core/reference.js',
+  './core/shruti.js',
   './core/renderers/notation.js', './core/renderers/roll.js',
   './core/midi/gm.js', './core/midi/smf.js', './core/midi/sequence.js', './core/midi/tala.js',
   './examples/swaravali.srgm', './examples/hamsa.srgm', './examples/vathapi.srgm',

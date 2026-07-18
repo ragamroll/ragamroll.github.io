@@ -11,10 +11,13 @@ import { RollPane } from './components/RollPane.js';
 import { Toolbar } from './components/Toolbar.js';
 import { Diagnostics } from './components/Diagnostics.js';
 import { ReferenceDialog } from './components/ReferenceDialog.js';
+import { ScaleDialog } from './components/ScaleDialog.js';
 import { buildSequence } from './core/midi/sequence.js';
 import { writeSMF } from './core/midi/smf.js';
 import { createPlayer } from './audio/player.js';
-import { scheduleEvents, totalSeconds } from './audio/schedule.js';
+import { scheduleEvents, totalSeconds, midiToFreq } from './audio/schedule.js';
+import { PITCH_CLASS } from './core/tuning.js';
+import { stepForLetter, stepFreq, P_STEP, OCTAVE_STEP } from './core/shruti.js';
 import { scrollPos, playheadScroll } from './audio/scroll.js';
 import { buildRowTimes, rowAt } from './audio/rowtimes.js';
 import { Transport } from './components/Transport.js';
@@ -30,6 +33,45 @@ const DEFAULT_NAME = 'ragamroll';
 function baseName(name) {
   const stripped = String(name || '').replace(/\.[^./\\]+$/, '').trim();
   return stripped || DEFAULT_NAME;
+}
+
+const mod12 = (x) => ((x % 12) + 12) % 12;
+
+// 12-TET pitch class of Sa for the model's active raga (incl. Raga transpose).
+// Drives both the drone and the 53-EDO retune. Falls back to C / no transpose.
+function saBaseOf(model, ragas) {
+  const rev = [...model.events].reverse();
+  const key = rev.find((e) => e.type === 'raga')?.key || ['c12', '0'];
+  const semis = Number.parseInt(key[1], 10) || 0;
+  const saNote = ragas?.[key[0]]?.C12_SWARAS?.S ?? 'C';
+  return (PITCH_CLASS[saNote] ?? 0) + semis;
+}
+
+// Mutate a built sequence's melody notes with an experimental 53-EDO frequency
+// (n.freq) per swara. MIDI export never reads n.freq, so goldens are untouched;
+// only the audio path (schedule.js) carries it. Iterates model.events with the
+// SAME filter buildSequence uses, so the notes line up by index.
+function retuneMelody(seq, model, scale, saBase) {
+  const notes = seq.tracks[0].notes;
+  const PER = seq.ppq / 2;                     // buildSequence: 1 length-unit = eighth
+  let i = 0;
+  for (const e of model.events) {
+    if (e.type !== 'note' || e.rest) continue;
+    if (Math.round(e.absLen * PER) <= 0) continue;
+    const step = stepForLetter(scale, e.swara);
+    if (step != null && notes[i]) {
+      const m = notes[i].pitch;
+      const saMidi = m - mod12(m - saBase);     // Sa at this note's octave
+      notes[i].freq = stepFreq(midiToFreq(saMidi), step);
+    }
+    i++;
+  }
+}
+
+// Low sustained Sa/Pa/Sa drone voices (frequencies) for the current raga's Sa.
+function droneFreqs(saBase) {
+  const saFreq = midiToFreq(48 + mod12(saBase));   // Sa near C4
+  return [saFreq / 2, stepFreq(saFreq, P_STEP - OCTAVE_STEP), saFreq];  // Sa↓, Pa↓, Sa
 }
 
 function useDebounced(value, ms) {
@@ -111,6 +153,14 @@ function App() {
   const [talaMuted, setTalaMuted] = useState(false);
   const onToggleTalaMute = useCallback(() => setTalaMuted(m => !m), []);
 
+  // Experimental 53-EDO scale override (null = ragabase 12-TET) and a constant
+  // Sa/Pa drone toggle. Both are playback-only; rendering and MIDI are unchanged.
+  const [scale, setScale] = useState(null);
+  const onApplyScale = useCallback((s) => setScale(s), []);
+  const [droneOn, setDroneOn] = useState(false);
+  const onToggleDrone = useCallback(() => setDroneOn(v => !v), []);
+  const saBase = useMemo(() => saBaseOf(model, getRagas()), [model]);
+
   const noteCount = useMemo(() => model.events.filter(e => e.type === 'note' && !e.rest).length, [model]);
 
   // Roll text change re-renders the line divs (Preact may reuse nodes, which
@@ -173,6 +223,7 @@ function App() {
       if (playState !== 'paused') { // stopped → build + load; paused → just resume
         const seq = buildSequence(model);
         if (totalSeconds(seq) <= 0) return;
+        if (scale) retuneMelody(seq, model, scale, saBase);   // 53-EDO override (audio only)
         player.onended = () => onStop();
         // Mute filters the schedule only; totalSeconds stays unchanged so the
         // timeline/scroll behaves identically with tala muted or audible.
@@ -192,7 +243,7 @@ function App() {
       console.error('playback failed', e);
       onStop();
     }
-  }, [model, rowTimes, playState, loop, onStop, talaMuted]);
+  }, [model, rowTimes, playState, loop, onStop, talaMuted, scale, saBase]);
 
   const onPause = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
@@ -202,10 +253,18 @@ function App() {
 
   useEffect(() => () => { cancelAnimationFrame(rafRef.current); playerRef.current?.dispose(); }, []);
 
-  // --- Read-only raga/tala reference dialogs (one open at a time) ---
-  const [dialog, setDialog] = useState(null);   // null | 'ragas' | 'talas'
+  // Constant drone: on/off toggle, re-voiced when the raga's Sa changes. Kept
+  // outside the transport so it plays independently of start/stop.
+  useEffect(() => {
+    const p = playerRef.current;
+    if (droneOn) p.setDrone(droneFreqs(saBase)); else p.droneOff();
+  }, [droneOn, saBase]);
+
+  // --- Dialogs (one open at a time): read-only raga/tala refs + Scale override ---
+  const [dialog, setDialog] = useState(null);   // null | 'ragas' | 'talas' | 'scale'
   const onOpenRagas = useCallback(() => setDialog('ragas'), []);
   const onOpenTalas = useCallback(() => setDialog('talas'), []);
+  const onOpenScale = useCallback(() => setDialog('scale'), []);
   const onCloseDialog = useCallback(() => setDialog(null), []);
 
   // --- Draggable pane dividers (like the original JSplitPane). The workspace is
@@ -230,12 +289,15 @@ function App() {
   return html`
     <${Toolbar} raga=${raga} tala=${tala} examples=${EXAMPLES} exampleValue=${exampleValue}
                 onOpen=${onOpen} onExample=${onExample}
-                onOpenRagas=${onOpenRagas} onOpenTalas=${onOpenTalas} />
-    ${dialog && html`<${ReferenceDialog} mode=${dialog} ragas=${getRagas()} talas=${TALA_MAP}
-                                         onClose=${onCloseDialog} />`}
+                onOpenRagas=${onOpenRagas} onOpenTalas=${onOpenTalas}
+                onOpenScale=${onOpenScale} scaleActive=${!!scale} />
+    ${(dialog === 'ragas' || dialog === 'talas') && html`<${ReferenceDialog} mode=${dialog}
+                                         ragas=${getRagas()} talas=${TALA_MAP} onClose=${onCloseDialog} />`}
+    ${dialog === 'scale' && html`<${ScaleDialog} scale=${scale} onApply=${onApplyScale} onClose=${onCloseDialog} />`}
     <${Transport} state=${playState} canPlay=${noteCount > 0}
                   onPlay=${onPlay} onPause=${onPause} onStop=${onStop}
                   talaMuted=${talaMuted} onToggleTalaMute=${onToggleTalaMute}
+                  droneOn=${droneOn} onToggleDrone=${onToggleDrone}
                   onSave=${onSave} onExportMidi=${onExportMidi} />
     <${Diagnostics} items=${model.diagnostics} />
     <div class="workspace" ref=${wsRef}>

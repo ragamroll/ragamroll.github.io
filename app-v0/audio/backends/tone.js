@@ -10,12 +10,13 @@ const transport = () => (Tone.Transport ?? Tone.getTransport());
 
 export function createToneBackend() {
   let synth = null;
+  let drone = null;      // separate sustained voice; survives load/play/stop
   let total = 0;
   let ended = false;
   const b = {
     onended: null,
     load(events, totalSec) {
-      b.dispose();
+      b.disposeMelody();   // keep the drone playing across sequence reloads
       total = totalSec;
       ended = false;
       synth = new Tone.PolySynth(Tone.Synth).toDestination();
@@ -24,8 +25,10 @@ export function createToneBackend() {
       tr.position = 0;
       for (const e of events) {
         const vel = e.track === 'tala' ? 0.35 : 0.8;
+        // e.freq: experimental 53-EDO retune; falls back to 12-TET midi.
+        const freq = e.freq != null ? e.freq : midiToFreq(e.midi);
         tr.schedule((time) => {
-          synth.triggerAttackRelease(midiToFreq(e.midi), e.durSec, time, vel);
+          synth.triggerAttackRelease(freq, e.durSec, time, vel);
         }, e.startSec);
       }
       if (totalSec > 0) {
@@ -63,11 +66,34 @@ export function createToneBackend() {
       const raw = c && c.rawContext;
       return (raw && (raw.outputLatency ?? raw.baseLatency)) || 0;
     },
-    dispose() {
+    // Constant tambura-style drone: sustained low-volume voices (Sa/Pa),
+    // independent of the transport. `freqs` = [] or null turns it off.
+    // Called on a user gesture, so Tone.start() can unlock the context.
+    setDrone(freqs) {
+      b.droneOff();
+      if (!freqs || !freqs.length) return;
+      Tone.start();
+      drone = new Tone.PolySynth(Tone.Synth).toDestination();
+      drone.set({ oscillator: { type: 'sine' },
+                  envelope: { attack: 0.9, decay: 0, sustain: 1, release: 1.4 } });
+      drone.volume.value = -26;                 // low, sits under the melody
+      drone.triggerAttack(freqs);
+    },
+    droneOff() {
+      if (!drone) return;
+      try { drone.releaseAll ? drone.releaseAll() : drone.triggerRelease(); } catch {}
+      drone.dispose();
+      drone = null;
+    },
+    disposeMelody() {
       const tr = transport();
       tr.cancel();
       tr.stop();
       if (synth) { synth.dispose(); synth = null; }
+    },
+    dispose() {
+      b.disposeMelody();
+      b.droneOff();
     },
   };
   return b;

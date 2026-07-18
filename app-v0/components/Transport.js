@@ -3,7 +3,7 @@ import { html } from '../vendor/htm-preact.js';
 // Action bar above the workspace. Document actions (Save, Export MIDI) sit on
 // the left; the playback group (play/pause/stop/tala) is pushed to the right via
 // margin-left:auto so it aligns above the roll it drives.
-export function Transport({ state, canPlay, onPlay, onPause, onStop, talaMuted, onToggleTalaMute, onSave, onExportMidi }) {
+export function Transport({ state, canPlay, onPlay, onPause, onStop, talaMuted, onToggleTalaMute, onSave, onExportMidi, droneOn, onToggleDrone }) {
   return html`<span class="transport">
     <button class="doc-btn" title="Save the .srgm source" onClick=${onSave}>Save</button>
     <button class="doc-btn" title="Export the melody as a .mid file" onClick=${onExportMidi}>Export MIDI</button>
@@ -15,6 +15,12 @@ export function Transport({ state, canPlay, onPlay, onPause, onStop, talaMuted, 
                                                  : 'Tala audible — click to mute (applies on next play)'}
               aria-pressed=${talaMuted} onClick=${onToggleTalaMute}>
         ${talaMuted ? '🔇' : '🔊'} Tala
+      </button>
+      <button class=${'drone-btn' + (droneOn ? ' on' : '')}
+              title=${droneOn ? 'Drone on — click to silence the Sa/Pa drone'
+                              : 'Drone off — click for a constant Sa/Pa drone'}
+              aria-pressed=${droneOn} onClick=${onToggleDrone}>
+        ${droneOn ? '🎶' : '🎵'} Drone
       </button>
     </span>
   </span>`;
