@@ -3,7 +3,9 @@ import { html } from '../vendor/htm-preact.js';
 // Action bar above the workspace. Document actions (Save, Export MIDI) sit on
 // the left; the playback group (play/pause/stop/tala) is pushed to the right via
 // margin-left:auto so it aligns above the roll it drives.
-export function Transport({ state, canPlay, onPlay, onPause, onStop, talaMuted, onToggleTalaMute, onSave, onExportMidi, droneOn, onToggleDrone }) {
+const pct = (v) => Math.round(v * 100);
+
+export function Transport({ state, canPlay, onPlay, onPause, onStop, talaVol, onTalaVol, onSave, onExportMidi, droneVol, onDroneVol }) {
   return html`<span class="transport">
     <button class="doc-btn" title="Save the .srgm source" onClick=${onSave}>Save</button>
     <button class="doc-btn" title="Export the melody as a .mid file" onClick=${onExportMidi}>Export MIDI</button>
@@ -11,17 +13,16 @@ export function Transport({ state, canPlay, onPlay, onPause, onStop, talaMuted, 
       <button title="Play"  onClick=${onPlay}  disabled=${state === 'playing' || !canPlay}>▶</button>
       <button title="Pause" onClick=${onPause} disabled=${state !== 'playing'}>⏸</button>
       <button title="Stop"  onClick=${onStop}  disabled=${state === 'stopped'}>⏹</button>
-      <button class="tala-mute" title=${talaMuted ? 'Tala muted — click to unmute (applies on next play)'
-                                                 : 'Tala audible — click to mute (applies on next play)'}
-              aria-pressed=${talaMuted} onClick=${onToggleTalaMute}>
-        ${talaMuted ? '🔇' : '🔊'} Tala
-      </button>
-      <button class=${'drone-btn' + (droneOn ? ' on' : '')}
-              title=${droneOn ? 'Drone on — click to silence the Sa/Pa drone'
-                              : 'Drone off — click for a constant Sa/Pa drone'}
-              aria-pressed=${droneOn} onClick=${onToggleDrone}>
-        ${droneOn ? '🎶' : '🎵'} Drone
-      </button>
+      <label class="vol" title=${`Tala volume ${pct(talaVol)}% (applies on next play)`}>
+        ${talaVol <= 0 ? '🔇' : '🔊'} Tala
+        <input type="range" min="0" max="1" step="0.05" value=${talaVol}
+               onInput=${(e) => onTalaVol(Number(e.target.value))} />
+      </label>
+      <label class="vol" title=${`Drone volume ${pct(droneVol)}% (live)`}>
+        ${droneVol <= 0 ? '🎵' : '🎶'} Drone
+        <input type="range" min="0" max="1" step="0.05" value=${droneVol}
+               onInput=${(e) => onDroneVol(Number(e.target.value))} />
+      </label>
     </span>
   </span>`;
 }

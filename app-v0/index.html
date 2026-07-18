@@ -21,7 +21,9 @@
     .transport button:disabled { opacity:.4; cursor:default; }
     .transport .doc-btn { font-size:.85rem; }
     .transport-play { display:flex; gap:.4rem; align-items:center; margin-left:auto; }  /* push playback to the right */
-    .transport .tala-mute { font-size:.85rem; margin-left:.4rem; }
+    .transport .vol { display:inline-flex; align-items:center; gap:.3rem; font-size:.8rem;
+      margin-left:.5rem; white-space:nowrap; opacity:.9; }
+    .transport .vol input[type=range] { width:5rem; cursor:pointer; accent-color:#6c9; }
     /* Unified Open ▾ menu */
     .openmenu { position:relative; display:inline-flex; }
     .openmenu-btn { cursor:pointer; }
@@ -63,8 +65,6 @@
     .ref-int { color:#cc9; }
     /* Scale ⚙ / Drone toggles */
     .toolbar .scale-btn.active { border-color:#6c9; color:#9fc; }
-    .transport .drone-btn { font-size:.85rem; }
-    .transport .drone-btn.on { color:#9fc; }
     /* Experimental 53-EDO scale dialog */
     .scale-box { width:min(880px,100%); }
     .scale-hint { font-size:.8rem; opacity:.75; margin:.1rem 0 .6rem; }

@@ -150,15 +150,17 @@ function App() {
   // Playback-only: drops tala events from the player schedule on the next
   // Play-from-stopped. Does not affect MIDI export, rendering, or timeline
   // length (totalSeconds is melody-cursor-based).
-  const [talaMuted, setTalaMuted] = useState(false);
-  const onToggleTalaMute = useCallback(() => setTalaMuted(m => !m), []);
+  // Tala volume 0..1 (0 = silent). Baked into the schedule, so it applies on the
+  // next Play-from-stopped — same timing/scroll regardless of the level.
+  const [talaVol, setTalaVol] = useState(0.5);
+  const onTalaVol = useCallback((v) => setTalaVol(v), []);
 
   // Experimental 53-EDO scale override (null = ragabase 12-TET) and a constant
-  // Sa/Pa drone toggle. Both are playback-only; rendering and MIDI are unchanged.
+  // Sa/Pa drone (volume 0..1, live). Both are playback-only; rendering + MIDI unchanged.
   const [scale, setScale] = useState(null);
   const onApplyScale = useCallback((s) => setScale(s), []);
-  const [droneOn, setDroneOn] = useState(false);
-  const onToggleDrone = useCallback(() => setDroneOn(v => !v), []);
+  const [droneVol, setDroneVol] = useState(0);
+  const onDroneVol = useCallback((v) => setDroneVol(v), []);
   const saBase = useMemo(() => saBaseOf(model, getRagas()), [model]);
 
   const noteCount = useMemo(() => model.events.filter(e => e.type === 'note' && !e.rest).length, [model]);
@@ -225,9 +227,13 @@ function App() {
         if (totalSeconds(seq) <= 0) return;
         if (scale) retuneMelody(seq, model, scale, saBase);   // 53-EDO override (audio only)
         player.onended = () => onStop();
-        // Mute filters the schedule only; totalSeconds stays unchanged so the
-        // timeline/scroll behaves identically with tala muted or audible.
-        player.load(scheduleEvents(seq).filter(e => !(talaMuted && e.track === 'tala')), totalSeconds(seq));
+        // Tala volume 0 drops the tala events entirely; >0 scales their velocity
+        // via talaGain. totalSeconds is unchanged either way, so timeline/scroll
+        // behave identically at any tala level.
+        player.load(
+          scheduleEvents(seq).filter(e => !(talaVol <= 0 && e.track === 'tala')),
+          totalSeconds(seq),
+          { talaGain: talaVol });
         // Snapshot what was loaded: the playhead must follow the PLAYING audio
         // even if the user edits (and rowTimes rebuilds) mid-playback.
         loadedTotalRef.current = totalSeconds(seq);
@@ -243,7 +249,7 @@ function App() {
       console.error('playback failed', e);
       onStop();
     }
-  }, [model, rowTimes, playState, loop, onStop, talaMuted, scale, saBase]);
+  }, [model, rowTimes, playState, loop, onStop, talaVol, scale, saBase]);
 
   const onPause = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
@@ -256,9 +262,8 @@ function App() {
   // Constant drone: on/off toggle, re-voiced when the raga's Sa changes. Kept
   // outside the transport so it plays independently of start/stop.
   useEffect(() => {
-    const p = playerRef.current;
-    if (droneOn) p.setDrone(droneFreqs(saBase)); else p.droneOff();
-  }, [droneOn, saBase]);
+    playerRef.current.setDrone(droneVol > 0 ? droneFreqs(saBase) : null, droneVol);
+  }, [droneVol, saBase]);
 
   // --- Dialogs (one open at a time): read-only raga/tala refs + Scale override ---
   const [dialog, setDialog] = useState(null);   // null | 'ragas' | 'talas' | 'scale'
@@ -296,8 +301,8 @@ function App() {
     ${dialog === 'scale' && html`<${ScaleDialog} scale=${scale} onApply=${onApplyScale} onClose=${onCloseDialog} />`}
     <${Transport} state=${playState} canPlay=${noteCount > 0}
                   onPlay=${onPlay} onPause=${onPause} onStop=${onStop}
-                  talaMuted=${talaMuted} onToggleTalaMute=${onToggleTalaMute}
-                  droneOn=${droneOn} onToggleDrone=${onToggleDrone}
+                  talaVol=${talaVol} onTalaVol=${onTalaVol}
+                  droneVol=${droneVol} onDroneVol=${onDroneVol}
                   onSave=${onSave} onExportMidi=${onExportMidi} />
     <${Diagnostics} items=${model.diagnostics} />
     <div class="workspace" ref=${wsRef}>

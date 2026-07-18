@@ -9,13 +9,13 @@
  * @property {'melody'|'tala'} track
  *
  * @typedef {Object} SynthBackend
- * @property {(events: ScheduledEvent[], totalSec: number) => (void|Promise<void>)} load
+ * @property {(events: ScheduledEvent[], totalSec: number, opts?: {talaGain?: number}) => (void|Promise<void>)} load  // talaGain (0..1) scales tala velocity
  * @property {() => Promise<void>} play    // start from 0, or resume from pause; awaits audio unlock
  * @property {() => void} pause            // freeze; position() holds
  * @property {() => void} stop             // stop + reset position() to 0
  * @property {() => number} position       // 0..1 fraction of totalSec elapsed
  * @property {() => number} latency        // output latency in seconds (for A/V sync compensation); 0 if unknown
- * @property {(freqs: number[]) => void} setDrone  // start a constant low-volume drone at these freqs; [] / null = off. Independent of the transport
+ * @property {(freqs: number[], vol?: number) => void} setDrone  // constant drone at these freqs, vol 0..1; vol<=0 / empty = off. Same freqs + new vol changes loudness without re-voicing. Independent of the transport
  * @property {() => void} droneOff         // silence the drone
  * @property {() => void} dispose          // release audio resources (incl. drone)
  * @property {?(() => void)} onended       // fires exactly once when playback reaches the end; the backend then enters a stopped state and position() reads 1 until load()/stop() resets it
