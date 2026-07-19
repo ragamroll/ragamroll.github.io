@@ -19,6 +19,11 @@ export function seqToLine(events, charSpacing = 1, lineSpacing = 1, foldAccents 
     }
   }
 
+  // Guard: a non-positive measure/beat (e.g. a broken Tala= with beat 0) would
+  // make `lines` Infinity below and hang the render loop. Degrade to the raw
+  // swara line instead of freezing — the parser also flags the bad tala.
+  if (!(measure > 0) || !(beat > 0)) return dispTxt;
+
   const out = [];
   const lines = Math.floor(dispTxt.length / measure);   // floor(BigDecimal range)
   for (let i = 0; i < lines; i++) {

@@ -35,6 +35,7 @@ function talaElem(v) {
   let beat;
   const b = decodeInt(v && v[1]);
   beat = Number.isNaN(b) ? 4 : b;
+  if (!(beat > 0)) beat = 4;                 // non-positive beat -> measure 0 -> infinite layout; fall back to 4
   const measure = tala[0] * beat;
   const accents = tala[1].map(it => (it - 1) * beat + 1);
   return { tala, beat, measure, accents };
@@ -143,6 +144,9 @@ export function parse(input) {
             diagnostics.push({ token, index: tokenIndex, message: `unknown tala "${parts[0]}" — using adi` });
             parts[0] = 'adi';
           }
+          const bv = decodeInt(parts[1]);
+          if (parts.length > 1 && !Number.isNaN(bv) && bv <= 0)
+            diagnostics.push({ token, index: tokenIndex, message: `tala beat must be positive — "${parts[1]}" ignored, using 4` });
           events.push({ type: 'tala', props: talaElem(parts) });
           break;
         }

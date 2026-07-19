@@ -1,9 +1,7 @@
 import { h, render } from './vendor/preact.module.js';
 import { useState, useEffect, useMemo, useCallback, useRef } from './vendor/hooks.module.js';
 import { html } from './vendor/htm-preact.js';
-import { parse, TALA_MAP } from './core/parser.js';
-import { seqToLine } from './core/renderers/notation.js';
-import { seqToRoll } from './core/renderers/roll.js';
+import { TALA_MAP } from './core/parser.js';
 import { setRagas, getRagas } from './core/raga-base.js';
 import { Editor } from './components/Editor.js';
 import { NotationPane } from './components/NotationPane.js';
@@ -101,12 +99,30 @@ function App({ examples }) {
   useEffect(() => { localStorage.setItem(LS_KEY, text); }, [text]);
   useEffect(() => { localStorage.setItem(LS_NAME, docName); }, [docName]);
 
-  const model = useMemo(() => {
-    try { return parse(debounced); } catch { return { events: [], seqProps: {}, diagnostics: [] }; }
+  // Parse + the heavy ascii renderers run in a web worker, so a large or
+  // malformed composition can never block the UI thread. The worker returns the
+  // parsed model (used by the playback / export path on the main thread) plus
+  // the notation + roll strings. Stale replies are dropped by request id.
+  const [compiled, setCompiled] = useState({
+    model: { events: [], seqProps: {}, meta: {}, diagnostics: [] }, notation: '', roll: '',
+  });
+  const workerRef = useRef(null);
+  const reqRef = useRef(0);
+  useEffect(() => {
+    const w = new Worker('./worker.js', { type: 'module' });
+    w.onmessage = (e) => {
+      if (e.data.id === reqRef.current) setCompiled({ model: e.data.model, notation: e.data.notation, roll: e.data.roll });
+    };
+    workerRef.current = w;
+    return () => w.terminate();
+  }, []);
+  useEffect(() => {
+    reqRef.current += 1;
+    workerRef.current?.postMessage({ id: reqRef.current, text: debounced });
   }, [debounced]);
-
-  const notation = useMemo(() => { try { return seqToLine(model.events, 1, 3, true); } catch { return ''; } }, [model]);
-  const roll = useMemo(() => { try { return seqToRoll(model.events, model.seqProps); } catch { return ''; } }, [model]);
+  const model = compiled.model;
+  const notation = compiled.notation;
+  const roll = compiled.roll;
   // Tempo override (null = the composition's T directive, else 120). Applied by
   // cloning the model with meta.tempo replaced, so audio (buildSequence) and the
   // playhead (buildRowTimes) both use it and stay in sync.
