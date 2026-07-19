@@ -1,0 +1,35 @@
+% Copyright (c) 2012, Mani Balasubramanian <ragamroll@gmail.com>
+% All rights reserved.
+
+% Lines starting with % are comments and are ignored
+
+% Swaravali
+
+% Jfugue tempo and instrument
+T180 I[ALTO_SAX] 
+
+% All talas in their default jati are supported
+Tala=rupaka,2
+
+% A limited set of ragas are only supported. However using C12 notation
+% all ragas can be notated. 
+
+% This is Raga Mayamalavagoula, pitch of Sa is set to C
+Raga=mohanam,0
+
+% Set the octave to 5 and unit length to 1
+L=1 O=5
+
+% empty measure to get prepared
+
+%1
+G2 G2 P4 P4   D2 P2 >S4 S4
+R2 S2 <D2 D2   P4 D2 P2 G2 G2 R4
+G2 P2 D2 >S2 <D4 D2 P2 G2 G2 R4
+G2 G2 D2 P2 G4 P2 G2 G2 R2 S4
+G2 G2 G2 G2 R2 G2 P2 G2 P4 P4
+G2 G2 D2 P2 D4 D2 P2 >S4 S2 S2
+<D2 >G2 R2 R2 S2 S2 <D2 >S2 <D2 D2 D2 P2
+G2 P2 D2 >S2 <D2 P2 D2 P2 G2 G2 R2 S2 
+S2 R2 G4 G4 G2 R2 P2 G2 R4
+S2 R2 S2 G2 R2 S2 R2 <D2 >S4 S2 S2

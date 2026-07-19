@@ -8,6 +8,7 @@ import { midiToFreq } from '../schedule.js';
 // supported; a second createPlayer() would clobber the first one's schedules.
 const transport = () => (Tone.Transport ?? Tone.getTransport());
 const destination = () => (Tone.Destination ?? Tone.getDestination());
+const rawCtx = () => { const c = Tone.getContext && Tone.getContext(); return c && c.rawContext; };
 
 // Volume-fraction (0..1) -> Tone dB. 0 -> silence. Linear-log; used for master.
 const gainDb = (v) => (v > 0 ? 20 * Math.log10(v) : -Infinity);
@@ -107,7 +108,24 @@ export function createToneBackend() {
       transport().start();
     },
     pause() { transport().pause(); },
-    stop() { ended = false; const tr = transport(); tr.stop(); tr.position = 0; },
+    stop() {
+      ended = false;
+      const tr = transport();
+      tr.stop();
+      tr.position = 0;
+      tr.cancel();               // drop the leftover schedule
+      b.disposeMelody();         // free the melody/tala oscillators (rebuilt on next play)
+      b.idleSuspend();           // nothing playing + no drone → suspend the audio context
+    },
+    // Suspend the AudioContext when fully idle (transport stopped AND no drone),
+    // so no ticker / audio-thread work continues. Auto-resumes: play() awaits
+    // Tone.start() and setDrone() calls Tone.start(), both of which resume it.
+    idleSuspend() {
+      const raw = rawCtx();
+      if (raw && raw.state === 'running' && transport().state !== 'started' && !drone) {
+        raw.suspend().catch(() => {});
+      }
+    },
     position() {
       if (ended) return 1;              // contract: natural end reads 1 until stop/replay
       if (total <= 0) return 0;
@@ -163,6 +181,7 @@ export function createToneBackend() {
       drone.dispose();
       drone = null;
       droneKey = '';
+      b.idleSuspend();           // if playback is also stopped, go fully idle
     },
     disposeMelody() {
       const tr = transport();

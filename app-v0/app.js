@@ -25,7 +25,12 @@ import { Transport } from './components/Transport.js';
 import { Splitter } from './components/Splitter.js';
 import { Footer } from './components/Footer.js';
 
-const EXAMPLES = ['swaravali', 'hamsa', 'vathapi'];
+// Example pieces are data-driven: the list comes from examples/index.json
+// (regenerated from the folder by tools/gen-examples.sh), so adding a piece
+// needs no code edit. EXAMPLES_BASE is where both the manifest and the .srgm
+// files are fetched from — point it at a CORS-enabled CDN to decouple later.
+const EXAMPLES_BASE = './examples';
+const EXAMPLES_FALLBACK = ['swaravali', 'hamsa', 'vathapi', 'varavina'];
 const LS_KEY = 'ragamroll.srgm';
 const LS_NAME = 'ragamroll.docname';
 const DEFAULT_NAME = 'ragamroll';
@@ -88,7 +93,7 @@ function useDebounced(value, ms) {
   return v;
 }
 
-function App() {
+function App({ examples }) {
   const [text, setText] = useState(() => localStorage.getItem(LS_KEY) || '');
   const [docName, setDocName] = useState(() => localStorage.getItem(LS_NAME) || DEFAULT_NAME);
   const debounced = useDebounced(text, 150);
@@ -107,7 +112,6 @@ function App() {
   // playhead (buildRowTimes) both use it and stay in sync.
   const compositionTempo = useMemo(() => (model.meta?.tempo > 0 ? model.meta.tempo : 120), [model]);
   const [tempoOverride, setTempoOverride] = useState(null);
-  const effectiveTempo = tempoOverride ?? compositionTempo;
   const onTempo = useCallback((v) => { if (v >= 20 && v <= 400) setTempoOverride(v); }, []);
   const onResetTempo = useCallback(() => setTempoOverride(null), []);
   const effModel = useMemo(
@@ -148,7 +152,7 @@ function App() {
   const onExample = useCallback(async (name) => {
     if (!name) { setExampleValue(''); return; }
     stopRef.current();
-    const r = await fetch(`./examples/${name}.srgm`); setExampleValue(name); setDocName(baseName(name)); setText(await r.text());
+    const r = await fetch(`${EXAMPLES_BASE}/${name}.srgm`); setExampleValue(name); setDocName(baseName(name)); setText(await r.text());
   }, []);
 
   // --- Playback: player instance, scroll refs, rAF loop, transport handlers ---
@@ -347,7 +351,7 @@ function App() {
   }, []);
 
   return html`
-    <${Toolbar} raga=${raga} tala=${tala} examples=${EXAMPLES} exampleValue=${exampleValue}
+    <${Toolbar} raga=${raga} tala=${tala} examples=${examples} exampleValue=${exampleValue}
                 onOpen=${onOpen} onExample=${onExample}
                 onOpenRagas=${onOpenRagas} onOpenTalas=${onOpenTalas}
                 onOpenScale=${onOpenScale} scaleActive=${!!scale} scaleLabel=${scaleLabel}
@@ -359,7 +363,7 @@ function App() {
                                                  ragas=${getRagas()} />`}
     <${Transport} state=${playState} canPlay=${noteCount > 0}
                   onPlay=${onPlay} onPause=${onPause} onStop=${onStop}
-                  tempo=${effectiveTempo} onTempo=${onTempo} tempoOverridden=${tempoOverride != null} onResetTempo=${onResetTempo}
+                  compositionTempo=${compositionTempo} tempoOverride=${tempoOverride} onTempo=${onTempo} onResetTempo=${onResetTempo}
                   masterVol=${masterVol} onMasterVol=${onMasterVol}
                   melodyMuted=${melodyMuted} onToggleMelody=${onToggleMelody}
                   talaVol=${talaVol} onTalaVol=${onTalaVol} talaMuted=${talaMuted} onToggleTala=${onToggleTala}
@@ -381,6 +385,14 @@ function App() {
 }
 
 // Load raga data (browser), then mount.
-fetch('./core/raga-base.json')
-  .then(r => r.json())
-  .then(data => { setRagas(data); render(h(App, {}), document.getElementById('app')); });
+// Load raga data + the example manifest (data-driven, so new pieces need no
+// code change), then mount. A missing/broken manifest falls back to the
+// built-in list so the app still runs.
+Promise.all([
+  fetch('./core/raga-base.json').then(r => r.json()),
+  fetch(`${EXAMPLES_BASE}/index.json`).then(r => r.json()).catch(() => EXAMPLES_FALLBACK),
+]).then(([data, examples]) => {
+  setRagas(data);
+  render(h(App, { examples: Array.isArray(examples) && examples.length ? examples : EXAMPLES_FALLBACK }),
+         document.getElementById('app'));
+});
