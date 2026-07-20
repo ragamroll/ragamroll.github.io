@@ -1,12 +1,14 @@
 import { html } from '../vendor/htm-preact.js';
 import { useState, useEffect, useRef } from '../vendor/hooks.module.js';
 import { talaMarks, talaPreview } from '../core/tala-preview.js';
+import { droneFreqs } from '../audio/drone.js';
 import { titleCase } from '../core/reference.js';
 
-// Audio-visual tala browser: each tala shows its aksharas as a row of boxes with
-// accents marked (X = sam, o = anga start, · plain). ▶ plays the cycle as strums
-// through the shared player and lights each box in sync (rAF off player.position).
-export function TalaDialog({ talas, player, saMidi = 60, stopMain, onClose }) {
+// Audio-visual tala browser: each tala shows its aksharas as a row of boxes
+// carrying the traditional anga glyphs (I laghu, O drutam, U anudrutam) at each
+// limb start; the cycle start (first laghu) is highlighted. ▶ plays the cycle as
+// strums through the shared player and lights each box (rAF off player.position).
+export function TalaDialog({ talas, player, saMidi = 60, droneLevel = 0.5, stopMain, onClose }) {
   const [playing, setPlaying] = useState(null);
   const rafRef = useRef(0);
   const contRef = useRef(null);    // the active box-row element
@@ -19,7 +21,7 @@ export function TalaDialog({ talas, player, saMidi = 60, stopMain, onClose }) {
   };
   const stop = () => {
     cancelAnimationFrame(rafRef.current);
-    try { player.stop(); } catch { /* backend may be mid-teardown */ }
+    try { player.stop(); player.droneOff(); } catch { /* backend may be mid-teardown */ }
     clearActive();
     setPlaying(null);
   };
@@ -30,15 +32,20 @@ export function TalaDialog({ talas, player, saMidi = 60, stopMain, onClose }) {
     return () => { window.removeEventListener('keydown', onKey); stop(); };   // stop on unmount/close
   }, []);
 
-  const play = (name, contEl) => {
+  const play = async (name, contEl) => {
     stopMain?.();     // free the shared transport from any composition playback
     stop();
     const prev = talaPreview(talas[name], { bpm: 110, cycles: 3, saMidi });
+    if (prev.totalSec <= 0) return;
     player.onended = () => stop();
     player.load(prev.events, prev.totalSec);
-    player.play();
     setPlaying(name);
     contRef.current = contEl;
+    try {
+      await player.play();            // resume/unlock the AudioContext before the drone
+      // Same global drone as the composition, so the cycle is heard against S–P–S.
+      if (droneLevel > 0) player.setDrone(droneFreqs(saMidi), droneLevel);
+    } catch { stop(); return; }
     const { aksharas: A, cycles: cyc } = prev;
     const loop = () => {
       const pos = player.position();
@@ -64,7 +71,7 @@ export function TalaDialog({ talas, player, saMidi = 60, stopMain, onClose }) {
         <button title="Close" onClick=${close}>✕</button>
       </div>
       <div class="dialog-body">
-        <div class="tala-hint">▶ plays the cycle — <b>X</b> sam (strong), <b>o</b> anga start (soft), · plain.</div>
+        <div class="tala-hint">▶ plays the cycle — <b>I</b> laghu, <b>O</b> drutam, <b>U</b> anudrutam; the cycle start (first laghu) is lower Sa, other limbs are accented.</div>
         <ul class="tala-list">
           ${Object.keys(talas).map((name) => {
             const marks = talaMarks(talas[name]);
@@ -81,7 +88,7 @@ export function TalaDialog({ talas, player, saMidi = 60, stopMain, onClose }) {
               </div>
               <div class="akrow">
                 ${marks.map((mk, i) => html`<span key=${i}
-                    class=${'akbox ' + (mk === 'X' ? 'sam' : mk === 'o' ? 'acc' : 'plain')}>${mk === '·' ? '' : mk}</span>`)}
+                    class=${'akbox ' + (mk.role === 'start' ? 'start' : mk.role === 'anga' ? 'acc' : 'plain')}>${mk.ch}</span>`)}
               </div>
             </li>`;
           })}

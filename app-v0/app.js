@@ -333,9 +333,10 @@ function App({ examples }) {
                 onOpenScale=${onOpenScale} scaleActive=${!!scale} scaleLabel=${scaleLabel}
                 timbre=${timbre} onTimbre=${onTimbre} />
     ${dialog === 'ragas' && html`<${RagaDialog} ragas=${getRagas()} player=${playerRef.current}
-                                         saMidi=${saMidi} droneLevel=${droneLevel} stopMain=${onStop} onClose=${onCloseDialog} />`}
+                                         saMidi=${saMidi} droneLevel=${droneLevel} ragaName=${ragaName}
+                                         stopMain=${onStop} onClose=${onCloseDialog} />`}
     ${dialog === 'talas' && html`<${TalaDialog} talas=${TALA_MAP} player=${playerRef.current}
-                                         saMidi=${saMidi} stopMain=${onStop} onClose=${onCloseDialog} />`}
+                                         saMidi=${saMidi} droneLevel=${droneLevel} stopMain=${onStop} onClose=${onCloseDialog} />`}
     ${dialog === 'scale' && html`<${ScaleDialog} scale=${scale} onApply=${onApplyScale} onClose=${onCloseDialog}
                                                  ragas=${getRagas()} ragaName=${ragaName} />`}
     <${Transport} state=${playState} canPlay=${noteCount > 0}

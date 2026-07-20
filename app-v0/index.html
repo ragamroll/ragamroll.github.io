@@ -129,9 +129,9 @@
        from ballooning. */
     .akrow { display:flex; flex-wrap:nowrap; gap:3px; margin:.35rem 0 .1rem; }
     .akbox { flex:1 1 0; min-width:0; max-width:1.5rem; aspect-ratio:1; display:flex; align-items:center;
-      justify-content:center; border:1px solid #333; border-radius:4px; background:#141414;
+      justify-content:center; border:1px solid #5a5a5a; border-radius:4px; background:#1c1c1c;
       font-family:ui-monospace,monospace; font-size:.7rem; }
-    .akbox.sam { border-color:#6c9; color:#9fc; background:#12211b; }
+    .akbox.start { border-color:#6c9; color:#9fc; background:#12211b; }
     .akbox.acc { border-color:#a86; color:#eca; background:#211a12; }
     .akbox.on { background:#2b4; color:#111; border-color:#2b4; }
     /* Raga browser preview */
@@ -144,6 +144,40 @@
     .raga-main .ref-name { font-weight:bold; }
     .raga-list .ref-mela { color:#c9c; font-size:.78rem; }
     .raga-list .ref-aroha { color:#9c9; font-size:.78rem; font-family:ui-monospace,monospace; }
+    /* Raga browser v2: 22-shruti grid header + per-row X footprint, sharing one
+       column template so swaras line up under their shrutis. */
+    .raga2-box { width:min(96vw, 760px); max-width:96vw; }
+    .rr-scroll { overflow:auto; max-height:66vh; border:1px solid #2a2a2a; border-radius:6px; }
+    .rr-grid, .rr-raga { display:grid;
+      grid-template-columns: var(--rr-gutter, 13rem) repeat(22, minmax(0.8rem, 1fr));
+      align-items:start; column-gap:1px; }
+    .rr-header { position:sticky; top:0; z-index:2; background:#161616;
+      border-bottom:1px solid #3a3a3a; padding:.3rem .2rem .35rem; }
+    .rr-melaline { font-size:.82rem; padding:0 .3rem .25rem; }
+    .rr-melaline .rr-selname { color:#9fc; font-weight:bold; margin-left:.5rem; }
+    .rr-rowlab { font-size:.66rem; color:#999; align-self:center; padding-right:.3rem; }
+    .rr-cell { display:flex; align-items:center; justify-content:center; font-size:.66rem;
+      font-family:ui-monospace,monospace; min-height:1.05rem; }
+    .rr-swara { color:#cfe; font-weight:bold; }
+    .rr-cents { color:#888; font-size:.58rem; }
+    .rr-comma.gap { color:#4a4a4a; border:1px solid #262626; border-radius:3px; min-height:1rem; }
+    .rr-comma.anchor { color:#bcbcbc; border:1px solid #6a6a6a; border-radius:3px; min-height:1rem;
+      background:#262626; font-weight:bold; }   /* S / P: stronger box, but grey (not an a/b choice) */
+    button.rr-comma { cursor:pointer; background:#1e1e1e; color:#c9a; border:1px solid #444;
+      border-radius:3px; padding:0; line-height:1; min-height:1rem; }
+    button.rr-comma.on { background:#3a2c12; border-color:#a86; color:#fda; font-weight:bold; }
+    .rr-cell.dim { opacity:.32; }
+    .rr-list { list-style:none; margin:0; padding:0; }
+    .rr-raga { padding:.3rem .2rem; border-bottom:1px solid #202020; }
+    .rr-raga.sel { background:#12211b; }
+    .rr-namecell { grid-column:1; padding-right:.4rem; min-width:0; }
+    .rr-nameline { display:flex; align-items:center; gap:.35rem; }
+    .rr-nameline .ref-name { font-weight:bold; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .rr-aroha, .rr-avaroha { color:#9c9; font-size:.68rem; font-family:ui-monospace,monospace;
+      white-space:normal; overflow-wrap:anywhere; }   /* wrap so all notes show */
+    .rr-avaroha { color:#9ac; }
+    .rr-x { color:#333; }
+    .rr-x.on { color:#2b4; font-weight:bold; }
     .scale-actions button { cursor:pointer; background:#2a2a2a; color:#eee; border:1px solid #555;
       border-radius:4px; padding:.3rem .7rem; }
     .scale-actions button.primary { background:#1c3a30; border-color:#6c9; color:#cfe; }

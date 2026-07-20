@@ -75,10 +75,11 @@ export function createToneBackend() {
       ended = false;
       synth = makeMelody(timbre);
       synth.volume.value = melodyMuted ? -Infinity : 0;   // melody mute (hear tala/drone alone)
-      tala = new Tone.PolySynth(Tone.Synth).toDestination();
-      // Pluck-ish tala: triangle osc, fast attack, short-ish body.
-      tala.set({ oscillator: { type: 'triangle' },
-                 envelope: { attack: 0.01, decay: 0.25, sustain: 0.4, release: 0.6 } });
+      tala = new Tone.PolySynth(Tone.MembraneSynth).toDestination();
+      // Soft percussive tala (mridangam-ish): a gentle pitch drop into a rounded
+      // body. Slower attack + smaller pitch sweep take the punch off the stroke.
+      tala.set({ pitchDecay: 0.08, octaves: 1.5, oscillator: { type: 'sine' },
+                 envelope: { attack: 0.008, decay: 0.32, sustain: 0, release: 0.32 } });
       tala.volume.value = talaDb(talaGain);     // live-adjustable via setTalaVolume
       const tr = transport();
       tr.cancel();
