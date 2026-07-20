@@ -59,13 +59,17 @@ export function createToneBackend() {
   let droneKey = '';     // freqs signature — lets volume change without re-voicing
   let timbre = 'soft-am';   // melody voice preset; applied on the next load()
   let melodyMuted = false;  // remembered so a reload keeps the melody muted
+  let masterDb = 0;         // canonical master level (dB); fades ramp around it
+  let fadeTimer = null;     // pending fadeOutStop teardown; cancelled by a new load/play
   let total = 0;
   let ended = false;
+  const clearFade = () => { if (fadeTimer) { clearTimeout(fadeTimer); fadeTimer = null; } };
   const b = {
     onended: null,
     // opts.talaGain (0..1) is the tala track's initial live volume.
     load(events, totalSec, opts = {}) {
       const talaGain = opts.talaGain != null ? opts.talaGain : 1;
+      clearFade();         // a new load supersedes any pending fade teardown
       b.disposeMelody();   // keep the drone playing across sequence reloads
       total = totalSec;
       ended = false;
@@ -103,6 +107,7 @@ export function createToneBackend() {
     },
     async play() {
       if (total <= 0) return;
+      clearFade();                      // don't let a stale teardown stop this run
       ended = false;
       await Tone.start();               // unlock AudioContext on the user gesture
       transport().start();
@@ -162,7 +167,28 @@ export function createToneBackend() {
     // Master output level (0..1): scales everything — melody, tala, drone.
     // 1 → 0 dB (unattenuated), 0 → silence. Live.
     setMasterVolume(vol) {
-      destination().volume.value = gainDb(vol);
+      masterDb = gainDb(vol);
+      destination().volume.value = masterDb;
+    },
+    // Click-free start/stop by ramping the master output. Both anchor to the
+    // stored master level (masterDb) — never the live, possibly mid-ramp value.
+    // fadeIn dips to silence then ramps up; fadeOutStop ramps down, then stops +
+    // clears the drone and restores the level. The teardown timer is tracked so
+    // a following load()/play() cancels it (else it would kill the new run).
+    fadeIn(sec = 0.06) {
+      clearFade();
+      const v = destination().volume;
+      v.value = -60;
+      v.rampTo(masterDb, sec);
+    },
+    fadeOutStop(sec = 0.12) {
+      const v = destination().volume;
+      v.rampTo(-60, sec);
+      clearFade();
+      fadeTimer = setTimeout(() => {
+        fadeTimer = null;
+        b.stop(); b.droneOff(); v.value = masterDb;
+      }, sec * 1000 + 40);
     },
     // Tala track volume (0..1), live — takes effect on a currently playing piece.
     setTalaVolume(vol) {

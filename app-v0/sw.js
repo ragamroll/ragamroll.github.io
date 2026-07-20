@@ -1,4 +1,4 @@
-const CACHE = 'ragamroll-4d9196f';
+const CACHE = 'ragamroll-d0d4bce';
 const ASSETS = [
   './', './index.html', './help.html', './app.js', './worker.js', './version.js', './manifest.webmanifest',
   './vendor/preact.module.js', './vendor/hooks.module.js', './vendor/htm.module.js', './vendor/htm-preact.js',
@@ -7,7 +7,7 @@ const ASSETS = [
   './components/Diagnostics.js', './components/Transport.js', './components/ReferenceDialog.js', './components/Splitter.js',
   './components/Footer.js', './components/OpenMenu.js', './components/ScaleDialog.js', './components/TalaDialog.js',
   './components/RagaDialog.js',
-  './audio/schedule.js', './audio/scroll.js', './audio/backend.js', './audio/backends/tone.js', './audio/player.js',
+  './audio/schedule.js', './audio/scroll.js', './audio/drone.js', './audio/backend.js', './audio/backends/tone.js', './audio/player.js',
   './audio/rowtimes.js',
   './core/parser.js', './core/tuning.js', './core/raga-base.js', './core/raga-base.json', './core/reference.js',
   './core/shruti.js', './core/melakarta.js', './core/tala-preview.js',

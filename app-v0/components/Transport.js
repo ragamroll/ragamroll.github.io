@@ -7,8 +7,12 @@ import { midiToName } from '../core/tuning.js';
 // closest to hand on mobile).
 const pct = (v) => Math.round(v * 100);
 
+// Sa reference-pitch choices span the full vocal range of shadja tonics, from
+// the lowest male (bass, ~E2) to the highest female (soprano, ~C5). MIDI is
+// standard here (60 = middle C, 261.63 Hz); the note labels carry the app's
+// +1-octave display quirk.
 const SA_CHOICES = [];
-for (let m = 48; m <= 72; m++) SA_CHOICES.push(m);
+for (let m = 40; m <= 72; m++) SA_CHOICES.push(m);
 
 export function Transport({ state, canPlay, onPlay, onPause, onStop,
   talaVol, onTalaVol, talaMuted, onToggleTala, melodyMuted, onToggleMelody,

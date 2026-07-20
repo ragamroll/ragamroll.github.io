@@ -550,8 +550,8 @@
  "asaveri": {
   "mela": 8,
   "arohana": "S R M P D >S",
-  "avarohana": "S <N S P D P M G R S",
-  "source": "ragasurabhi.com"
+  "avarohana": "S <N >S <P D P M G R S",
+  "source": "manual"
  },
  "atana": {
   "mela": 29,

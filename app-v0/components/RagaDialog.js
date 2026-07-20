@@ -2,8 +2,8 @@ import { html } from '../vendor/htm-preact.js';
 import { useState, useEffect } from '../vendor/hooks.module.js';
 import { parse } from '../core/parser.js';
 import { buildSequence } from '../core/midi/sequence.js';
-import { scheduleEvents, totalSeconds, midiToFreq } from '../audio/schedule.js';
-import { stepFreq, P_STEP } from '../core/shruti.js';
+import { scheduleEvents, totalSeconds } from '../audio/schedule.js';
+import { droneFreqs } from '../audio/drone.js';
 import { saBaseOf, applyPlaybackPitch } from '../core/retune.js';
 import { ragaPreviewSrgm, ragaPreviewScale } from '../core/raga-preview.js';
 import { getRagaExt } from '../core/raga-ext.js';
@@ -12,17 +12,15 @@ import { formatSwaraSeq, formatIntervalNumbers, padMelaName, titleCase } from '.
 
 // Searchable raga browser with an audio preview. ▶ plays the raga's arohana /
 // avarohana (+ any phrases; straight scale up/down when none authored) through
-// the shared player, retuned to its 53-EDO shrutis. Read-only otherwise.
-// S · P · >S drone voices for a Sa MIDI (Pa a 53-EDO fifth, upper Sa an octave).
-const droneFreqs = (saMidi) => { const f = midiToFreq(saMidi); return [f, stepFreq(f, P_STEP), f * 2]; };
-const mod12 = (x) => ((x % 12) + 12) % 12;
+// the shared player, retuned to its 53-EDO shrutis. Read-only otherwise. The
+// drone reuses the app's global voicing + level, so it matches the composition.
 
-export function RagaDialog({ ragas, player, stopMain, onClose }) {
+export function RagaDialog({ ragas, player, saMidi = 60, droneLevel = 0.5, stopMain, onClose }) {
   const [q, setQ] = useState('');
   const [playing, setPlaying] = useState(null);
 
   const stop = () => {
-    try { player.stop(); player.droneOff(); } catch { /* mid-teardown */ }
+    try { player.fadeOutStop(0.12); } catch { try { player.stop(); player.droneOff(); } catch { /* mid-teardown */ } }
     setPlaying(null);
   };
   useEffect(() => {
@@ -31,7 +29,7 @@ export function RagaDialog({ ragas, player, stopMain, onClose }) {
     return () => { window.removeEventListener('keydown', onKey); stop(); };
   }, []);
 
-  const play = (name) => {
+  const play = async (name) => {
     stopMain?.();
     stop();
     const ext = getRagaExt(name);
@@ -39,14 +37,20 @@ export function RagaDialog({ ragas, player, stopMain, onClose }) {
     const seq = buildSequence(model);
     if (totalSeconds(seq) <= 0) return;
     const saBase = saBaseOf(model, ragas);
-    applyPlaybackPitch(seq, model, ragaPreviewScale(name, ext, ragas), saBase, 0);
+    // Transpose the sample so Sa lands on the app's selected pitch (the preview's
+    // natural Sa is 60 + saBase at O=5).
+    const shift = saMidi - (60 + saBase);
+    applyPlaybackPitch(seq, model, ragaPreviewScale(name, ext, ragas), saBase, shift);
     player.onended = () => stop();
     // Raga preview is the melody only — drop the (default) tala strums.
     player.load(scheduleEvents(seq).filter((e) => e.track !== 'tala'), totalSeconds(seq));
-    player.play();
-    // S-P-S drone an octave below the melody's Sa, so each note is heard against it.
-    player.setDrone(droneFreqs(48 + mod12(saBase)), 0.5);
     setPlaying(name);
+    try {
+      await player.play();            // resume/unlock the AudioContext BEFORE the drone
+      // Same global drone as the composition — matching Sa, octave and level.
+      if (droneLevel > 0) player.setDrone(droneFreqs(saMidi), droneLevel);
+      player.fadeIn(0.06);            // click-free start
+    } catch { stop(); }
   };
 
   const stopEvt = (e) => e.stopPropagation();

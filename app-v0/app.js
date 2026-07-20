@@ -15,8 +15,8 @@ import { ScaleDialog } from './components/ScaleDialog.js';
 import { buildSequence } from './core/midi/sequence.js';
 import { writeSMF } from './core/midi/smf.js';
 import { createPlayer } from './audio/player.js';
-import { scheduleEvents, totalSeconds, midiToFreq } from './audio/schedule.js';
-import { stepFreq, P_STEP } from './core/shruti.js';
+import { scheduleEvents, totalSeconds } from './audio/schedule.js';
+import { droneFreqs } from './audio/drone.js';
 import { melaOfScale } from './core/melakarta.js';
 import { saBaseOf, applyPlaybackPitch } from './core/retune.js';
 import { scrollPos, playheadScroll } from './audio/scroll.js';
@@ -39,13 +39,6 @@ const DEFAULT_NAME = 'ragamroll';
 function baseName(name) {
   const stripped = String(name || '').replace(/\.[^./\\]+$/, '').trim();
   return stripped || DEFAULT_NAME;
-}
-
-// Sustained drone voices (frequencies) for a given Sa MIDI: S · P · >S
-// (Sa, Pa above Sa, upper Sa an octave up).
-function droneFreqs(saMidi) {
-  const saFreq = midiToFreq(saMidi);
-  return [saFreq, stepFreq(saFreq, P_STEP), saFreq * 2];   // S, P, >S
 }
 
 function useDebounced(value, ms) {
@@ -177,7 +170,7 @@ function App({ examples }) {
   const [scale, setScale] = useState(null);
   const onApplyScale = useCallback((s) => setScale(s), []);
   const [droneVol, setDroneVol] = useState(0.5);
-  const [droneMuted, setDroneMuted] = useState(true);
+  const [droneMuted, setDroneMuted] = useState(false);   // drone accompanies playback by default
   const onDroneVol = useCallback((v) => { setDroneVol(v); setDroneMuted(false); }, []);
   const onToggleDrone = useCallback(() => setDroneMuted((m) => !m), []);
   const droneLevel = droneMuted ? 0 : droneVol;
@@ -293,11 +286,14 @@ function App({ examples }) {
 
   useEffect(() => () => { cancelAnimationFrame(rafRef.current); playerRef.current?.dispose(); }, []);
 
-  // Constant drone: on/off toggle, re-voiced when the raga's Sa changes. Kept
-  // outside the transport so it plays independently of start/stop.
+  // Drone accompanies playback: it starts on Play and stops when the piece ends
+  // (or on Stop). While a piece is going it stays live-adjustable / re-voiced on
+  // Sa change; when stopped it's silent.
   useEffect(() => {
-    playerRef.current.setDrone(droneLevel > 0 ? droneFreqs(saMidi) : null, droneLevel);
-  }, [droneLevel, saMidi]);
+    const p = playerRef.current;
+    if (playState !== 'stopped' && droneLevel > 0) p.setDrone(droneFreqs(saMidi), droneLevel);
+    else p.droneOff();
+  }, [playState, droneLevel, saMidi]);
 
   useEffect(() => { playerRef.current.setMasterVolume(masterVol); }, [masterVol]);
   useEffect(() => { playerRef.current.setTalaVolume(talaLevel); }, [talaLevel]);
@@ -337,7 +333,7 @@ function App({ examples }) {
                 onOpenScale=${onOpenScale} scaleActive=${!!scale} scaleLabel=${scaleLabel}
                 timbre=${timbre} onTimbre=${onTimbre} />
     ${dialog === 'ragas' && html`<${RagaDialog} ragas=${getRagas()} player=${playerRef.current}
-                                         stopMain=${onStop} onClose=${onCloseDialog} />`}
+                                         saMidi=${saMidi} droneLevel=${droneLevel} stopMain=${onStop} onClose=${onCloseDialog} />`}
     ${dialog === 'talas' && html`<${TalaDialog} talas=${TALA_MAP} player=${playerRef.current}
                                          saMidi=${saMidi} stopMain=${onStop} onClose=${onCloseDialog} />`}
     ${dialog === 'scale' && html`<${ScaleDialog} scale=${scale} onApply=${onApplyScale} onClose=${onCloseDialog}
