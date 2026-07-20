@@ -4,12 +4,21 @@ import { talaMarks, talaPreview } from '../core/tala-preview.js';
 import { droneFreqs } from '../audio/drone.js';
 import { titleCase } from '../core/reference.js';
 
+const TALA_TIMBRES = [
+  ['reed', 'Reed'],
+  ['mallet', 'Mallet'],
+  ['membrane', 'Membrane'],
+];
+
 // Audio-visual tala browser: each tala shows its aksharas as a row of boxes
 // carrying the traditional anga glyphs (I laghu, O drutam, U anudrutam) at each
 // limb start; the cycle start (first laghu) is highlighted. ▶ plays the cycle as
 // strums through the shared player and lights each box (rAF off player.position).
 export function TalaDialog({ talas, player, saMidi = 60, droneLevel = 0.5, stopMain, onClose }) {
   const [playing, setPlaying] = useState(null);
+  // Voice is browser-only: it retunes the preview strum, not the composition's
+  // tala (which keeps its fixed 'veena' accent-strum voice).
+  const [talaTimbre, setTalaTimbre] = useState('reed');
   const rafRef = useRef(0);
   const contRef = useRef(null);    // the active box-row element
   const idxRef = useRef(-1);
@@ -38,7 +47,7 @@ export function TalaDialog({ talas, player, saMidi = 60, droneLevel = 0.5, stopM
     const prev = talaPreview(talas[name], { bpm: 110, cycles: 3, saMidi });
     if (prev.totalSec <= 0) return;
     player.onended = () => stop();
-    player.load(prev.events, prev.totalSec);
+    player.load(prev.events, prev.totalSec, { talaVoice: talaTimbre });
     setPlaying(name);
     contRef.current = contEl;
     try {
@@ -72,6 +81,11 @@ export function TalaDialog({ talas, player, saMidi = 60, droneLevel = 0.5, stopM
       </div>
       <div class="dialog-body">
         <div class="tala-hint">▶ plays the cycle — <b>I</b> laghu, <b>O</b> drutam, <b>U</b> anudrutam; the cycle start (first laghu) is lower Sa, other limbs are accented.</div>
+        <label class="tala-timbre" title="Preview strum voice (browser only; the composition tala keeps its own voice)">🥁 Voice
+          <select value=${talaTimbre} onChange=${(e) => setTalaTimbre(e.target.value)}>
+            ${TALA_TIMBRES.map(([v, label]) => html`<option key=${v} value=${v}>${label}</option>`)}
+          </select>
+        </label>
         <ul class="tala-list">
           ${Object.keys(talas).map((name) => {
             const marks = talaMarks(talas[name]);

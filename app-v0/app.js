@@ -336,7 +336,8 @@ function App({ examples }) {
                                          saMidi=${saMidi} droneLevel=${droneLevel} ragaName=${ragaName}
                                          stopMain=${onStop} onClose=${onCloseDialog} />`}
     ${dialog === 'talas' && html`<${TalaDialog} talas=${TALA_MAP} player=${playerRef.current}
-                                         saMidi=${saMidi} droneLevel=${droneLevel} stopMain=${onStop} onClose=${onCloseDialog} />`}
+                                         saMidi=${saMidi} droneLevel=${droneLevel}
+                                         stopMain=${onStop} onClose=${onCloseDialog} />`}
     ${dialog === 'scale' && html`<${ScaleDialog} scale=${scale} onApply=${onApplyScale} onClose=${onCloseDialog}
                                                  ragas=${getRagas()} ragaName=${ragaName} />`}
     <${Transport} state=${playState} canPlay=${noteCount > 0}

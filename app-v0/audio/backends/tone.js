@@ -52,6 +52,42 @@ function makeMelody(timbre) {
   }
 }
 
+// Tala percussion voice factory. All are pitched (so the lower-Sa / Pa / Ma / Sa
+// strokes stay distinct) with a short, sustain-0 envelope so each akshara reads
+// as a struck stroke. Applied on the next load().
+function makeTala(timbre) {
+  switch (timbre) {
+    case 'mallet': {     // soft pitched mallet — marimba / kalimba
+      const s = new Tone.PolySynth(Tone.Synth).toDestination();
+      s.set({ oscillator: { type: 'triangle' },
+              envelope: { attack: 0.002, decay: 0.28, sustain: 0, release: 0.2 } });
+      return s;
+    }
+    case 'reed':
+    default: {           // warm rounded tick — the melody reed, made percussive (default)
+      const s = new Tone.PolySynth(Tone.MonoSynth).toDestination();
+      s.set({ oscillator: { type: 'triangle' },
+              envelope: { attack: 0.01, decay: 0.22, sustain: 0, release: 0.3 },
+              filter: { Q: 0.5, type: 'lowpass', rolloff: -24 },
+              filterEnvelope: { attack: 0.02, decay: 0.2, sustain: 0.2, release: 0.3, baseFrequency: 200, octaves: 2 } });
+      return s;
+    }
+    case 'membrane': {   // pitched membrane kick — mridangam-ish (the original)
+      const s = new Tone.PolySynth(Tone.MembraneSynth).toDestination();
+      s.set({ pitchDecay: 0.08, octaves: 1.5, oscillator: { type: 'sine' },
+              envelope: { attack: 0.008, decay: 0.32, sustain: 0, release: 0.32 } });
+      return s;
+    }
+    case 'veena': {      // plucked string — the composition's sparse accent strum.
+      // PluckSynth isn't Monophonic-based (no PolySynth); the composition tala is
+      // sparse accent strums, so mono is fine.
+      const s = new Tone.PluckSynth().toDestination();
+      s.set({ attackNoise: 0.6, dampening: 2200, resonance: 0.9 });
+      return s;
+    }
+  }
+}
+
 export function createToneBackend() {
   let synth = null;      // melody voice
   let tala = null;       // tala voice — separate so its volume is live
@@ -75,11 +111,9 @@ export function createToneBackend() {
       ended = false;
       synth = makeMelody(timbre);
       synth.volume.value = melodyMuted ? -Infinity : 0;   // melody mute (hear tala/drone alone)
-      tala = new Tone.PolySynth(Tone.MembraneSynth).toDestination();
-      // Soft percussive tala (mridangam-ish): a gentle pitch drop into a rounded
-      // body. Slower attack + smaller pitch sweep take the punch off the stroke.
-      tala.set({ pitchDecay: 0.08, octaves: 1.5, oscillator: { type: 'sine' },
-                 envelope: { attack: 0.008, decay: 0.32, sustain: 0, release: 0.32 } });
+      // Composition tala (no talaVoice) uses the fixed 'veena' accent-strum voice;
+      // the tala browser passes opts.talaVoice from its picker to audition voices.
+      tala = makeTala(opts.talaVoice || 'veena');
       tala.volume.value = talaDb(talaGain);     // live-adjustable via setTalaVolume
       const tr = transport();
       tr.cancel();

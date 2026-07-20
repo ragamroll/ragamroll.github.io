@@ -115,7 +115,10 @@
     .scale-actions .suggest-btn { background:#1c2f3a; border-color:#69c; color:#cde; }
     /* Tala browser */
     .tala-box { width:min(680px,96vw); }
-    .tala-hint { font-size:.8rem; opacity:.75; margin:.1rem 0 .6rem; }
+    .tala-hint { font-size:.8rem; opacity:.75; margin:.1rem 0 .4rem; }
+    .tala-timbre { display:inline-flex; align-items:center; gap:.3rem; font-size:.82rem;
+      margin:0 0 .6rem; color:#ccc; }
+    .tala-timbre select { font-size:.82rem; }
     .tala-list { list-style:none; margin:0; padding:0; }
     .tala-list li { padding:.45rem 0; border-bottom:1px solid #222; }
     .tala-head { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
@@ -146,20 +149,24 @@
     .raga-list .ref-aroha { color:#9c9; font-size:.78rem; font-family:ui-monospace,monospace; }
     /* Raga browser v2: 22-shruti grid header + per-row X footprint, sharing one
        column template so swaras line up under their shrutis. */
-    .raga2-box { width:min(96vw, 760px); max-width:96vw; }
+    .raga2-box { width:min(96vw, 760px); max-width:96vw; --rr-gutter:11rem; }
     .rr-scroll { overflow:auto; max-height:66vh; border:1px solid #2a2a2a; border-radius:6px; }
     .rr-grid, .rr-raga { display:grid;
-      grid-template-columns: var(--rr-gutter, 13rem) repeat(22, minmax(0.8rem, 1fr));
+      grid-template-columns: var(--rr-gutter, 11rem) repeat(22, minmax(0.5rem, 1fr));
       align-items:start; column-gap:1px; }
     .rr-header { position:sticky; top:0; z-index:2; background:#161616;
       border-bottom:1px solid #3a3a3a; padding:.3rem .2rem .35rem; }
-    .rr-melaline { font-size:.82rem; padding:0 .3rem .25rem; }
+    .rr-melaline { font-size:.82rem; padding:0 .3rem .2rem; }
     .rr-melaline .rr-selname { color:#9fc; font-weight:bold; margin-left:.5rem; }
-    .rr-rowlab { font-size:.66rem; color:#999; align-self:center; padding-right:.3rem; }
-    .rr-cell { display:flex; align-items:center; justify-content:center; font-size:.66rem;
+    /* Cents summary: free-flowing above the grid so multi-digit values never
+       widen a shruti column. Each entry = swara letter + its chosen cents. */
+    .rr-cents-line { display:flex; flex-wrap:wrap; gap:.1rem .55rem; padding:0 .3rem .3rem;
+      font-size:.6rem; color:#8a8a8a; font-family:ui-monospace,monospace; }
+    .rr-cl b { color:#b9c6c0; font-weight:normal; margin-left:.12rem; }
+    .rr-rowlab { font-size:.62rem; color:#999; align-self:center; padding-right:.3rem; }
+    .rr-cell { display:flex; align-items:center; justify-content:center; font-size:.64rem;
       font-family:ui-monospace,monospace; min-height:1.05rem; }
     .rr-swara { color:#cfe; font-weight:bold; }
-    .rr-cents { color:#888; font-size:.58rem; }
     .rr-comma.gap { color:#4a4a4a; border:1px solid #262626; border-radius:3px; min-height:1rem; }
     .rr-comma.anchor { color:#bcbcbc; border:1px solid #6a6a6a; border-radius:3px; min-height:1rem;
       background:#262626; font-weight:bold; }   /* S / P: stronger box, but grey (not an a/b choice) */
@@ -178,6 +185,14 @@
     .rr-avaroha { color:#9ac; }
     .rr-x { color:#333; }
     .rr-x.on { color:#2b4; font-weight:bold; }
+    /* Mobile portrait: shrink the name gutter + glyphs so all 22 shruti columns
+       fit without horizontal scroll. */
+    @media (max-width:560px) {
+      .raga2-box { --rr-gutter:6.2rem; }
+      .rr-cell, .rr-rowlab { font-size:.54rem; }
+      .rr-nameline .ref-name { font-size:.8rem; }
+      .rr-aroha, .rr-avaroha { font-size:.6rem; }
+    }
     .scale-actions button { cursor:pointer; background:#2a2a2a; color:#eee; border:1px solid #555;
       border-radius:4px; padding:.3rem .7rem; }
     .scale-actions button.primary { background:#1c3a30; border-color:#6c9; color:#cfe; }

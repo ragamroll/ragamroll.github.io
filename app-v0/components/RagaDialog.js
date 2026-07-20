@@ -114,14 +114,20 @@ export function RagaDialog({ ragas, player, saMidi = 60, droneLevel = 0.5, ragaN
 
   // Each cell is a DIRECT grid child (no wrapper) so the grid stretches it to the
   // full column and its flex-centering lines the glyph up under the header column.
+  // Each cell is a DIRECT grid child (no wrapper) so the grid stretches it to the
+  // full column and its flex-centering lines the glyph up under the header column.
+  // Only the swara letter, a/b button and X are in the grid (all single-char), so
+  // the 22 columns stay narrow enough for mobile; cents live in a summary line
+  // above the grid (see centsLine) rather than widening a column.
   const swaraCell = (c) => html`<span key=${'s' + c.i} class=${'rr-cell rr-swara' + (c.present === false ? ' dim' : '')}>
     ${c.kind === 'fixed' || (c.kind === 'active' && c.chosen) ? c.letter : ''}</span>`;
   const commaCell = (c) => (c.kind === 'active'
     ? html`<button key=${'c' + c.i} class=${'rr-cell rr-comma' + (c.chosen ? ' on' : '') + (c.present === false ? ' dim' : '')}
              title=${`${c.letter} comma ${c.comma}`} onClick=${() => setComma(c.letter, c.comma)}>${c.comma}</button>`
     : html`<span key=${'c' + c.i} class=${'rr-cell rr-comma ' + (c.kind === 'fixed' ? 'anchor' : 'gap')}>·</span>`);
-  const centsCell = (c) => html`<span key=${'e' + c.i} class=${'rr-cell rr-cents' + (c.present === false ? ' dim' : '')}>
-    ${c.kind === 'fixed' || (c.kind === 'active' && c.chosen) ? c.cents : ''}</span>`;
+  // Per-swara cents (the chosen shruti of each swara), in swara order, for the
+  // free-flowing summary line — not column-bound.
+  const cented = cols.filter((c) => c.kind === 'fixed' || (c.kind === 'active' && c.chosen));
 
   return html`<div class="dialog-backdrop" onClick=${close}>
     <div class="dialog-box raga2-box" onClick=${stopEvt} role="dialog" aria-modal="true" aria-label="Ragas">
@@ -142,10 +148,12 @@ export function RagaDialog({ ragas, player, saMidi = 60, droneLevel = 0.5, ragaN
               ${mela ? html`<b>Mela ${mela.n}</b> · ${MELA_NAMES[mela.n]}` : html`<span class="dim">no melakarta match</span>`}
               <span class="rr-selname">${selected ? titleCase(padMelaName(selected)) : ''}</span>
             </div>
+            <div class="rr-cents-line">
+              ${cented.map((c) => html`<span key=${'cl' + c.i} class=${'rr-cl' + (c.present === false ? ' dim' : '')}>${c.letter}<b>${c.cents}</b></span>`)}
+            </div>
             <div class="rr-grid rr-head-grid">
               <div class="rr-rowlab">swara</div>${cols.map(swaraCell)}
               <div class="rr-rowlab">comma</div>${cols.map(commaCell)}
-              <div class="rr-rowlab">cents</div>${cols.map(centsCell)}
             </div>
           </div>
 

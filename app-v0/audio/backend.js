@@ -9,7 +9,7 @@
  * @property {'melody'|'tala'} track
  *
  * @typedef {Object} SynthBackend
- * @property {(events: ScheduledEvent[], totalSec: number, opts?: {talaGain?: number}) => (void|Promise<void>)} load  // talaGain (0..1) scales tala velocity
+ * @property {(events: ScheduledEvent[], totalSec: number, opts?: {talaGain?: number, talaVoice?: string}) => (void|Promise<void>)} load  // talaGain (0..1) scales tala velocity; talaVoice picks the tala voice ('reed'|'mallet'|'membrane') for the tala browser — omit for the composition's fixed 'veena' accent strum
  * @property {() => Promise<void>} play    // start from 0, or resume from pause; awaits audio unlock
  * @property {() => void} pause            // freeze; position() holds
  * @property {() => void} stop             // stop + reset position() to 0
