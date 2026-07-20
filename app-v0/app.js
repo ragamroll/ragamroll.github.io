@@ -372,8 +372,9 @@ Promise.all([
   fetch('./core/raga-base.json').then(r => r.json()),
   fetch(`${EXAMPLES_BASE}/index.json`).then(r => r.json()).catch(() => EXAMPLES_FALLBACK),
   fetch('./core/raga-ext.json').then(r => r.json()).catch(() => ({})),
-]).then(([data, examples, ext]) => {
-  setRagas(data);
+  fetch('./core/raga-add.json').then(r => r.json()).catch(() => ({})),   // imported ragas (optional)
+]).then(([data, examples, ext, add]) => {
+  setRagas({ ...data, ...add });
   setRagaExt(ext);
   render(h(App, { examples: Array.isArray(examples) && examples.length ? examples : EXAMPLES_FALLBACK }),
          document.getElementById('app'));

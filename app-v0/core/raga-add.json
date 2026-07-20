@@ -1,0 +1,1205 @@
+{
+ "ahiri": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "C#",
+   "G": "E",
+   "M": "F",
+   "D": "G#",
+   "N": "A#"
+  }
+ },
+ "amrithavarshini": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "E",
+   "M": "F#",
+   "N": "B"
+  }
+ },
+ "anandabhairavi": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "D#",
+   "R": "D",
+   "M": "F",
+   "D": "G#",
+   "N": "A#"
+  }
+ },
+ "andolika": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "M": "F",
+   "N": "A#",
+   "D": "A"
+  }
+ },
+ "arabhi": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "M": "F",
+   "D": "A",
+   "N": "B",
+   "G": "E"
+  }
+ },
+ "asaveri": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "C#",
+   "M": "F",
+   "D": "G#",
+   "N": "A#",
+   "G": "D#"
+  }
+ },
+ "atana": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "M": "F",
+   "N": "B",
+   "D": "A",
+   "G": "E"
+  }
+ },
+ "bageshri": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "D#",
+   "M": "F",
+   "D": "A",
+   "N": "A#",
+   "R": "D"
+  }
+ },
+ "bahudari": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "E",
+   "M": "F",
+   "D": "A",
+   "N": "A#"
+  }
+ },
+ "begada": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "E",
+   "R": "D",
+   "M": "F",
+   "D": "A",
+   "N": "B"
+  }
+ },
+ "behag": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "E",
+   "M": "F",
+   "N": "B",
+   "D": "A",
+   "R": "D"
+  }
+ },
+ "bhairavi": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "D#",
+   "R": "D",
+   "M": "F",
+   "D": "G#",
+   "N": "A#"
+  }
+ },
+ "bhoopalam": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "C#",
+   "G": "D#",
+   "D": "G#"
+  }
+ },
+ "bilahari": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "E",
+   "D": "A",
+   "N": "B",
+   "M": "F"
+  }
+ },
+ "bowli": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "C#",
+   "G": "E",
+   "D": "G#",
+   "N": "B"
+  }
+ },
+ "brindavanasaranga": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "M": "F",
+   "N": "A#",
+   "G": "D#"
+  }
+ },
+ "chalanattai": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D#",
+   "G": "E",
+   "M": "F",
+   "D": "A#",
+   "N": "B"
+  }
+ },
+ "chandrajyoti": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "C#",
+   "G": "D",
+   "M": "F#",
+   "D": "A"
+  }
+ },
+ "chandrakauns": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "D#",
+   "M": "F",
+   "D": "G#",
+   "N": "B"
+  }
+ },
+ "darbar": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "M": "F",
+   "D": "A",
+   "N": "A#",
+   "G": "D#"
+  }
+ },
+ "darbarikanada": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "D#",
+   "M": "F",
+   "D": "G#",
+   "N": "A#"
+  }
+ },
+ "desh": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "M": "F",
+   "N": "A#",
+   "D": "A",
+   "G": "E"
+  }
+ },
+ "devagandhari": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "M": "F",
+   "D": "A",
+   "N": "B",
+   "G": "E"
+  }
+ },
+ "devamanohari": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "M": "F",
+   "D": "A",
+   "N": "A#"
+  }
+ },
+ "dhanyasi": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "D#",
+   "M": "F",
+   "N": "A#",
+   "D": "G#",
+   "R": "C#"
+  }
+ },
+ "dwijavanti": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "E",
+   "M": "F",
+   "D": "A",
+   "N": "A#"
+  }
+ },
+ "gambheeranattai": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "E",
+   "M": "F",
+   "N": "B"
+  }
+ },
+ "gowlai": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "C#",
+   "M": "F",
+   "N": "B",
+   "G": "E"
+  }
+ },
+ "gowrimanohari": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "D#",
+   "M": "F",
+   "D": "A",
+   "N": "B"
+  }
+ },
+ "hamirkalyani": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "M": "F#",
+   "D": "A",
+   "N": "B",
+   "G": "E",
+   "R": "D"
+  }
+ },
+ "hamsadwani": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "E",
+   "N": "B"
+  }
+ },
+ "hamsanandi": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "C#",
+   "G": "E",
+   "M": "F#",
+   "D": "A",
+   "N": "B"
+  }
+ },
+ "huseni": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "D#",
+   "M": "F",
+   "N": "A#",
+   "D": "A"
+  }
+ },
+ "jaganmohini": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "E",
+   "M": "F",
+   "N": "B",
+   "R": "C#"
+  }
+ },
+ "janaranjani": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "E",
+   "M": "F",
+   "D": "A",
+   "N": "B"
+  }
+ },
+ "jayanthashri": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "D#",
+   "M": "F",
+   "D": "G#",
+   "N": "A#"
+  }
+ },
+ "kadanakuthoohalam": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "M": "F",
+   "D": "A",
+   "N": "B",
+   "G": "E"
+  }
+ },
+ "kalavati": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "C#",
+   "M": "F",
+   "D": "A",
+   "G": "E"
+  }
+ },
+ "kalyanavasantham": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "D#",
+   "M": "F",
+   "D": "G#",
+   "N": "B",
+   "R": "D"
+  }
+ },
+ "kalyani": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "E",
+   "M": "F#",
+   "D": "A",
+   "N": "B"
+  }
+ },
+ "kamalamanohari": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "E",
+   "M": "F",
+   "N": "B",
+   "D": "G#"
+  }
+ },
+ "kambhoji": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "E",
+   "M": "F",
+   "D": "A",
+   "N": "A#"
+  }
+ },
+ "kanada": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "D#",
+   "M": "F",
+   "D": "A",
+   "N": "A#"
+  }
+ },
+ "kannada": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "E",
+   "M": "F",
+   "D": "A",
+   "N": "B",
+   "R": "D"
+  }
+ },
+ "kannadagowlai": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "D#",
+   "M": "F",
+   "N": "A#",
+   "D": "A"
+  }
+ },
+ "kapi": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "M": "F",
+   "N": "A#",
+   "D": "A",
+   "G": "D#"
+  }
+ },
+ "karnaranjani": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "D#",
+   "M": "F",
+   "D": "A",
+   "N": "A#"
+  }
+ },
+ "kedaragowlai": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "M": "F",
+   "N": "A#",
+   "D": "A",
+   "G": "E"
+  }
+ },
+ "kedaram": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "M": "F",
+   "G": "E",
+   "N": "B",
+   "R": "D"
+  }
+ },
+ "khamas": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "M": "F",
+   "G": "E",
+   "D": "A",
+   "N": "A#",
+   "R": "D"
+  }
+ },
+ "kuntalavarali": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "M": "F",
+   "D": "A",
+   "N": "A#"
+  }
+ },
+ "lalitha": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "C#",
+   "G": "E",
+   "M": "F",
+   "D": "G#",
+   "N": "B"
+  }
+ },
+ "lathangi": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "E",
+   "M": "F#",
+   "D": "G#",
+   "N": "B"
+  }
+ },
+ "maand": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "E",
+   "M": "F",
+   "D": "A",
+   "N": "B",
+   "R": "D"
+  }
+ },
+ "madhuvanti": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "D#",
+   "M": "F#",
+   "N": "B",
+   "D": "A",
+   "R": "D"
+  }
+ },
+ "madhyamavati": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "M": "F",
+   "N": "A#"
+  }
+ },
+ "malahari": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "C#",
+   "M": "F",
+   "D": "G#",
+   "G": "E"
+  }
+ },
+ "mandari": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "C#",
+   "G": "E",
+   "M": "F#",
+   "N": "B"
+  }
+ },
+ "manirangu": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "M": "F",
+   "N": "A#",
+   "G": "D#"
+  }
+ },
+ "mayamalavagowlai": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "C#",
+   "G": "E",
+   "M": "F",
+   "D": "G#",
+   "N": "B"
+  }
+ },
+ "mohanakalyani": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "E",
+   "D": "A",
+   "N": "B",
+   "M": "F#"
+  }
+ },
+ "mukhari": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "M": "F",
+   "N": "A#",
+   "D": "A",
+   "G": "D#"
+  }
+ },
+ "nagaswarali": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "E",
+   "M": "F",
+   "D": "A"
+  }
+ },
+ "nalinakanthi": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "E",
+   "R": "D",
+   "M": "F",
+   "N": "B"
+  }
+ },
+ "nattaikurinji": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "E",
+   "M": "F",
+   "N": "A#",
+   "D": "A"
+  }
+ },
+ "navarasakanada": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "E",
+   "M": "F",
+   "N": "A#",
+   "D": "A",
+   "R": "D"
+  }
+ },
+ "nayaki": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "M": "F",
+   "D": "A",
+   "N": "A#",
+   "G": "D#"
+  }
+ },
+ "neelambari": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "E",
+   "M": "F",
+   "N": "B",
+   "D": "A",
+   "R": "D"
+  }
+ },
+ "neethimathi": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "D#",
+   "M": "F#",
+   "D": "A#",
+   "N": "B"
+  }
+ },
+ "pantuvarali": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "C#",
+   "G": "E",
+   "M": "F#",
+   "D": "G#",
+   "N": "B"
+  }
+ },
+ "poornachandrika": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "E",
+   "M": "F",
+   "D": "A",
+   "N": "B"
+  }
+ },
+ "poorvikalyani": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "C#",
+   "G": "E",
+   "M": "F#",
+   "D": "A",
+   "N": "B"
+  }
+ },
+ "ranjani": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "D#",
+   "M": "F#",
+   "D": "A",
+   "N": "B"
+  }
+ },
+ "rathipathipriya": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "D#",
+   "N": "A#"
+  }
+ },
+ "reethigowlai": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "D#",
+   "R": "D",
+   "M": "F",
+   "N": "A#",
+   "D": "A"
+  }
+ },
+ "revagupti": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "C#",
+   "G": "E",
+   "D": "G#"
+  }
+ },
+ "revati": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "C#",
+   "M": "F",
+   "N": "A#"
+  }
+ },
+ "sahana": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "E",
+   "M": "F",
+   "D": "A",
+   "N": "A#"
+  }
+ },
+ "sama": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "M": "F",
+   "D": "A",
+   "G": "E"
+  }
+ },
+ "saramati": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "D#",
+   "M": "F",
+   "D": "G#",
+   "N": "A#"
+  }
+ },
+ "saranga": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "M": "F#",
+   "D": "A",
+   "N": "B",
+   "R": "D",
+   "G": "E"
+  }
+ },
+ "saraswathi": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "M": "F#",
+   "D": "A",
+   "N": "A#"
+  }
+ },
+ "saveri": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "C#",
+   "M": "F",
+   "D": "G#",
+   "N": "B",
+   "G": "E"
+  }
+ },
+ "shankarabaranam": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "E",
+   "M": "F",
+   "D": "A",
+   "N": "B"
+  }
+ },
+ "shriragam": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "M": "F",
+   "N": "A#",
+   "D": "A",
+   "G": "D#"
+  }
+ },
+ "sindhubhairavi": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "C#",
+   "G": "D#",
+   "M": "F",
+   "D": "G#",
+   "N": "A#"
+  }
+ },
+ "sivaranjani": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "D#",
+   "D": "A"
+  }
+ },
+ "sowrashtram": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "C#",
+   "G": "E",
+   "M": "F",
+   "D": "A",
+   "N": "B"
+  }
+ },
+ "sriranjani": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "D#",
+   "M": "F",
+   "D": "A",
+   "N": "A#"
+  }
+ },
+ "subhapantuvarali": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "C#",
+   "G": "D#",
+   "M": "F#",
+   "D": "G#",
+   "N": "B"
+  }
+ },
+ "suddhadhanyasi": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "D#",
+   "M": "F",
+   "N": "A#"
+  }
+ },
+ "suddhasaveri": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "M": "F",
+   "D": "A"
+  }
+ },
+ "sumanesaranjani": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "D#",
+   "M": "F#",
+   "N": "A#"
+  }
+ },
+ "sunadavinodini": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "E",
+   "M": "F#",
+   "D": "A",
+   "N": "B"
+  }
+ },
+ "surutti": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "M": "F",
+   "N": "A#",
+   "D": "A",
+   "G": "E"
+  }
+ },
+ "surya": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "E",
+   "M": "F",
+   "D": "G#",
+   "N": "A#"
+  }
+ },
+ "thilang": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "E",
+   "M": "F",
+   "N": "A#"
+  }
+ },
+ "thodi": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "C#",
+   "G": "D#",
+   "M": "F",
+   "D": "G#",
+   "N": "A#"
+  }
+ },
+ "valaji": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "E",
+   "D": "A",
+   "N": "A#"
+  }
+ },
+ "varali": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "D",
+   "R": "C#",
+   "M": "F#",
+   "D": "G#",
+   "N": "B"
+  }
+ },
+ "varamu": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "G": "D#",
+   "M": "F",
+   "D": "A",
+   "N": "A#"
+  }
+ },
+ "vasantha": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "M": "F",
+   "G": "E",
+   "D": "A",
+   "N": "B",
+   "R": "C#"
+  }
+ },
+ "vasanthi": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "E",
+   "D": "G#"
+  }
+ },
+ "vijayanagari": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "G": "D#",
+   "M": "F#",
+   "D": "A"
+  }
+ },
+ "yadukulakambhoji": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "D",
+   "M": "F",
+   "D": "A",
+   "N": "A#",
+   "G": "E"
+  }
+ }
+}

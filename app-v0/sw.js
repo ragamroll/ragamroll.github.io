@@ -1,4 +1,4 @@
-const CACHE = 'ragamroll-70ff1bb';
+const CACHE = 'ragamroll-4d9196f';
 const ASSETS = [
   './', './index.html', './help.html', './app.js', './worker.js', './version.js', './manifest.webmanifest',
   './vendor/preact.module.js', './vendor/hooks.module.js', './vendor/htm.module.js', './vendor/htm-preact.js',
@@ -11,7 +11,7 @@ const ASSETS = [
   './audio/rowtimes.js',
   './core/parser.js', './core/tuning.js', './core/raga-base.js', './core/raga-base.json', './core/reference.js',
   './core/shruti.js', './core/melakarta.js', './core/tala-preview.js',
-  './core/raga-ext.js', './core/raga-ext.json', './core/raga-preview.js', './core/retune.js',
+  './core/raga-ext.js', './core/raga-ext.json', './core/raga-add.json', './core/raga-preview.js', './core/retune.js',
   './core/renderers/notation.js', './core/renderers/roll.js',
   './core/midi/gm.js', './core/midi/smf.js', './core/midi/sequence.js', './core/midi/tala.js',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png',

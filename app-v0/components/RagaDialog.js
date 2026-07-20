@@ -52,7 +52,9 @@ export function RagaDialog({ ragas, player, stopMain, onClose }) {
   const stopEvt = (e) => e.stopPropagation();
   const close = () => { stop(); onClose(); };
 
-  const names = Object.keys(ragas || {}).sort((a, b) => padMelaName(a).localeCompare(padMelaName(b)));
+  // c12 (chromatic) is a hidden power-user notation — not a raga to browse.
+  const names = Object.keys(ragas || {}).filter((n) => n !== 'c12')
+    .sort((a, b) => padMelaName(a).localeCompare(padMelaName(b)));
   const needle = q.trim().toLowerCase();
   const filtered = needle
     ? names.filter((n) => padMelaName(n).toLowerCase().includes(needle) || n.toLowerCase().includes(needle))
@@ -83,7 +85,7 @@ export function RagaDialog({ ragas, player, stopMain, onClose }) {
                 <div class="ref-cols">
                   <span class="ref-seq">${formatSwaraSeq(ragas[n].C12_SWARAS)}</span>
                   <span class="ref-int">${formatIntervalNumbers(ragas[n].C12_SWARAS)}</span>
-                  ${ext && html`<span class="ref-mela">mela ${ext.mela} · ${MELA_NAMES[ext.mela]}${ext.gen ? ' ~' : ''}</span>`}
+                  ${ext && html`<span class="ref-mela">mela ${ext.mela} · ${MELA_NAMES[ext.mela]}${ext.source === 'auto' ? ' ~' : ''}</span>`}
                   ${ext && html`<span class="ref-aroha">↑ ${ext.arohana}   ↓ ${ext.avarohana}</span>`}
                 </div>
               </div>
