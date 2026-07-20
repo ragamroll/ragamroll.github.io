@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RagaM-Roll — Help</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background:#1a1a1a; color:#eee; font-family: system-ui, sans-serif; line-height: 1.5; }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 1.5rem 1.1rem 4rem; }
+  h1 { font-size: 1.5rem; margin: .2rem 0 .3rem; }
+  h2 { font-size: 1.15rem; margin: 1.6rem 0 .4rem; border-bottom:1px solid #333; padding-bottom:.2rem; color:#9cf; }
+  h3 { font-size: 1rem; margin: 1rem 0 .3rem; color:#9fc; }
+  p, li { font-size: .95rem; }
+  code, kbd { font-family: ui-monospace, Menlo, Consolas, monospace; background:#111; border:1px solid #333;
+    border-radius:4px; padding:.05rem .3rem; font-size: .88em; }
+  pre { background:#111; border:1px solid #333; border-radius:6px; padding:.7rem .8rem; overflow-x:auto; }
+  pre code { border:0; background:none; padding:0; }
+  table { border-collapse: collapse; width:100%; margin:.4rem 0; font-size:.9rem; }
+  th, td { text-align:left; border-bottom:1px solid #262626; padding:.3rem .5rem; vertical-align: top; }
+  th { color:#9cf; font-weight:600; }
+  .sub { opacity:.65; font-size:.85rem; }
+  .tag { display:inline-block; background:#222; border:1px solid #444; border-radius:6px; padding:.05rem .45rem; font-size:.82rem; }
+  a { color:#9cf; }
+  .back { position: sticky; top:0; background:#1a1a1a; padding:.4rem 0; border-bottom:1px solid #333; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="back"><a href="./index.html">&larr; Back to RagaM-Roll</a></div>
+
+  <h1>RagaM-Roll — Help</h1>
+  <p class="sub"><b>RagaM-Roll</b> — a play on "Rock and Roll" — is a build-free, offline Carnatic-notation
+  playground. Type <b>srgm</b> notation on the left; see the textbook line and the <b>ragamroll</b>
+  (a pianoroll-style roll — the app's signature view) on the right; hear it, retune it, and browse
+  ragas &amp; talas.</p>
+
+  <h2>The panes</h2>
+  <ul>
+    <li><b>Editor</b> (left): your srgm source. It auto-compiles as you type (off the main thread, so it never freezes).</li>
+    <li><b>Ragamroll</b> (top-right): the ascii roll; the playing row highlights during playback.</li>
+    <li><b>Notation</b> (bottom): the Carnatic-textbook single-line form with barlines.</li>
+    <li>Drag the dividers between panes to resize.</li>
+  </ul>
+
+  <h2>Writing srgm — the melody</h2>
+  <p>The melody uses a deliberately tiny alphabet so it stays terse:</p>
+  <table>
+    <tr><th>Token</th><th>Meaning</th></tr>
+    <tr><td><code>s r g m p d n</code></td><td>The seven swaras. <b>Case picks the variety</b> — lower vs upper is the komal/shuddha (lower/higher) form, resolved against the current raga.</td></tr>
+    <tr><td><code>&gt;</code> / <code>&lt;</code></td><td>Prepend to a swara to raise / lower the octave, e.g. <code>&gt;s</code>, <code>&lt;p</code>. The shift persists for the notes that follow.</td></tr>
+    <tr><td><code>2</code>, <code>4</code>, …</td><td>An integer after a swara sets its length, e.g. <code>s4</code>. Default is 1.</td></tr>
+    <tr><td><code>z</code></td><td>A rest (silence). Takes a length too: <code>z2</code>.</td></tr>
+    <tr><td><code>-</code></td><td>A separator (visual grouping; no time).</td></tr>
+    <tr><td><code>%</code></td><td>A line starting with <code>%</code> is a comment.</td></tr>
+  </table>
+
+  <h3>Cutting repetition</h3>
+  <table>
+    <tr><th>Directive</th><th>Meaning</th></tr>
+    <tr><td><code>L=2</code></td><td>Default note-length <b>multiplier</b>: <code>absLen = L × the number on the swara</code>. So <code>S2 G2 M2 P2 N4</code> can be written <code>L=2 S G M P N2</code>.</td></tr>
+    <tr><td><code>O=5</code></td><td>Set the absolute octave register.</td></tr>
+  </table>
+
+  <h2>Directives — the setup line</h2>
+  <p>These appear once or a few times, so they read verbosely for clarity:</p>
+  <table>
+    <tr><th>Directive</th><th>Meaning</th></tr>
+    <tr><td><code>Raga=mohanam,0</code></td><td>The raga (name) and a semitone transpose of Sa. The raga fixes how each swara letter resolves to a pitch.</td></tr>
+    <tr><td><code>Tala=adi,4</code></td><td>The tala (cycle) and a length resolution — chosen so the shortest note in the piece is an integer <code>1</code> (one akshara = N length-units).</td></tr>
+    <tr><td><code>T120</code></td><td>Tempo in BPM.</td></tr>
+    <tr><td><code>I[FLUTE]</code></td><td>Instrument (General-MIDI name) for export.</td></tr>
+  </table>
+
+  <h3>Example</h3>
+<pre><code>% A short Mohanam phrase
+Raga=mohanam,0  Tala=rupaka,2  T160
+L=1 O=5
+G2 G2 P4 P4  D2 P2 &gt;S4 S4</code></pre>
+
+  <h2>Playing &amp; the mixer</h2>
+  <p>The transport row (above the panes) holds:</p>
+  <ul>
+    <li><span class="tag">▶ ⏸ ⏹</span> play / pause / stop. The ragamroll highlights the current row as it plays.</li>
+    <li><span class="tag">Sa</span> the reference pitch — <em>Auto</em> follows the raga, or pin Sa to a note (C4–C6). Transposes playback.</li>
+    <li><span class="tag">♩ tempo</span> a speed slider (0.2× steps) plus an exact-BPM box; ↺ returns to the composition tempo.</li>
+    <li><span class="tag">🎶 Drone</span>, <span class="tag">🎼 Melody</span>, <span class="tag">🔊 Tala</span>, <span class="tag">🔈 Master</span> — each icon is a mute toggle (keeps its set level); sliders set volume. Mute melody to solo tala + drone.</li>
+    <li><span class="tag">🎻 Timbre</span> the melody voice: Soft, Bowed, or Reed.</li>
+  </ul>
+  <p class="sub">Volumes are live during playback. Tempo, Sa transpose, and the scale override apply on the next Play.</p>
+
+  <h2>Open, Save, Export</h2>
+  <ul>
+    <li><b>Open ▾</b> — load a bundled example or a <code>.srgm</code> file from your device.</li>
+    <li><b>Save</b> — download your source as <code>.srgm</code>.</li>
+    <li><b>Export MIDI</b> — a standard <code>.mid</code> of the melody (12-EDO; the microtonal scale override is web-audio only).</li>
+  </ul>
+
+  <h2>Ragas &amp; Talas</h2>
+  <ul>
+    <li><b>Ragas</b> — a searchable reference of the raga scales (swaras, intervals in semitones).</li>
+    <li><b>Talas</b> — each tala as a row of <b>akshara boxes</b> with accents marked (<code>X</code> = sam, <code>o</code> = anga start). ▶ plays the cycle as strums and lights each box in time.</li>
+  </ul>
+
+  <h2>Scale ⚙ — experimental microtonal tuning</h2>
+  <p>Override the playback pitches with an authentic <b>53-EDO</b> tuning built from the 72 melakartas:</p>
+  <ul>
+    <li>Pick a <b>mela</b> (grouped by the 12 chakras) — or tap <b>Match piece</b> to jump to the mela matching your raga.</li>
+    <li>Each of R, G, M, D, N shows its variety and an <b>a / b comma</b> toggle — the two microtonal shrutis a comma apart. Defaults to the just-intonation-nearest.</li>
+    <li>The table shows the resulting swaras, 53-EDO steps, and cents. <b>Apply</b> retunes playback; <b>↺</b> returns to the plain 12-EDO ragabase.</li>
+  </ul>
+  <p class="sub">The tuning affects web-audio playback and the drone only — notation and MIDI export stay unchanged.</p>
+
+  <h2>Offline</h2>
+  <p>RagaM-Roll is a PWA: after the first visit it works fully offline, and your last composition is remembered
+  in the browser. Add it to your home screen to launch it like an app.</p>
+
+  <div class="back" style="border-top:1px solid #333; border-bottom:0; margin-top:2rem;">
+    <a href="./index.html">&larr; Back to RagaM-Roll</a>
+  </div>
+</div>
+</body>
+</html>

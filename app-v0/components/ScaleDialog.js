@@ -1,23 +1,21 @@
 import { html } from '../vendor/htm-preact.js';
 import { useState, useEffect, useMemo } from '../vendor/hooks.module.js';
 import { EDO } from '../core/shruti.js';
-import { midiToName } from '../core/tuning.js';
-import { CHAKRAS, MELA_NAMES, MAJOR_MELA, chakraOf, melaVarieties, melaScale, melaOfScale, commaOf, jiAb } from '../core/melakarta.js';
+import { CHAKRAS, MELA_NAMES, MAJOR_MELA, chakraOf, melaVarieties, melaScale, melaOfScale, commaOf, jiAb, melaForRaga } from '../core/melakarta.js';
+import { getRagaExt } from '../core/raga-ext.js';
 
 // Experimental scale-pitch override, mela-centric. Pick one of the 72
 // melakartas (which fixes the R/G/M/D/N varieties), then choose the a/b comma
 // per swara — 72 × 2^5 = 2304 scales. S and P are invariant. Apply pushes the
-// 53-EDO scale up as a playback retune; Reset drops back to the ragabase.
+// 53-EDO scale up as a playback retune; the ↺ reset drops back to the ragabase.
 const cents = (step) => Math.round((step / EDO) * 1200);
 const SLOTS = ['S', 'R', 'G', 'M', 'P', 'D', 'N'];
 const VARIABLE = ['R', 'G', 'M', 'D', 'N'];
-const SA_CHOICES = [];
-for (let m = 48; m <= 72; m++) SA_CHOICES.push(m);
 
 const abFromScale = (scale) =>
   Object.fromEntries(VARIABLE.map((L) => [L, commaOf(scale[L])]));
 
-export function ScaleDialog({ scale, onApply, onClose, saPitch, autoSaMidi, onSetSa, ragas }) {
+export function ScaleDialog({ scale, onApply, onClose, ragas, ragaName }) {
   const [melaN, setMelaN] = useState(() => melaOfScale(ragas, scale)?.n ?? MAJOR_MELA);
   // Default comma is the just-intonation-nearest shruti for each swara; an
   // existing override keeps its own commas.
@@ -32,6 +30,13 @@ export function ScaleDialog({ scale, onApply, onClose, saPitch, autoSaMidi, onSe
   }, [onClose]);
 
   const stop = (e) => e.stopPropagation();
+  // Suggestion: the mela matching the composition's Raga= — a shortcut, not an
+  // auto-override. Prefers the authored janaka (raga-ext), else the heuristic.
+  const suggest = useMemo(() => {
+    const ext = getRagaExt(ragaName);
+    if (ext?.mela) return { n: ext.mela, name: MELA_NAMES[ext.mela] };
+    return melaForRaga(ragas, ragaName);
+  }, [ragas, ragaName]);
   const v = useMemo(() => melaVarieties(ragas, melaN), [ragas, melaN]);
   const built = useMemo(() => melaScale(ragas, melaN, ab), [ragas, melaN, ab]);
   const ch = chakraOf(melaN);
@@ -50,17 +55,6 @@ export function ScaleDialog({ scale, onApply, onClose, saPitch, autoSaMidi, onSe
         <button title="Close" onClick=${onClose}>✕</button>
       </div>
       <div class="dialog-body">
-        <div class="sa-pitch">
-          <label>Sa =
-            <select value=${saPitch == null ? '' : String(saPitch)}
-                    onChange=${(e) => onSetSa(e.target.value === '' ? null : Number(e.target.value))}>
-              <option value="">Auto (${midiToName(autoSaMidi)})</option>
-              ${SA_CHOICES.map((m) => html`<option key=${m} value=${String(m)}>${midiToName(m)}</option>`)}
-            </select>
-          </label>
-          <span class="sa-note">tonic reference — transposes playback (drone live, melody on next play)</span>
-        </div>
-
         <div class="mela-row">
           <label>Mela =
             <select value=${String(melaN)} onChange=${(e) => pickMela(Number(e.target.value))}>
@@ -93,7 +87,12 @@ export function ScaleDialog({ scale, onApply, onClose, saPitch, autoSaMidi, onSe
         </table>
 
         <div class="scale-actions">
-          <button onClick=${() => { onApply(null); onClose(); }}>Reset to ragabase</button>
+          <button class="reset-icon" title="Reset to ragabase (remove the override)"
+                  onClick=${() => { onApply(null); onClose(); }}>↺</button>
+          ${suggest && suggest.n !== melaN && html`<button class="suggest-btn"
+                  title=${`Jump to the mela matching the piece's raga (${ragaName || '?'})`}
+                  onClick=${() => pickMela(suggest.n)}>Match piece: ${suggest.n} · ${suggest.name}</button>`}
+          <span class="actions-spacer"></span>
           <button class="primary" disabled=${!built}
                   onClick=${() => { onApply(built); onClose(); }}>Apply override</button>
         </div>

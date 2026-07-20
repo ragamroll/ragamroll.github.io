@@ -1,0 +1,1087 @@
+{
+ "Bhavapriya": {
+  "mela": 44,
+  "swaras": "S R1b G2b M2a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Chakravakam": {
+  "mela": 16,
+  "swaras": "S R1b G3a M1a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Chalanata": {
+  "mela": 36,
+  "swaras": "S R3b G3a M1a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Charukesi": {
+  "mela": 26,
+  "swaras": "S R2b G3a M1a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Chitrambari": {
+  "mela": 66,
+  "swaras": "S R2b G3a M2a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Dharmavati": {
+  "mela": 59,
+  "swaras": "S R2b G2b M2a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Dhatuvardani": {
+  "mela": 69,
+  "swaras": "S R3b G3a M2a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Dhavalambari": {
+  "mela": 49,
+  "swaras": "S R1b G3a M2a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Dheerasankarabharanam": {
+  "mela": 29,
+  "swaras": "S R2b G3a M1a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Dhenuka": {
+  "mela": 9,
+  "swaras": "S R1b G2b M1a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Divyamani": {
+  "mela": 48,
+  "swaras": "S R1b G2b M2a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Gamanashrama": {
+  "mela": 53,
+  "swaras": "S R1b G3a M2a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Ganamurti": {
+  "mela": 3,
+  "swaras": "S R1b G1a M1a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Gangeyabhushani": {
+  "mela": 33,
+  "swaras": "S R3b G3a M1a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Gavambhodi": {
+  "mela": 43,
+  "swaras": "S R1b G2b M2a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Gayakapriya": {
+  "mela": 13,
+  "swaras": "S R1b G3a M1a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Gourimanohari": {
+  "mela": 23,
+  "swaras": "S R2b G2b M1a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Hanumatodi": {
+  "mela": 8,
+  "swaras": "S R1b G2b M1a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Harikambhoji": {
+  "mela": 28,
+  "swaras": "S R2b G3a M1a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Hatakambari": {
+  "mela": 18,
+  "swaras": "S R1b G3a M1a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Hemavati": {
+  "mela": 58,
+  "swaras": "S R2b G2b M2a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Jalarnavam": {
+  "mela": 38,
+  "swaras": "S R1b G1a M2a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Jhalavarali": {
+  "mela": 39,
+  "swaras": "S R1b G1a M2a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Jhankaradhwani": {
+  "mela": 19,
+  "swaras": "S R2b G2b M1a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Jyoti": {
+  "mela": 68,
+  "swaras": "S R3b G3a M2a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Kamavardani": {
+  "mela": 51,
+  "swaras": "S R1b G3a M2a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Kanakangi": {
+  "mela": 1,
+  "swaras": "S R1b G1a M1a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Kantamani": {
+  "mela": 61,
+  "swaras": "S R2b G3a M2a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Keeravani": {
+  "mela": 21,
+  "swaras": "S R2b G2b M1a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Kharaharapriya": {
+  "mela": 22,
+  "swaras": "S R2b G2b M1a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Kokilapriya": {
+  "mela": 11,
+  "swaras": "S R1b G2b M1a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Kosalam": {
+  "mela": 71,
+  "swaras": "S R3b G3a M2a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Latangi": {
+  "mela": 63,
+  "swaras": "S R2b G3a M2a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Manavati": {
+  "mela": 5,
+  "swaras": "S R1b G1a M1a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Mararanjani": {
+  "mela": 25,
+  "swaras": "S R2b G3a M1a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Mayamalavagowla": {
+  "mela": 15,
+  "swaras": "S R1b G3a M1a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Mechakalyani": {
+  "mela": 65,
+  "swaras": "S R2b G3a M2a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Naganandini": {
+  "mela": 30,
+  "swaras": "S R2b G3a M1a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Namanarayani": {
+  "mela": 50,
+  "swaras": "S R1b G3a M2a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Nasikabhushani": {
+  "mela": 70,
+  "swaras": "S R3b G3a M2a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Natabhairavi": {
+  "mela": 20,
+  "swaras": "S R2b G2b M1a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Natakapriya": {
+  "mela": 10,
+  "swaras": "S R1b G2b M1a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Navaneetam": {
+  "mela": 40,
+  "swaras": "S R1b G1a M2a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Neetimati": {
+  "mela": 60,
+  "swaras": "S R2b G2b M2a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Pavani": {
+  "mela": 41,
+  "swaras": "S R1b G1a M2a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Ragavardhini": {
+  "mela": 32,
+  "swaras": "S R3b G3a M1a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Raghupriya": {
+  "mela": 42,
+  "swaras": "S R1b G1a M2a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Ramapriya": {
+  "mela": 52,
+  "swaras": "S R1b G3a M2a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Rasikapriya": {
+  "mela": 72,
+  "swaras": "S R3b G3a M2a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Ratnangi": {
+  "mela": 2,
+  "swaras": "S R1b G1a M1a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Rishabhapriya": {
+  "mela": 62,
+  "swaras": "S R2b G3a M2a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Rupavati": {
+  "mela": 12,
+  "swaras": "S R1b G2b M1a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Salagam": {
+  "mela": 37,
+  "swaras": "S R1b G1a M2a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Sarasangi": {
+  "mela": 27,
+  "swaras": "S R2b G3a M1a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Senavati": {
+  "mela": 7,
+  "swaras": "S R1b G2b M1a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Shadvidamargini": {
+  "mela": 46,
+  "swaras": "S R1b G2b M2a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Shamalangi": {
+  "mela": 55,
+  "swaras": "S R2b G2b M2a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Shanmukhapriya": {
+  "mela": 56,
+  "swaras": "S R2b G2b M2a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Shubhapantuvarali": {
+  "mela": 45,
+  "swaras": "S R1b G2b M2a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Shulini": {
+  "mela": 35,
+  "swaras": "S R3b G3a M1a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Simhendramadhyamam": {
+  "mela": 57,
+  "swaras": "S R2b G2b M2a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Sucharitra": {
+  "mela": 67,
+  "swaras": "S R3b G3a M2a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Suryakantam": {
+  "mela": 17,
+  "swaras": "S R1b G3a M1a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Suvarnangi": {
+  "mela": 47,
+  "swaras": "S R1b G2b M2a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Tanarupi": {
+  "mela": 6,
+  "swaras": "S R1b G1a M1a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Vachaspati": {
+  "mela": 64,
+  "swaras": "S R2b G3a M2a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Vagadheeswari": {
+  "mela": 34,
+  "swaras": "S R3b G3a M1a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Vakulabharanam": {
+  "mela": 14,
+  "swaras": "S R1b G3a M1a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Vanaspati": {
+  "mela": 4,
+  "swaras": "S R1b G1a M1a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Varunapriya": {
+  "mela": 24,
+  "swaras": "S R2b G2b M1a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Vishwambari": {
+  "mela": 54,
+  "swaras": "S R1b G3a M2a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "Yagapriya": {
+  "mela": 31,
+  "swaras": "S R3b G3a M1a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "abheri": {
+  "mela": 22,
+  "swaras": "S R2b G2b M1a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "abhogi": {
+  "mela": 22,
+  "swaras": "S R2b G2b M1a P D2a >S",
+  "arohana": "S R G M P D >S",
+  "avarohana": "S <D P M G R S",
+  "gen": true
+ },
+ "hamsadhwani": {
+  "mela": 27,
+  "swaras": "S R2b G3a P N3a >S",
+  "arohana": "S R G P N >S",
+  "avarohana": "S <N P G R S",
+  "gen": true
+ },
+ "hamsanadam": {
+  "mela": 57,
+  "swaras": "S R2b M2a P N3a >S",
+  "arohana": "S R M P N >S",
+  "avarohana": "S <N P M R S",
+  "gen": true
+ },
+ "hindolam": {
+  "mela": 8,
+  "swaras": "S G2b M1a D1b N2b >S",
+  "arohana": "S G M D N >S",
+  "avarohana": "S <N D M G S",
+  "gen": true
+ },
+ "jayanthasri": {
+  "mela": 8,
+  "swaras": "S G2b M1a P D1b N2b >S",
+  "arohana": "S G M P D N >S",
+  "avarohana": "S <N D P M G S",
+  "gen": true
+ },
+ "malayamarutham": {
+  "mela": 16,
+  "swaras": "S R1b G3a M1a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_1": {
+  "mela": 1,
+  "swaras": "S R1b G1a M1a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_10": {
+  "mela": 10,
+  "swaras": "S R1b G2b M1a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_11": {
+  "mela": 11,
+  "swaras": "S R1b G2b M1a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_12": {
+  "mela": 12,
+  "swaras": "S R1b G2b M1a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_13": {
+  "mela": 13,
+  "swaras": "S R1b G3a M1a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_14": {
+  "mela": 14,
+  "swaras": "S R1b G3a M1a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_15": {
+  "mela": 15,
+  "swaras": "S R1b G3a M1a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_16": {
+  "mela": 16,
+  "swaras": "S R1b G3a M1a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_17": {
+  "mela": 17,
+  "swaras": "S R1b G3a M1a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_18": {
+  "mela": 18,
+  "swaras": "S R1b G3a M1a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_19": {
+  "mela": 19,
+  "swaras": "S R2b G2b M1a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_2": {
+  "mela": 2,
+  "swaras": "S R1b G1a M1a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_20": {
+  "mela": 20,
+  "swaras": "S R2b G2b M1a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_21": {
+  "mela": 21,
+  "swaras": "S R2b G2b M1a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_22": {
+  "mela": 22,
+  "swaras": "S R2b G2b M1a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_23": {
+  "mela": 23,
+  "swaras": "S R2b G2b M1a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_24": {
+  "mela": 24,
+  "swaras": "S R2b G2b M1a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_25": {
+  "mela": 25,
+  "swaras": "S R2b G3a M1a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_26": {
+  "mela": 26,
+  "swaras": "S R2b G3a M1a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_27": {
+  "mela": 27,
+  "swaras": "S R2b G3a M1a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_28": {
+  "mela": 28,
+  "swaras": "S R2b G3a M1a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_29": {
+  "mela": 29,
+  "swaras": "S R2b G3a M1a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_3": {
+  "mela": 3,
+  "swaras": "S R1b G1a M1a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_30": {
+  "mela": 30,
+  "swaras": "S R2b G3a M1a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_31": {
+  "mela": 31,
+  "swaras": "S R3b G3a M1a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_32": {
+  "mela": 32,
+  "swaras": "S R3b G3a M1a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_33": {
+  "mela": 33,
+  "swaras": "S R3b G3a M1a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_34": {
+  "mela": 34,
+  "swaras": "S R3b G3a M1a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_35": {
+  "mela": 35,
+  "swaras": "S R3b G3a M1a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_36": {
+  "mela": 36,
+  "swaras": "S R3b G3a M1a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_37": {
+  "mela": 37,
+  "swaras": "S R1b G1a M2a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_38": {
+  "mela": 38,
+  "swaras": "S R1b G1a M2a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_39": {
+  "mela": 39,
+  "swaras": "S R1b G1a M2a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_4": {
+  "mela": 4,
+  "swaras": "S R1b G1a M1a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_40": {
+  "mela": 40,
+  "swaras": "S R1b G1a M2a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_41": {
+  "mela": 41,
+  "swaras": "S R1b G1a M2a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_42": {
+  "mela": 42,
+  "swaras": "S R1b G1a M2a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_43": {
+  "mela": 43,
+  "swaras": "S R1b G2b M2a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_44": {
+  "mela": 44,
+  "swaras": "S R1b G2b M2a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_45": {
+  "mela": 45,
+  "swaras": "S R1b G2b M2a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_46": {
+  "mela": 46,
+  "swaras": "S R1b G2b M2a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_47": {
+  "mela": 47,
+  "swaras": "S R1b G2b M2a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_48": {
+  "mela": 48,
+  "swaras": "S R1b G2b M2a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_49": {
+  "mela": 49,
+  "swaras": "S R1b G3a M2a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_5": {
+  "mela": 5,
+  "swaras": "S R1b G1a M1a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_50": {
+  "mela": 50,
+  "swaras": "S R1b G3a M2a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_51": {
+  "mela": 51,
+  "swaras": "S R1b G3a M2a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_52": {
+  "mela": 52,
+  "swaras": "S R1b G3a M2a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_53": {
+  "mela": 53,
+  "swaras": "S R1b G3a M2a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_54": {
+  "mela": 54,
+  "swaras": "S R1b G3a M2a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_55": {
+  "mela": 55,
+  "swaras": "S R2b G2b M2a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_56": {
+  "mela": 56,
+  "swaras": "S R2b G2b M2a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_57": {
+  "mela": 57,
+  "swaras": "S R2b G2b M2a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_58": {
+  "mela": 58,
+  "swaras": "S R2b G2b M2a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_59": {
+  "mela": 59,
+  "swaras": "S R2b G2b M2a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_6": {
+  "mela": 6,
+  "swaras": "S R1b G1a M1a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_60": {
+  "mela": 60,
+  "swaras": "S R2b G2b M2a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_61": {
+  "mela": 61,
+  "swaras": "S R2b G3a M2a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_62": {
+  "mela": 62,
+  "swaras": "S R2b G3a M2a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_63": {
+  "mela": 63,
+  "swaras": "S R2b G3a M2a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_64": {
+  "mela": 64,
+  "swaras": "S R2b G3a M2a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_65": {
+  "mela": 65,
+  "swaras": "S R2b G3a M2a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_66": {
+  "mela": 66,
+  "swaras": "S R2b G3a M2a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_67": {
+  "mela": 67,
+  "swaras": "S R3b G3a M2a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_68": {
+  "mela": 68,
+  "swaras": "S R3b G3a M2a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_69": {
+  "mela": 69,
+  "swaras": "S R3b G3a M2a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_7": {
+  "mela": 7,
+  "swaras": "S R1b G2b M1a P D1b N1a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_70": {
+  "mela": 70,
+  "swaras": "S R3b G3a M2a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_71": {
+  "mela": 71,
+  "swaras": "S R3b G3a M2a P D2a N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_72": {
+  "mela": 72,
+  "swaras": "S R3b G3a M2a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_8": {
+  "mela": 8,
+  "swaras": "S R1b G2b M1a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mela_9": {
+  "mela": 9,
+  "swaras": "S R1b G2b M1a P D1b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "minor": {
+  "mela": 20,
+  "swaras": "S R2b G2b M1a P D1b N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "mohanam": {
+  "mela": 28,
+  "swaras": "S R2b G3a P D2a >S",
+  "arohana": "S R G P D >S",
+  "avarohana": "S <D P G R S",
+  "gen": true
+ },
+ "nattai": {
+  "mela": 36,
+  "swaras": "S R3b G3a M1a P D3b N3a >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ },
+ "revathi": {
+  "mela": 16,
+  "swaras": "S R1b G3a M1a P D2a N2b >S",
+  "arohana": "S R G M P D N >S",
+  "avarohana": "S <N D P M G R S",
+  "gen": true
+ }
+}

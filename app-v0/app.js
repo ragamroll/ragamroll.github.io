@@ -3,20 +3,22 @@ import { useState, useEffect, useMemo, useCallback, useRef } from './vendor/hook
 import { html } from './vendor/htm-preact.js';
 import { TALA_MAP } from './core/parser.js';
 import { setRagas, getRagas } from './core/raga-base.js';
+import { setRagaExt } from './core/raga-ext.js';
 import { Editor } from './components/Editor.js';
 import { NotationPane } from './components/NotationPane.js';
 import { RollPane } from './components/RollPane.js';
 import { Toolbar } from './components/Toolbar.js';
 import { Diagnostics } from './components/Diagnostics.js';
-import { ReferenceDialog } from './components/ReferenceDialog.js';
+import { RagaDialog } from './components/RagaDialog.js';
+import { TalaDialog } from './components/TalaDialog.js';
 import { ScaleDialog } from './components/ScaleDialog.js';
 import { buildSequence } from './core/midi/sequence.js';
 import { writeSMF } from './core/midi/smf.js';
 import { createPlayer } from './audio/player.js';
 import { scheduleEvents, totalSeconds, midiToFreq } from './audio/schedule.js';
-import { PITCH_CLASS } from './core/tuning.js';
-import { stepForLetter, stepFreq, P_STEP } from './core/shruti.js';
+import { stepFreq, P_STEP } from './core/shruti.js';
 import { melaOfScale } from './core/melakarta.js';
+import { saBaseOf, applyPlaybackPitch } from './core/retune.js';
 import { scrollPos, playheadScroll } from './audio/scroll.js';
 import { buildRowTimes, rowAt } from './audio/rowtimes.js';
 import { Transport } from './components/Transport.js';
@@ -37,45 +39,6 @@ const DEFAULT_NAME = 'ragamroll';
 function baseName(name) {
   const stripped = String(name || '').replace(/\.[^./\\]+$/, '').trim();
   return stripped || DEFAULT_NAME;
-}
-
-const mod12 = (x) => ((x % 12) + 12) % 12;
-
-// 12-TET pitch class of Sa for the model's active raga (incl. Raga transpose).
-// Drives both the drone and the 53-EDO retune. Falls back to C / no transpose.
-function saBaseOf(model, ragas) {
-  const rev = [...model.events].reverse();
-  const key = rev.find((e) => e.type === 'raga')?.key || ['c12', '0'];
-  const semis = Number.parseInt(key[1], 10) || 0;
-  const saNote = ragas?.[key[0]]?.C12_SWARAS?.S ?? 'C';
-  return (PITCH_CLASS[saNote] ?? 0) + semis;
-}
-
-// Mutate a built sequence's melody notes with an experimental playback pitch
-// (n.freq): a 53-EDO scale override and/or a whole-audio semitone transpose
-// (from a user-set Sa). MIDI export never reads n.freq, so goldens are
-// untouched; only the audio path (schedule.js) carries it. Iterates
-// model.events with the SAME filter buildSequence uses → notes align by index.
-function applyPlaybackPitch(seq, model, scale, saBase, shift) {
-  if (!scale && !shift) return;                 // pure 12-TET, no override → default path
-  const notes = seq.tracks[0].notes;
-  const PER = seq.ppq / 2;                       // buildSequence: 1 length-unit = eighth
-  let i = 0;
-  for (const e of model.events) {
-    if (e.type !== 'note' || e.rest) continue;
-    if (Math.round(e.absLen * PER) <= 0) continue;
-    const m = notes[i]?.pitch;
-    if (m != null) {
-      const step = scale ? stepForLetter(scale, e.swara) : null;
-      if (step != null) {
-        const saMidi = m - mod12(m - saBase) + shift;   // Sa at this note's octave, transposed
-        notes[i].freq = stepFreq(midiToFreq(saMidi), step);
-      } else if (shift) {
-        notes[i].freq = midiToFreq(m + shift);          // 12-TET note, transposed
-      }
-    }
-    i++;
-  }
 }
 
 // Sustained drone voices (frequencies) for a given Sa MIDI: S · P · >S
@@ -139,6 +102,7 @@ function App({ examples }) {
   const rowTimes = useMemo(() => { try { return buildRowTimes(effModel); } catch { return []; } }, [effModel]);
 
   const raga = useMemo(() => { const e = [...model.events].reverse().find(e => e.type === 'raga'); return e ? e.key.join(',') : ''; }, [model]);
+  const ragaName = useMemo(() => { const e = [...model.events].reverse().find(e => e.type === 'raga'); return e ? e.key[0] : ''; }, [model]);
   const tala = useMemo(() => { const e = [...model.events].reverse().find(e => e.type === 'tala'); return e ? `beat ${e.props.beat}` : ''; }, [model]);
 
   // Opening a file / picking an example remembers its name, so Save and Export
@@ -372,14 +336,16 @@ function App({ examples }) {
                 onOpenRagas=${onOpenRagas} onOpenTalas=${onOpenTalas}
                 onOpenScale=${onOpenScale} scaleActive=${!!scale} scaleLabel=${scaleLabel}
                 timbre=${timbre} onTimbre=${onTimbre} />
-    ${(dialog === 'ragas' || dialog === 'talas') && html`<${ReferenceDialog} mode=${dialog}
-                                         ragas=${getRagas()} talas=${TALA_MAP} onClose=${onCloseDialog} />`}
+    ${dialog === 'ragas' && html`<${RagaDialog} ragas=${getRagas()} player=${playerRef.current}
+                                         stopMain=${onStop} onClose=${onCloseDialog} />`}
+    ${dialog === 'talas' && html`<${TalaDialog} talas=${TALA_MAP} player=${playerRef.current}
+                                         saMidi=${saMidi} stopMain=${onStop} onClose=${onCloseDialog} />`}
     ${dialog === 'scale' && html`<${ScaleDialog} scale=${scale} onApply=${onApplyScale} onClose=${onCloseDialog}
-                                                 saPitch=${saPitch} autoSaMidi=${autoSaMidi} onSetSa=${onSetSa}
-                                                 ragas=${getRagas()} />`}
+                                                 ragas=${getRagas()} ragaName=${ragaName} />`}
     <${Transport} state=${playState} canPlay=${noteCount > 0}
                   onPlay=${onPlay} onPause=${onPause} onStop=${onStop}
                   compositionTempo=${compositionTempo} tempoOverride=${tempoOverride} onTempo=${onTempo} onResetTempo=${onResetTempo}
+                  saPitch=${saPitch} autoSaMidi=${autoSaMidi} onSetSa=${onSetSa}
                   masterVol=${masterVol} onMasterVol=${onMasterVol}
                   melodyMuted=${melodyMuted} onToggleMelody=${onToggleMelody}
                   talaVol=${talaVol} onTalaVol=${onTalaVol} talaMuted=${talaMuted} onToggleTala=${onToggleTala}
@@ -400,15 +366,15 @@ function App({ examples }) {
   `;
 }
 
-// Load raga data (browser), then mount.
-// Load raga data + the example manifest (data-driven, so new pieces need no
-// code change), then mount. A missing/broken manifest falls back to the
-// built-in list so the app still runs.
+// Load raga data + the extended-raga overlay + the example manifest
+// (data-driven), then mount. Each optional feed falls back gracefully.
 Promise.all([
   fetch('./core/raga-base.json').then(r => r.json()),
   fetch(`${EXAMPLES_BASE}/index.json`).then(r => r.json()).catch(() => EXAMPLES_FALLBACK),
-]).then(([data, examples]) => {
+  fetch('./core/raga-ext.json').then(r => r.json()).catch(() => ({})),
+]).then(([data, examples, ext]) => {
   setRagas(data);
+  setRagaExt(ext);
   render(h(App, { examples: Array.isArray(examples) && examples.length ? examples : EXAMPLES_FALLBACK }),
          document.getElementById('app'));
 });

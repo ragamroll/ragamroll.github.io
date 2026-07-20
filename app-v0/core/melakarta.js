@@ -117,6 +117,44 @@ export function melaScale(ragas, n, ab = {}) {
   return s;
 }
 
+// The mela that best matches a composition's Raga= (name). A mela name maps
+// directly; a janya raga → the LOWEST-numbered mela whose scale is a superset of
+// the raga's present swaras (its janaka for common ragas). null if no match.
+// Variety numbers of the present variable swaras of a raga (from its C12 notes).
+// e.g. mohanam → {R:2, G:3, D:2} (M, N absent).
+export function presentVarieties(ragas, name) {
+  const c = ragas?.[name]?.C12_SWARAS;
+  if (!c) return {};
+  const sa = PITCH_CLASS[c.S] ?? 0;
+  const out = {};
+  for (const L of ['R', 'G', 'M', 'D', 'N']) {
+    if (c[L] == null) continue;
+    const semis = (((PITCH_CLASS[c[L]] ?? 0) - sa) % 12 + 12) % 12;
+    const v = VARIETY[L][semis];
+    if (v != null) out[L] = v;               // skip notes that aren't a standard variety
+  }
+  return out;
+}
+
+// 53-EDO step for a swara variety + a/b comma (e.g. R,2,'a' → 8), or null.
+export function stepForVariety(letter, num, comma = 'a') {
+  return VARIETY_STEP[letter]?.[num]?.[comma] ?? null;
+}
+
+export function melaForRaga(ragas, name) {
+  if (!name || name === 'c12') return null;   // c12 = chromatic, not a raga to match
+  const m = /^mela_(\d+)$/.exec(name);
+  if (m) { const n = Number(m[1]); return n >= 1 && n <= 72 ? { n, name: MELA_NAMES[n] } : null; }
+  if (!ragas?.[name]?.C12_SWARAS) return null;
+  const want = presentVarieties(ragas, name);
+  if (!Object.keys(want).length) return null;
+  for (let n = 1; n <= 72; n++) {
+    const mv = melaVarieties(ragas, n);
+    if (mv && Object.entries(want).every(([L, v]) => mv[L] === v)) return { n, name: MELA_NAMES[n] };
+  }
+  return null;
+}
+
 // Reverse: which mela (if any) a built scale {R,G,M,D,N: step} corresponds to,
 // ignoring the a/b comma. Returns {n, name} or null (non-melakarta).
 export function melaOfScale(ragas, scale) {

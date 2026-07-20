@@ -1,5 +1,5 @@
 import { noteToMidi } from './tuning.js';
-import { swaraMap } from './raga-base.js';
+import { swaraMap, resolveRagaName } from './raga-base.js';
 import { GM } from './midi/gm.js';
 
 // tala_map: name -> [beatsPerCycleUnit, [accentedAngaStarts...]]  (verbatim)
@@ -131,6 +131,7 @@ export function parse(input) {
         }
         case 'Raga': case 'raga': {
           ragaKeyTuple = val.split(',');
+          ragaKeyTuple[0] = resolveRagaName(ragaKeyTuple[0]);   // case-insensitive raga name -> canonical key
           events.push({ type: 'raga', key: ragaKeyTuple });
           try {
             curSrgAbcMap = swaraMap(ragaKeyTuple[0]);
@@ -141,8 +142,13 @@ export function parse(input) {
         case 'Tala': case 'tala': {
           const parts = val.split(',');
           if (!Object.prototype.hasOwnProperty.call(TALA_MAP, parts[0])) {
-            diagnostics.push({ token, index: tokenIndex, message: `unknown tala "${parts[0]}" — using adi` });
-            parts[0] = 'adi';
+            const lower = String(parts[0]).toLowerCase();     // case-insensitive tala name
+            if (Object.prototype.hasOwnProperty.call(TALA_MAP, lower)) {
+              parts[0] = lower;
+            } else {
+              diagnostics.push({ token, index: tokenIndex, message: `unknown tala "${parts[0]}" — using adi` });
+              parts[0] = 'adi';
+            }
           }
           const bv = decodeInt(parts[1]);
           if (parts.length > 1 && !Number.isNaN(bv) && bv <= 0)

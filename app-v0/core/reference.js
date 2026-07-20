@@ -65,6 +65,12 @@ export function padMelaName(name) {
   return String(name).replace(/^(mela_)(\d)$/, '$10$2');
 }
 
+// Display form for raga/tala keys: underscores → spaces, capitalise each word.
+// e.g. mohanam → Mohanam, mela_15 → Mela 15, khandachapu → Khandachapu.
+export function titleCase(name) {
+  return String(name).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export function formatTala(entry) {
   if (!entry) return '';
   const [aksharas, accents] = entry;

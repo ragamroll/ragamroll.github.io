@@ -16,15 +16,21 @@
     .toolbar .readout { margin-left:auto; opacity:.7; font-size:.85rem; }
     .toolbar .app-badge { font-weight:bold; font-size:.95rem; background:#222; border:1px solid #444;
       border-radius:10px; padding:.12rem .55rem; margin-right:.25rem; }
+    .toolbar .help-link { display:inline-flex; align-items:center; justify-content:center; width:1.5rem; height:1.5rem;
+      border-radius:50%; border:1px solid #555; background:#222; color:#9cf; text-decoration:none; font-weight:bold; font-size:.9rem; }
+    .toolbar .help-link:hover { border-color:#9cf; }
     .transport { display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; padding:.35rem .5rem; border-bottom:1px solid #333; }
     .transport button { font-size:1rem; padding:.15rem .5rem; cursor:pointer; }
     .transport button:disabled { opacity:.4; cursor:default; }
     .transport .doc-btn { font-size:.85rem; }
-    .transport-play { display:flex; gap:.4rem; align-items:center; margin-left:auto; }  /* push playback to the right */
-    .transport .tempo { display:inline-flex; align-items:center; gap:.2rem; font-size:.85rem; margin-left:.4rem; }
-    .transport .tempo input { width:3.4rem; background:#111; color:#eee; border:1px solid #444;
+    .transport-play { display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; margin-left:auto; }  /* wraps in portrait */
+    .transport .sapick { display:inline-flex; align-items:center; gap:.25rem; font-size:.85rem; margin-left:.4rem; }
+    .transport .sapick select { background:#111; color:#eee; border:1px solid #444; border-radius:4px; padding:.1rem .25rem; font:inherit; }
+    .transport .tempo { display:inline-flex; align-items:center; gap:.3rem; font-size:.85rem; margin-left:.4rem; }
+    .transport .tempo .tempo-mult { width:4.5rem; accent-color:#6c9; cursor:pointer; }
+    .transport .tempo .tempo-num { width:3.2rem; background:#111; color:#eee; border:1px solid #444;
       border-radius:4px; padding:.1rem .25rem; font:inherit; }
-    .transport .tempo.on input { border-color:#6c9; color:#9fc; }
+    .transport .tempo.on .tempo-num { border-color:#6c9; color:#9fc; }
     .transport .tempo .tempo-state { font-size:.68rem; opacity:.55; }
     .transport .tempo.on .tempo-state { color:#9fc; opacity:.9; }
     .transport .tempo .tempo-reset { cursor:pointer; background:#2a2a2a; color:#eee; border:1px solid #555;
@@ -83,12 +89,9 @@
       padding:.15rem .3rem; font:inherit; cursor:pointer; }
     /* Experimental 53-EDO scale dialog */
     .scale-box { width:min(680px,96vw); }
-    .sa-pitch { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; margin:.1rem 0 .5rem;
-      padding-bottom:.5rem; border-bottom:1px solid #333; }
-    .sa-pitch label, .mela-row label { font-size:.9rem; }
-    .sa-pitch select, .mela-row select { margin-left:.35rem; background:#111; color:#eee; border:1px solid #444;
+    .mela-row label { font-size:.9rem; }
+    .mela-row select { margin-left:.35rem; background:#111; color:#eee; border:1px solid #444;
       border-radius:4px; padding:.2rem .35rem; font:inherit; }
-    .sa-pitch .sa-note { font-size:.72rem; opacity:.6; }
     /* Mela picker + a/b table */
     .mela-row { display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; margin:.2rem 0 .6rem; }
     .mela-row .mela-step { cursor:pointer; background:#2a2a2a; color:#eee; border:1px solid #555;
@@ -106,7 +109,41 @@
     .mela-table .ab-btn { cursor:pointer; background:#1a1a1a; color:#bbb; border:1px solid #444;
       border-radius:3px; width:1.4rem; padding:.1rem 0; font:inherit; font-size:.78rem; }
     .mela-table .ab-btn.on { background:#183028; border-color:#6c9; color:#cfe; }
-    .scale-actions { display:flex; gap:.5rem; justify-content:flex-end; padding-top:.3rem; border-top:1px solid #333; }
+    .scale-actions { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; padding-top:.3rem; border-top:1px solid #333; }
+    .scale-actions .actions-spacer { flex:1 1 auto; }
+    .scale-actions .reset-icon { font-size:1rem; padding:.15rem .5rem; }
+    .scale-actions .suggest-btn { background:#1c2f3a; border-color:#69c; color:#cde; }
+    /* Tala browser */
+    .tala-box { width:min(680px,96vw); }
+    .tala-hint { font-size:.8rem; opacity:.75; margin:.1rem 0 .6rem; }
+    .tala-list { list-style:none; margin:0; padding:0; }
+    .tala-list li { padding:.45rem 0; border-bottom:1px solid #222; }
+    .tala-head { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+    .tala-play { cursor:pointer; background:#2a2a2a; color:#eee; border:1px solid #555; border-radius:4px;
+      padding:.1rem .55rem; font-size:.9rem; }
+    .tala-play.on { border-color:#6c9; color:#9fc; }
+    .tala-name { font-weight:bold; }
+    .tala-count { font-size:.74rem; opacity:.6; }
+    /* One row always: boxes shrink to fit (14 aksharas on a phone) rather than
+       wrapping; aspect-ratio keeps them square, max-width stops few-akshara rows
+       from ballooning. */
+    .akrow { display:flex; flex-wrap:nowrap; gap:3px; margin:.35rem 0 .1rem; }
+    .akbox { flex:1 1 0; min-width:0; max-width:1.5rem; aspect-ratio:1; display:flex; align-items:center;
+      justify-content:center; border:1px solid #333; border-radius:4px; background:#141414;
+      font-family:ui-monospace,monospace; font-size:.7rem; }
+    .akbox.sam { border-color:#6c9; color:#9fc; background:#12211b; }
+    .akbox.acc { border-color:#a86; color:#eca; background:#211a12; }
+    .akbox.on { background:#2b4; color:#111; border-color:#2b4; }
+    /* Raga browser preview */
+    .raga-list li { display:grid; grid-template-columns:auto 1fr; column-gap:.6rem; align-items:start;
+      padding:.35rem 0; border-bottom:1px solid #222; }
+    .raga-list li.playing { background:#12211b; }
+    .raga-play { cursor:pointer; background:#2a2a2a; color:#eee; border:1px solid #555; border-radius:4px;
+      padding:.1rem .5rem; font-size:.85rem; align-self:center; }
+    .raga-play.on { border-color:#6c9; color:#9fc; }
+    .raga-main .ref-name { font-weight:bold; }
+    .raga-list .ref-mela { color:#c9c; font-size:.78rem; }
+    .raga-list .ref-aroha { color:#9c9; font-size:.78rem; font-family:ui-monospace,monospace; }
     .scale-actions button { cursor:pointer; background:#2a2a2a; color:#eee; border:1px solid #555;
       border-radius:4px; padding:.3rem .7rem; }
     .scale-actions button.primary { background:#1c3a30; border-color:#6c9; color:#cfe; }
@@ -137,6 +174,10 @@
     @media (max-width:560px) {
       .toolbar { flex-wrap:wrap; }
       .toolbar .readout { margin-left:0; flex-basis:100%; }
+      /* Portrait: don't right-pin the playback group — let it wrap to full width
+         so nothing (Tala/Master/Drone) runs off the edge. */
+      .transport-play { margin-left:0; flex-basis:100%; }
+      .transport .vol { margin-left:0; }
     }
   </style>
 </head>

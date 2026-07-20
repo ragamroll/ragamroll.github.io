@@ -20,11 +20,20 @@ export { RAGAS };
 export function setRagas(data) { RAGAS = data; }
 export function getRagas() { return RAGAS; }
 
-// Returns the C12_SWARAS map (swara letter -> note name) for a raga.
-// Throws on unknown raga; callers decide the fallback (the Groovy code
-// would NPE here, and its callers wrap parse in try/catch).
+// Resolve a raga name to its canonical key, case-insensitively (keys are
+// lowercase). Returns the input unchanged if no match — callers tolerate it.
+export function resolveRagaName(name) {
+  if (!RAGAS || name == null) return name;
+  if (RAGAS[name]) return name;
+  const lower = String(name).toLowerCase();
+  if (RAGAS[lower]) return lower;
+  return Object.keys(RAGAS).find((k) => k.toLowerCase() === lower) || name;
+}
+
+// Returns the C12_SWARAS map (swara letter -> note name) for a raga (name
+// matched case-insensitively). Throws on unknown raga; callers wrap parse.
 export function swaraMap(ragaName) {
-  const r = RAGAS && RAGAS[ragaName];
+  const r = RAGAS && RAGAS[resolveRagaName(ragaName)];
   if (!r || !r.C12_SWARAS) throw new Error(`unknown raga: ${ragaName}`);
   return r.C12_SWARAS;
 }

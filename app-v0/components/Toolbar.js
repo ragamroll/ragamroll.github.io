@@ -9,6 +9,8 @@ const TIMBRES = [
 export function Toolbar({ raga, tala, onOpen, examples, exampleValue, onExample, onOpenRagas, onOpenTalas, onOpenScale, scaleActive, scaleLabel, timbre, onTimbre }) {
   return html`<div class="toolbar">
     <span class="app-badge">RagaM-Roll</span>
+    <a class="help-link" href="./help.html" target="_blank" rel="noopener"
+       title="Help — notation guide &amp; features">?</a>
     <${OpenMenu} examples=${examples} exampleValue=${exampleValue} onOpen=${onOpen} onExample=${onExample} />
     <button onClick=${onOpenRagas}>Ragas</button>
     <button onClick=${onOpenTalas}>Talas</button>
