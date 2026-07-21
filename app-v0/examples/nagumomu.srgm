@@ -1,0 +1,164 @@
+Raga=abheri,4
+Tala=adi,16
+
+T400 I[FLUTE] 
+L=2 O=5
+ 
+z64
+P2 P2 P4 n4 n4
+n D D P m8 m4
+m2 R2 g4 g R R2 S4
+<n2 >S2 g4 S g m2 g m P2
+ 
+P2 P2 n4 m P n2 n4
+n D D P m4 S g m2 m4
+m g P m m g g2 g R R2 S3 R
+<n2 >S2 g4 S g m2 g m P2
+
+P2 P2 n4 P n >S2 S4
+<n D >S <n n D D P P m m2 m4
+n D D P P m m g g R R2 S4
+<n2 >S2 g4 S g m2 g m P2
+ 
+P2 P2 n4 P n >S2 <n >S g2
+S g   L=1   m2 P m L=2   g R R S       S <n n D    D P P m
+P n   L=1  >S2 R S L=2  <n D P m g m  L=1 P D P m  L=2   g R S R
+<n2 >S2                        g4             S g m2      g m P2
+
+P2 P2   n2 P2    P n L=1  >S2 R S  L=2  <n2 D2
+P2 m2   g2 R2    S R g R      P m g R
+
+S12   P2 m2
+g2 R2  S2 R2    <n2 >S2  g2 m2
+
+P2 P2   n2 P2    P n L=1  >S2 R S  L=2  <n2 D2
+P2 m2   g2 R2    S R g R      P m g R
+
+S2 >g R		S <n D P	>R S <n D	P m >S <n
+D P m g		n D P m		g R <n >S g	S g m
+
+P3 n P2 >S6 <n >S g2
+S <n >S <n P n P m g6 g2
+
+g m P n >S6 <g m n P2 m
+m g g2	g R S10
+
+
+
+P2 n2 >S24 <n D P m
+
+P2 n2 >S12
+<n >S g R <n >S g R S4 <n D P m
+
+P2 n2 >S12
+<<n >S g m P n >S2 S3 S <n D P m
+
+P2 n2 >S10 S2
+S2 g2 m8	m4
+
+g2 R2 g10 g2
+m g P m 	g2 R2 	S3 R 	S R S <n
+
+P2 n2 >S3 <n	P n >S R	S4
+S2 g2  m3  g  S g  m P  m4
+
+g2 R2	g10	g2
+m g P m	g2 R2	S8
+
+<P n P n 	>S R S <n	P n >S R	S <n >S2
+S g S g		m P m g		S g m P		m g m2
+
+g2 g2 		g3 R	<n2 >S2 g2 m2	
+P3 m		g2 R2	 S8
+
+g2 R2	R4	R2 S2	S4
+S2 <n2	n4	n2 D2 P2 m2	P3 n
+
+n >S15
+<n D P m 	g R S2	<n >S g m 	P n >S2
+
+g2 R2	R4	R2 S2	S4
+S2 <n2	n4	n2 D2 P2 m2	P3 n
+
+n >S11 		<n2 D2
+P2 m2 g2 R2	<n2 >S2 g2 m2
+
+P2 P2 n4 P n >S2 <n >S g2
+S g   L=1   m2 P m L=2   g R R S       S <n n D    D P P m
+P n   L=1  >S2 R S L=2  <n D P m g m   P D P m     g R S R
+<n2 >S2                        g4             S g m2      g m P2
+
+P2 P2 P8	n2 P2
+m2 g2 m8	P2 m2
+
+g2 S2 g8	g2 m2
+P2 m2 g2 R2	S4	<n >S g m
+
+P2 P2 P4	m P >S <n 	n D D P
+m2 g2 m4	g m n D		D P P m
+g2 S2	g8			g2 m2
+P D P m		g m g R		S4	<n >S g m
+
+P2 P2 	P2 n2	n2 >S2	S2 g2
+g R R S	S <n n D	D P P m	m g g2
+g2 m2	P2 n2	>S4	<g2 m2
+P D P m	g m g R		S8
+
+P2 P2 	P2 n2	n2 >S2	<n >S g2
+S g m g g R R S S <n n D D P P m
+g2 m2	P2 n2	>S4	<g2 m2
+P D P m	g m g R		S8
+
+<n2  n2 >S8	S2 S2
+<n2 >S2	g8	g2 g2
+S2 g2	m8	m2 m2
+g2 m2 g m P n	m4	P4
+n2 P2 m g R S S4	S2 S2
+<n2 >S2 g8 	g2 g2
+S2 g2 m8 	m2 m2
+g2 m2	g m P n	m2 P6
+
+
+>S2 R  S <n >S  <n P n2    P m P2 P2
+g m P n		>S <n P m g R S2	S R <n2
+n2 >S2	g m g g g4 g2 g2
+g2 m2	g m P n		m2 P6
+
+
+
+P2 n2 >S10 S2
+S2 g2 m8	m4
+
+g2 R2 g10 g2
+m g P m 	g2 R2 	S3 R 	S R S <n
+
+P2 n2 >S3 <n	P n >S R	S4
+S2 g2  m3  g  S g  m P  m4
+
+g2 R2	g10	g2
+m g P m	g2 R2	S8
+
+<P n P n 	>S R S <n	P n >S R	S <n >S2
+S g S g		m P m g		S g m P		m g m2
+
+g2 g2 		g3 R	<n2 >S2 g2 m2	
+P3 m		g2 R2	 S8
+
+g2 R2	R4	R2 S2	S4
+S2 <n2	n4	n2 D2 P2 m2	P3 n
+
+n >S15
+<n D P m 	g R S2	<n >S g m 	P n >S2
+
+g2 R2	R4	R2 S2	S4
+S2 <n2	n4	n2 D2 P2 m2	P3 n
+
+n >S11 		<n2 D2
+P2 m2 g2 R2	<n2 >S2 g2 m2
+
+P2 P2 n4 P n >S2 <n >S g2
+S g   L=1   m2 P m L=2   g R R S       S <n n D    D P P m
+P n   L=1  >S2 R S L=2  <n D P m g m   P D P m     g R S R
+<n2 >S2                        g4             S g m2      g m P2
+
+

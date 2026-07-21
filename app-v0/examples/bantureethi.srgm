@@ -1,0 +1,82 @@
+T700 I[ALTO_SAX]
+Raga=hamsanadam,4
+Tala=adi,16
+
+% 1
+L=4 O=5
+z6    p2              p2 p m     r2 r2     
+s r2 s3  s <n        >s3 p3 m2
+
+% 2
+ p3 p3 p2              p2 p m     r2 r2  
+ s r2 s3  s <n        >s3 p3 m2
+
+% 3 
+ p3 p3 p n              p n p m     r2 r2     
+ s r2 s3  s <n        >s3 p3 m2
+
+% 4
+p3 p3 p n              p n p m     r2 r2     
+s r2 s3  s <n        >s3 p3 p2
+
+% 5
+m p2 n3 p n              p n p m     r2 r2     
+s r2 s3 >s <n             p m p m   r s <n >s
+
+% 6
+r m p n   >s r s <n     p m p m   r2 r2
+s r2 s3  s r <n        >s2 p3 p2
+
+% 7
+m p2 n13
+>s22
+
+% 8 (z6)
+         s2 s2 s4 s2 
+<n >s2 s3 <n2 >s2 r4 r2
+
+% 9
+s r2 s3    s2 s2 s4 s2 
+<n >s2 s3 <n2 >s2 r4 r2
+
+% 10 
+s r2 s3    <p2 n2 >s4 s2 
+<n >s2 <n3 n2 >s2 r4 r2
+
+% 11
+s <n p m p n p2   n2 >s4 s2 
+<n >s2 <n3 n2     >s2 r4 r2
+
+% 12
+s r2 m3 p2              p2 p m     r2 r2     
+s r2 s3 <n2     n3 >s3 s2
+
+% 13
+<n >r s s <n2 p n   p n p m     r2 r2     
+s r2 s3 >s <n             p m p m   r s <n >s
+
+% 14
+r m p n   >s r s <n     p m p m   r2 r2
+s r2 s3  s r <n        >s2 p3 p2
+
+% 15
+m p2 n13
+>s22
+
+L=4 O=5
+% 16 (z6)
+                p4 p4 p2
+m p2 m3 p2       n3 >s3 s2
+
+% 17
+<n >s2 <n3   p2        p2 p m     r2 r2     
+s r2 s3  s <n        >s3 p3 m2
+
+% 18
+p6                p4 p4 p2
+m p2 m3 p2       n3 >s3 s2
+
+% 19
+<n >s2 <n3   p2        p2 p m     r2 r2     
+s r2 s3  s <n        >s3 p3 m2
+

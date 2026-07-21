@@ -1,0 +1,44 @@
+T120 I[ALTO_SAX] 
+
+Tala=adi,4
+Raga=c12,4
+
+L=1 O=5
+
+n2 D2 n4 >s <n D n P D n2
+>S6 <n >R S <n D >S <n D m2
+
+D6 n4 D4 m2 G4 G2 S4 R2 S2 <n2 
+D4 D2 m4 n2 D2 n2 >S6 <n2 >S2 R2 G2 m2
+
+n2 D2 n4 >s <n D n P D n2
+>S6 <n >R S <n D >S <n D m2
+
+n2 D p D n D2 m G2 m P G R S
+<n2 D n >S R S2 R G m n D m G m
+
+n2 D2 n4 >s <n D n P D n2
+>S6 <n >R S <n D >S <n D m2
+
+n3 >s3 <n >R S <n D n >s <D n p
+D3 m3 R G m G S <n >R S <n D
+n3 >s3 R G m G m n D n P D
+n3 >s3 R G m G S <n >R S <n D
+
+n2 D2 n4 >s <n D n P D n2
+>S6 <n >R S <n D >S <n D m2
+
+>s6 R G m G s <n >R s <n D
+n6 p D n >s <n D m P G R
+
+S6 <n D n >S <n D n >S R G
+m6 R G m P m G m n D n
+
+>s2 R S <n D n2 >s <n D P D2 P m
+G2 m P G m n2 D m n D n P D n
+
+>S R G m G S <n >R S <n >S <n D P D n
+>S <D P G m P G R S <n D n >S R G m
+
+n2 D2 n4 >s <n D n P D n2
+>S6 <n >R S <n D >S <n D m2

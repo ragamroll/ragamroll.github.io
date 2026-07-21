@@ -1,0 +1,53 @@
+T160 I[ALTO_SAX] 
+Tala=eka,4
+Raga=nattai,4
+
+O=5 L=2
+
+m p2 m r s r2
+L=1
+s <D N2 >s4 s <N >s3 r G2
+
+L=2
+m p2 m r s r2
+L=1
+s <D N2 >s4 s <N >s r G2 m2
+
+L=1
+p N >s <N p m G m p m r s r4
+s <D N2 >s4 s <N >s r G2 m2
+
+p N >s r s <N p m r s r4
+
+
+p s N p m
+
+G m r r s
+N s r G
+m p N p p m m r s s r
+s D N s
+
+m p N p
+p D N s s N s
+r r s r r s s N s
+p N s N p m G m
+p D N s s N s
+r r s r r s s N s r
+
+s r G m s r p s
+s N p N s N p m
+N p p m r s
+
+m p G m p
+s r r G m p m p
+
+p m p N p m 
+r r s s N p m
+
+p p m G m r s r s N s p m G m
+p D N s r G m
+r m r s s r s N p m
+s N p m G m
+N p m r G m r r s
+r R S p S N p m r s
+N s r G

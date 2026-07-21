@@ -1,0 +1,114 @@
+Raga=c12,4
+Tala=adi,4
+T120 I[ALTO_SAX]
+L=1 O=5
+
+z32
+
+R2 R2		R2 G m		P2 P2		P m G m
+R2 S2		S <N P2		N >S R S	R2 R2
+
+R2 R2 		R2 G m 		P D P D 	P m G m
+R2 S2 		S <N P2 	N >S R S 	R2 R2
+
+R2 R2 		R2 G m		P >R S <N 	P m G m
+R2 S2 		S <N P2 	N >S R S 	R2 R2
+
+R G m R 	R G m P 	D D P m 	G m R s
+R G m2		R4		S3 R 		S R S <N
+
+>R G m R 	R G m P 	D D P m 	G m R s
+R G m2		R3 >R		S <N P m 	G m R s
+
+R2 R2		R2 G m		P2 m2		P4
+z8				z8
+
+
+
+
+P2 P m		R2 P m		G m R2		R G m2
+R2 G m		P m R2		P m P D3 P2
+
+>S4		S <N P2		P m R2		G m P R
+>S <N P m	R G m2		P m G m		R2 S2
+
+>S2 m R		S <N P2		P m R2		G m P R
+>S <N P m	R G m2		P m G m		R2 S2
+
+>S2 m R		S <N P2		P m R2		G m P R
+>S <N P m	R G m2		P m G m		R2 S2
+
+
+
+
+R3 R 		G m R G		m P m G2 m R S
+R6		   <N P		>R S2 <N	>S R G m
+
+R3 R 		G m R G		m P m G2 m R S
+R6		   <N P		>R S2 <N	>S R G m
+
+R2 R P		m P D D		P m P G		m R <N >S
+R G m P2 	  m G m		P D D P		P4
+
+R R G m		P m D P 	>S <N P >R	S <N P m
+R G m D		P >R S <N	>S R G m 	R4
+
+R R S m		G m P m		G m R S		<N >R S <N
+P >S <N P	N P >R S	<N P m G	m R <N >S
+
+
+
+
+R2 R2 		R2 G m		P >R S <N 	P m G m
+R2 S2 		S <N P2 	N >S R S 	R2 R2
+
+R G m R 	R G m P 	D D P m 	G m R s
+R G m2		R4		S3 R 		S R S <N
+
+>R G m R 	R G m P 	D D P m 	G m R s
+R G m2		R3 >R		S <N P m 	G m R s
+
+R2 R2		R2 G m		P2 m2		P4
+z8				z8
+
+
+
+z2 R2		R4 		R2 G2		m2 P2
+P m G m		R2 R2		S R3		S2 S2
+
+z2 P2		P m G m		R2 S2		S <N P2
+N >S R S	R2 R2		P m G m		R2 S2
+
+z2 P2		m m m R		G2 m2		P4
+P m P m		R2 R2		P m P D3 P2
+
+>S4		S <N P2		P m R2		G m P2
+>S <N P m	R G m2		P m G m		R2 S2
+
+
+
+
+R3 R 		G m R G		m P m G2 m R S
+R6		   <N P		>R S2 <N	>S R G m
+
+R2 R P		m P D D		P m P G		m R <N >S
+R G m P2 	  m G m		P D D P		P4
+
+R R G m		P m D P 	>S <N P >R	S <N P m
+R G m D		P >R S <N	>S R G m 	R4
+
+R R S m		G m P m		G m R S		<N >R S <N
+P >S <N P	N P >R S	<N P m G	m R <N >S
+
+R2 R2 		R2 G m		P >R S <N 	P m G m
+R2 S2 		S <N P2 	N >S R S 	R2 R2
+
+R G m R 	R G m P 	D D P m 	G m R s
+R G m2		R4		S3 R 		S R S <N
+
+>R G m R 	R G m P 	D D P m 	G m R s
+R G m2		R3 >R		S <N P m 	G m R s
+
+R2 R2		R2 G m		P2 m2		P4
+z8				z8
+

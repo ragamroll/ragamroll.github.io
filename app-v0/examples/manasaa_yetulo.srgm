@@ -1,0 +1,68 @@
+Raga=malayamarutham,4 Tala=rupaka,8
+
+T500 I[ALTO_SAX] 
+
+L=4 O=5
+
+Z12
+
+G2 P2 D n >S3 <n D2 			P6 G P 	G r S r
+G2 P2 D n >S3 <n D2 			P6 G P 	G r S r
+
+L=2
+G4 P4 D2 n2 >S r S2 S2 <n2 D4		P2 D2 P D n D P4 G2 P2 G2 r2 S2 r2
+G4 P4 D2 n2 >S r S2 S2 <n2 D4		P2 D2 P D n D P4 G2 P2 G2 r2 S2 r2
+
+L=4
+G P D P P D n2 D n >S2		S <n n D P2	G P G r S r
+G P D P P D n2 D n >S2		S <n n D P2	G P G r S r
+
+G2 P2 D n >S3 <n D2 			D8 n D 	P G 
+P12
+
+Z2 G P2 D n2 >S2 <n2	>S6 S3 <n D4
+   G P2 D n2 >S2 <n2	>S6 S3 <n D4
+
+   G P2 D n2 >S2 <n2	>S6 <n >S r S r4
+   S r2	G r2	G4	G P G2 r2 S L=2 r G S r3 L=4 S4
+
+   <G P2 D n2 >S2 <n2	>S6 <n >S r S r4
+   S r2	G r2	G4	G P G2 r2 S L=2 r G S r3 L=4 S4
+
+   S S2 r S2 S2 S2 S            <n n D n2 n D D2 P2
+>S <n >S r S r S <n  n D P2  G P D n D P G P G r S r
+
+z2  >S S2 r S2 S2 S2 S            <n n D n2 n D D2 P2
+>S <n >S r S r S <n  n D P2  G P D n D P G P G r S r
+
+L=2
+G4 P4 D2 n2 >S r S2 S2 <n2 D4		P2 D2 P D n D P4 G2 P2 G2 r2 S2 r2
+L=4
+G P D P P D n2 D n >S2		S <n n D P2	G P G r S r
+G2 P2 D n >S3 <n D2 			D8 n D 	P G 
+P12
+
+Z2 n D2 P3 D4		D2 D2 P D n D n2 D2
+P2 G2 D2 P2 G P G r 	S r G2 G2 P2 P2 P G P D
+   n D2 P3 D4		D2 D2 P D n D n2 D2
+P2 G2 D2 P2 G P G r 	S r G2 G2 P2 P2 P4
+
+   G P2 D n >S <n D P2	P2 G2 D2 P2 G P G r
+S r G2 G2 P2 P2 D2	n >S <n D P10
+   G P2 D n >S <n D P2	P2 G2 D2 P2 G P G r
+S r G2 G2 P2 P2 D2	n >S <n D P8
+
+Z2 G P2 D n2 >S2 <n2 	>S6	S3 <n D4
+   G P2 D n2 >S2 <n2 	>S6	<n >S r S r4
+   S r2	G r2	G4	G P G2 r2 S L=2 r G S r3 L=4 S4
+   
+   S S2 r S2 S2 S2 S            <n n D n2 n D D2 P2
+
+>S <n >S r S r S <n  n D P2  G P D n D P G P G r S r
+
+L=2
+G4 P4 D2 n2 >S r S2 S2 <n2 D4		P2 D2 P D n D P4 G2 P2 G2 r2 S2 r2
+L=4
+G P D P P D n2 D n >S2		S <n n D P2	G P G r S r
+G2 P2 D n >S3 <n D2 			D8 n D 	P G 
+P12

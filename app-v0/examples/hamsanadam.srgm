@@ -1,0 +1,71 @@
+T300 I[ALTO_SAX]
+Raga=hamsanadam,4
+Tala=adi,8
+
+O=4
+L=2
+z6    p2              p2 p m     r2 r2     
+s r2 s3  s <n        >s3 p3 m2
+ 
+p3 p3 p2              p2 p m     r2 r2     
+s r2 s3  z2           z8
+
+L=2
+<n z >s z r m
+L=2
+p2              p2 p m     r2 r2     
+s r2 s3  z2           z8
+
+L=2
+<n z >s z r m
+L=2
+p2              p2 p m     r2 r2     
+s r2 s3  z2           z8
+
+L=2
+<p z n >s r m
+L=2
+p2              p2 p m     r2 r2     
+s r2 s3  z2           z8
+
+L=2
+<p z n >s r m
+L=2
+p2              p2 p m     r2 r2     
+s r2 s3  z2           z8
+
+L=2
+<m p n >s r m
+L=2
+p2              p2 p m     r2 r2     
+s r2 s3  z2    <n2 >s2 r2 m2
+
+L=2
+<m p n >s r m
+L=2
+p2              p2 p m     r2 r2     
+s r2 s3  z2    <n2 >s2 r2 m2
+
+L=2
+r m p n >s <n
+L=2
+p2              p2 p m     r2 r2     
+s r2 s3  <p2    n2 >s2 r2 m2
+
+L=2
+r m p n >s <n
+L=2
+p2              p2 p m     r2 r2     
+s r2 s3  <p2    n2 >s2 r2 m2
+
+L=2
+r m p n >s <n
+L=2
+p2              p2 p m     r2 r2     
+s r2 s3  z2    <n2 >s2 r2 m2
+
+L=2
+r m p n >s <n
+L=2
+p2              p2 p m     r2 r2     
+s r2 s3  <p2    n2 >s2 r2 m2

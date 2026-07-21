@@ -1,23 +1,25 @@
+
+% Lines starting with % are comments and are ignored
+
 % Vathapi Ganapathim Bhaje
 
+% Tempo and Instrument
 T160 I[ALTO_SAX] 
 
-% All talas in their default style are supported. Check wikipedia
-   % Tala names should be in lowercase
-
+% All talas in their default jati are supported
+% Tala names should be in lowercase
 Tala=adi,4
 
 % Raga names should be in lowercase
-
 Raga=hamsadhwani,4
 
 % A limited set of ragas are only supported. However using C12 notation
-% all ragas can be coded.
+% all ragas can be coded. This is a hidden feature and might be removed in future.
 % C12 - S r R g G m M P d D n N
 % S P are case-insensitive
 
 
-% empty measure to get prepared
+% empty measure to get prepared. z is for silence or rest. 
 z32
 
 % Set the octave to 5 and default length to 1
