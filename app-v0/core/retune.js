@@ -1,9 +1,12 @@
-// Playback-pitch retune: apply an experimental 53-EDO scale and/or a whole-audio
-// semitone transpose to a built sequence's melody notes (n.freq). MIDI export
-// never reads n.freq, so goldens stay exact; only the audio path (schedule.js)
-// carries it. Shared by the app (composition playback) and the raga preview.
+// Playback-pitch retune: tune a built sequence's melody notes to 53-EDO shrutis
+// (n.freq) for audio. By DEFAULT every note is placed on its just-intonation
+// 22-shruti (chosen by semitone from Sa — works for any raga and for c12); an
+// explicit `scale` override (mela + a/b commas) wins per swara; `shift` transposes
+// the whole thing. MIDI export never reads n.freq, so its 12-EDO goldens stay
+// exact; only the audio path (schedule.js) carries the shruti frequencies. Shared
+// by the app (composition playback) and the raga preview.
 import { PITCH_CLASS } from './tuning.js';
-import { stepForLetter, stepFreq } from './shruti.js';
+import { stepForLetter, stepFreq, defaultShrutiStep } from './shruti.js';
 import { midiToFreq } from '../audio/schedule.js';
 
 const mod12 = (x) => ((x % 12) + 12) % 12;
@@ -18,10 +21,11 @@ export function saBaseOf(model, ragas) {
 }
 
 // Iterates model.events with the SAME filter buildSequence uses → notes align
-// by index. `scale` = {S,R,G,M,P,D,N: 53-EDO step} (partial ok); `shift` = a
-// semitone transpose (0 = none).
+// by index. `scale` = {S,R,G,M,P,D,N: 53-EDO step} override (partial ok, may be
+// null); `shift` = a semitone transpose (0 = none). Every melody note is retuned
+// to a shruti: the override's step for that swara if present, else the default
+// JI-12 shruti for the note's semitone above Sa.
 export function applyPlaybackPitch(seq, model, scale, saBase, shift) {
-  if (!scale && !shift) return;                 // pure 12-TET, no override → default path
   const notes = seq.tracks[0].notes;
   const PER = seq.ppq / 2;                        // buildSequence: 1 length-unit = eighth
   let i = 0;
@@ -30,13 +34,11 @@ export function applyPlaybackPitch(seq, model, scale, saBase, shift) {
     if (Math.round(e.absLen * PER) <= 0) continue;
     const m = notes[i]?.pitch;
     if (m != null) {
-      const step = scale ? stepForLetter(scale, e.swara) : null;
-      if (step != null) {
-        const saMidi = m - mod12(m - saBase) + shift;   // Sa at this note's octave, transposed
-        notes[i].freq = stepFreq(midiToFreq(saMidi), step);
-      } else if (shift) {
-        notes[i].freq = midiToFreq(m + shift);          // 12-TET note, transposed
-      }
+      const semitone = mod12(m - saBase);
+      // Override wins per swara; otherwise the default shruti for this semitone.
+      const step = (scale ? stepForLetter(scale, e.swara) : null) ?? defaultShrutiStep(semitone);
+      const saMidi = m - semitone + shift;        // Sa at this note's octave, transposed
+      notes[i].freq = stepFreq(midiToFreq(saMidi), step);
     }
     i++;
   }

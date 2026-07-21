@@ -84,3 +84,17 @@ export function stepForLetter(scale, letter) {
 
 // Frequency of a 53-EDO step above the octave's Sa frequency.
 export function stepFreq(saFreq, step) { return saFreq * Math.pow(2, step / EDO); }
+
+// Default just-intonation 12-tone tuning on the 22-shruti grid: for each semitone
+// above Sa, the 53-EDO shruti nearest its 5-limit JI ratio. This is the tuning
+// composition playback uses by default (chosen per note by semitone from Sa), so
+// a piece is heard in shrutis rather than 12-TET — for any raga and for c12.
+// Yields [0,5,9,14,17,22,26,31,36,39,45,48].
+const JI12_CENTS = [0, 111.73, 203.91, 315.64, 386.31, 498.04, 590.22, 701.96, 813.69, 884.36, 1017.60, 1088.27];
+export const JI12_STEPS = JI12_CENTS.map((target) => {
+  let best = 0, bestD = Infinity;
+  for (const b of BOXES) { const d = Math.abs((b.step / EDO) * 1200 - target); if (d < bestD) { bestD = d; best = b.step; } }
+  return best;
+});
+// 53-EDO step for a semitone (any integer) above Sa in the default shruti tuning.
+export function defaultShrutiStep(semitone) { return JI12_STEPS[((semitone % 12) + 12) % 12]; }
