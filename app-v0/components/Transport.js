@@ -17,7 +17,7 @@ for (let m = 40; m <= 72; m++) SA_CHOICES.push(m);
 export function Transport({ state, canPlay, onPlay, onPause, onStop,
   talaVol, onTalaVol, talaMuted, onToggleTala, melodyMuted, onToggleMelody,
   droneVol, onDroneVol, droneMuted, onToggleDrone, masterVol, onMasterVol,
-  onSave, onExportMidi, compositionTempo, tempoOverride, onTempo, onResetTempo,
+  onSave, onExportMidi, onShare, shared, compositionTempo, tempoOverride, onTempo, onResetTempo,
   saPitch, autoSaMidi, onSetSa }) {
   const overridden = tempoOverride != null;
   const eff = overridden ? tempoOverride : compositionTempo;
@@ -27,6 +27,8 @@ export function Transport({ state, canPlay, onPlay, onPause, onStop,
   return html`<span class="transport">
     <button class="doc-btn" title="Save the .srgm source" onClick=${onSave}>Save</button>
     <button class="doc-btn" title="Export the melody as a .mid file" onClick=${onExportMidi}>Export MIDI</button>
+    <button class=${'doc-btn' + (shared ? ' ok' : '')} title="Copy a shareable link (composition packed into the URL)"
+            onClick=${onShare}>${shared ? 'Copied ✓' : 'Share'}</button>
 
     <label class="sapick" title="Sa reference pitch — transposes playback (Auto = the raga's Sa)">
       Sa

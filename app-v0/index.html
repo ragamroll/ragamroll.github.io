@@ -23,6 +23,7 @@
     .transport button { font-size:1rem; padding:.15rem .5rem; cursor:pointer; }
     .transport button:disabled { opacity:.4; cursor:default; }
     .transport .doc-btn { font-size:.85rem; }
+    .transport .doc-btn.ok { border-color:#6c9; color:#9fc; }
     .transport-play { display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; margin-left:auto; }  /* wraps in portrait */
     .transport .sapick { display:inline-flex; align-items:center; gap:.25rem; font-size:.85rem; margin-left:.4rem; }
     .transport .sapick select { background:#111; color:#eee; border:1px solid #444; border-radius:4px; padding:.1rem .25rem; font:inherit; }
@@ -54,6 +55,13 @@
     .openmenu-item:hover { background:#2a2a3a; }
     .openmenu-item.current { color:#9cf; }
     .openmenu-sep { opacity:.5; font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; padding:.35rem .5rem .15rem; }
+    .openmenu-link { display:flex; gap:.3rem; padding:.1rem .5rem .2rem; }
+    .openmenu-linkin { flex:1 1 0; min-width:8rem; background:#111; color:#eee; border:1px solid #444;
+      border-radius:4px; padding:.25rem .4rem; font:inherit; font-size:.82rem; }
+    .openmenu-linkin.err { border-color:#c55; }
+    .openmenu-linkgo { background:#2a2a3a; color:#cde; border:1px solid #556; border-radius:4px;
+      padding:.25rem .55rem; cursor:pointer; font:inherit; font-size:.82rem; }
+    .openmenu-linkerr { color:#e88; font-size:.75rem; padding:0 .5rem .2rem; }
     .diagnostics { margin:.5rem; padding:.5rem; border:1px solid #a63; border-radius:4px; background:#241a10; color:#eda; font-size:.85rem; max-height:20vh; overflow:auto; }
     .diagnostics ul { margin:.25rem 0 0; padding-left:1.25rem; }
     .dialog-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.6);

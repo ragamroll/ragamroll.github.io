@@ -19,6 +19,7 @@ import { scheduleEvents, totalSeconds } from './audio/schedule.js';
 import { droneFreqs } from './audio/drone.js';
 import { melaOfScale } from './core/melakarta.js';
 import { saBaseOf, applyPlaybackPitch } from './core/retune.js';
+import { shareUrl, readSharedSource, sourceFromShareInput } from './core/share.js';
 import { scrollPos, playheadScroll } from './audio/scroll.js';
 import { buildRowTimes, rowAt } from './audio/rowtimes.js';
 import { Transport } from './components/Transport.js';
@@ -126,6 +127,37 @@ function App({ examples }) {
     if (!name) { setExampleValue(''); return; }
     stopRef.current();
     const r = await fetch(`${EXAMPLES_BASE}/${name}.srgm`); setExampleValue(name); setDocName(baseName(name)); setText(await r.text());
+  }, []);
+  // Share: copy a self-contained "#pako:" link (the source, zlib-deflated) to the
+  // clipboard; the button flashes "Copied". Falls back to a prompt if the
+  // clipboard is blocked (e.g. non-secure context).
+  const [shared, setShared] = useState(false);
+  const onShare = useCallback(async () => {
+    const url = await shareUrl(text);
+    try {
+      await navigator.clipboard.writeText(url);
+      setShared(true); setTimeout(() => setShared(false), 1500);
+    } catch { try { window.prompt('Copy this share link:', url); } catch { /* ignore */ } }
+  }, [text]);
+  // Open a pasted share link (from this or any other host). Returns true on
+  // success so the menu can close / show an error.
+  const onOpenLink = useCallback(async (input) => {
+    try {
+      const src = await sourceFromShareInput(input);
+      stopRef.current(); setExampleValue(''); setDocName('shared'); setText(src);
+      return true;
+    } catch { return false; }
+  }, []);
+  // Opening a "#pako:" link loads the shared source into the editor, then clears
+  // the hash so later edits (persisted to localStorage) aren't overridden on reload.
+  useEffect(() => {
+    let cancelled = false;
+    readSharedSource().then((src) => {
+      if (cancelled || src == null) return;
+      stopRef.current(); setExampleValue(''); setDocName('shared'); setText(src);
+      try { history.replaceState(null, '', location.pathname + location.search); } catch { /* ignore */ }
+    });
+    return () => { cancelled = true; };
   }, []);
 
   // --- Playback: player instance, scroll refs, rAF loop, transport handlers ---
@@ -328,7 +360,7 @@ function App({ examples }) {
 
   return html`
     <${Toolbar} raga=${raga} tala=${tala} examples=${examples} exampleValue=${exampleValue}
-                onOpen=${onOpen} onExample=${onExample}
+                onOpen=${onOpen} onExample=${onExample} onOpenLink=${onOpenLink}
                 onOpenRagas=${onOpenRagas} onOpenTalas=${onOpenTalas}
                 onOpenScale=${onOpenScale} scaleActive=${!!scale} scaleLabel=${scaleLabel}
                 timbre=${timbre} onTimbre=${onTimbre} />
@@ -348,7 +380,7 @@ function App({ examples }) {
                   melodyMuted=${melodyMuted} onToggleMelody=${onToggleMelody}
                   talaVol=${talaVol} onTalaVol=${onTalaVol} talaMuted=${talaMuted} onToggleTala=${onToggleTala}
                   droneVol=${droneVol} onDroneVol=${onDroneVol} droneMuted=${droneMuted} onToggleDrone=${onToggleDrone}
-                  onSave=${onSave} onExportMidi=${onExportMidi} />
+                  onSave=${onSave} onExportMidi=${onExportMidi} onShare=${onShare} shared=${shared} />
     <${Diagnostics} items=${model.diagnostics} />
     <div class="workspace" ref=${wsRef}>
       <div class="cols" ref=${colsRef}
