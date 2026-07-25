@@ -45,6 +45,9 @@ button.mini{padding:.1rem .5rem;font-size:1rem;line-height:1;margin-left:.3rem}
 .vol{display:inline-flex;align-items:center;gap:.3rem;color:var(--muted);font-size:.8rem}
 .vol input[type=range]{width:66px;accent-color:var(--teal)}
 .tog{display:inline-flex;align-items:center;gap:.35rem;color:var(--muted);font-size:.82rem}
+.tog select{background:var(--panel2);color:var(--ink);border:1px solid var(--hair);border-radius:6px;padding:.12rem .3rem;font-size:.8rem}
+.tog input[type=range]{width:72px;accent-color:var(--teal)}
+#tempolbl{min-width:3.6em}
 .mode{font-family:var(--mono);font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;color:var(--amber);border:1px solid var(--hair);border-radius:999px;padding:.14rem .5rem}
 .legend{flex:0 0 auto;display:flex;gap:1rem;flex-wrap:wrap;color:var(--muted);font-size:.76rem;align-items:center}
 .legend .k{display:inline-flex;align-items:center;gap:.4rem}
@@ -66,7 +69,7 @@ button.mini{padding:.1rem .5rem;font-size:1rem;line-height:1;margin-left:.3rem}
 <div class="wrap" id="wrap">
   <div class="head">
     <h1>RagaM-Roll</h1>
-    <a class="back-app" href="./index.html">‹ back to app</a>
+    <a class="back-app" id="backapp" href="./index.html">‹ back to app</a>
     <span class="spacer"></span>
     <button id="helpbtn" class="help-icon" title="How to use" aria-label="Help">?</button>
   </div>
@@ -74,6 +77,8 @@ button.mini{padding:.1rem .5rem;font-size:1rem;line-height:1;margin-left:.3rem}
     <div class="topbar">
       <span class="mode" id="mode">select a note</span>
       <span class="hint" id="crumb"></span>
+      <label class="tog" title="Sa reference pitch — transposes playback (Auto = the composition's Sa)">Sa<select id="sapick"></select></label>
+      <label class="tog" title="Playback tempo (× the composition's tempo)">♩<input type="range" id="tempo" min="0.5" max="2" step="0.05" value="1"><span class="hint" id="tempolbl"></span></label>
       <span class="spacer"></span>
       <span class="tog" id="tzoom">expand<button id="tmin" class="mini">−</button><button id="tplus" class="mini">+</button></span>
       <span class="tog" id="rangectl" style="display:none">pitch range<button id="rmin" class="mini">−</button><button id="rplus" class="mini">+</button></span>

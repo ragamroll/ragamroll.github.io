@@ -10,6 +10,7 @@ import { midiToFreq } from './audio/schedule.js';
 import { BOXES, EDO, stepFreq, defaultShrutiStep } from './core/shruti.js';
 import { encodeShareToken, decodeShareToken } from './core/share.js';
 import { VERSION, BUILD_DATE } from './version.js';
+import { midiToName } from './core/tuning.js';
 
 const LS_KEY = 'ragamroll.srgm';
 const SHRUTI = [...new Set(BOXES.map(b => b.step))].sort((a, b) => a - b);   // 22 steps in an octave
@@ -17,6 +18,8 @@ const SHRUTI = [...new Set(BOXES.map(b => b.step))].sort((a, b) => a - b);   // 
 // ---------- model built from the parsed composition ----------
 let NOTES = [];        // [{step, dur, swara, octave, curve:null|[[u,step]...]}]
 let saRef = 60, saFreq = midiToFreq(60), tempoBpm = 120, TOTAL = 0;
+let saPlay = null;     // Sa reference-pitch override (midi); null = auto (= saRef, the layout anchor)
+let compTempo = 120;   // the composition's own tempo; the tempo slider is a multiplier of this
 let starts = [], gridPitches = [], stepMin = -26, stepMax = 66, srcText = '';
 let talaMeasure = 0, talaAccents = [];   // cycle length (length-units) + 1-based accent slots
 
@@ -25,10 +28,12 @@ function buildModel(src){
   srcText = src || '';
   const model = parse(srcText);
   const notes = model.events.filter(e => e.type === 'note' && !e.rest && e.absLen > 0);
-  tempoBpm = (model.meta && model.meta.tempo > 0) ? model.meta.tempo : 120;
+  compTempo = (model.meta && model.meta.tempo > 0) ? model.meta.tempo : 120;
+  tempoBpm = compTempo;   // reset to the composition tempo on (re)load; the slider re-applies its multiplier
   const sNote = notes.find(n => n.swara === 'S' || n.swara === 's');
   saRef = sNote ? sNote.midi - (sNote.octave - 5) * 12 : (notes.length ? Math.min(...notes.map(n => n.midi)) : 60);
-  saFreq = midiToFreq(saRef);
+  saPlay = null;          // reset Sa override to auto on a new composition
+  saFreq = midiToFreq(saRef);   // saRef is the LAYOUT anchor (steps); saPlay only retunes playback
   NOTES = notes.map(n => ({ step: stepOfSemitone(n.midi - saRef), dur: n.absLen,
                             swara: n.swara.toUpperCase(), octave: n.octave, curve: null }));
   starts = []; let t = 0; for (const n of NOTES){ starts.push(t); t += n.dur; } TOTAL = t || 1;
@@ -211,6 +216,21 @@ $('dronevol').oninput=e=>{ droneVol=Number(e.target.value); if (session&&session
 $('talavol').oninput=e=>{ talaVol=Number(e.target.value); if (session&&session.tBus&&AC) session.tBus.gain.setTargetAtTime(talaVol,AC.currentTime,0.02); };
 // Footer build/version — mirrors the app's Footer component (build-app-v0.sh stamps both).
 $('footbuild').innerHTML=(BUILD_DATE?`built ${BUILD_DATE} · `:'')+`<span class="ver">${VERSION}</span>`;
+
+// Sa reference pitch (playback transpose) — Auto = the composition's Sa (saRef).
+// Changing it retunes saFreq only; the roll layout (steps) is anchored to saRef.
+(function fillSa(){ let opts='<option value="">Auto</option>'; for (let m=40;m<=72;m++) opts+=`<option value="${m}">${midiToName(m)}</option>`; $('sapick').innerHTML=opts; })();
+$('sapick').onchange=e=>{ saPlay=e.target.value===''?null:Number(e.target.value); saFreq=midiToFreq(saPlay==null?saRef:saPlay); render(); };
+// Tempo slider — a multiplier of the composition tempo; affects playback speed only
+// (the roll layout is in length-units, independent of tempo).
+$('tempo').oninput=e=>{ tempoBpm=Math.round(compTempo*Number(e.target.value)); $('tempolbl').textContent=tempoBpm+' BPM'; };
+// Sync the Sa / tempo controls to the current model (after a load/reload).
+function syncControls(){ $('sapick').value=saPlay==null?'':String(saPlay);
+  const auto=$('sapick').querySelector('option[value=""]'); if (auto) auto.textContent='Auto ('+midiToName(saRef)+')';
+  $('tempo').value=String(Math.max(0.5,Math.min(2, tempoBpm/compTempo))); $('tempolbl').textContent=tempoBpm+' BPM'; }
+// Back to the app: carry the composition CURRENTLY open here into the app (it reads
+// the same localStorage key), so the app opens the same piece — not whatever it held.
+$('backapp').onclick=e=>{ e.preventDefault(); try{ localStorage.setItem(LS_KEY, srcText); }catch(_){}; location.href='./index.html'; };
 function autoZoom(){ const baseH=$('holder').clientHeight||600; timeZoom=Math.max(3, Math.min(12, (NOTES.length*64)/baseH)); }
 
 // ---------- audio ----------
@@ -318,7 +338,7 @@ async function loadComposition(){
 // paste a share link/token in-page and load its melody + curves
 $('load').onclick=async()=>{ const inp=window.prompt('Paste a RagamRoll share link or pako token:'); if (!inp) return;
   const m=/pako:[A-Za-z0-9\-_]+/.exec(inp); const tok=m?m[0]:inp.trim().replace(/^#/,'');
-  try{ applyShared(await decodeShareToken(tok)); if (mode==='draw') $('back').click(); resizeCanvas(); rebuildShare(); }
+  try{ applyShared(await decodeShareToken(tok)); if (mode==='draw') $('back').click(); syncControls(); resizeCanvas(); rebuildShare(); }
   catch(e){ window.alert('That isn’t a valid RagamRoll link — it should contain a pako: token.'); } };
 window.__rr = { notes:()=>NOTES, X, Y, starts:()=>starts, get shareLink(){ return shareLink; }, get playPos(){ return playPos; }, get markerA(){ return markerA; }, get markerB(){ return markerB; }, get talaMeasure(){ return talaMeasure; }, get talaAccents(){ return talaAccents; }, get droneVol(){ return droneVol; }, get talaVol(){ return talaVol; } };
 Promise.all([
@@ -330,4 +350,4 @@ Promise.all([
     window.addEventListener('orientationchange',()=>setTimeout(fit,200));
     new MutationObserver(render).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
     if (!NOTES.length) $('mode').textContent='no notes — open a composition in the app first';
-    fit(); autoZoom(); resizeCanvas(); rebuildShare(); });
+    syncControls(); fit(); autoZoom(); resizeCanvas(); rebuildShare(); });
