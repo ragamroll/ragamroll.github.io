@@ -98,6 +98,7 @@ export function parse(input) {
   let tokenIndex = -1;
   for (const token of inStr.split(/\s+/).filter(Boolean)) {
     tokenIndex++;
+
     const m = SWARA_RE.exec(token);
     if (m) {
       octshift(m[1]);                        // mutate octave BEFORE emitting

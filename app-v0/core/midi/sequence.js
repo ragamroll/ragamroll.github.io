@@ -18,7 +18,9 @@ export function buildSequence(model, { ppq = 480 } = {}) {
     // A rest advances the cursor but emits no note — silence is a tick gap.
     // Zero-duration notes are skipped: on/off at the same tick sorts off-first
     // (dropped by readers, stuck note on real players).
-    if (!e.rest && dur > 0) notes.push({ pitch: e.midi, startTicks: cursor, durTicks: dur });
+    if (!e.rest && dur > 0) {
+      notes.push({ pitch: e.midi, startTicks: cursor, durTicks: dur });
+    }
     cursor += dur;
   }
   const melody = { channel: 0, program, notes };

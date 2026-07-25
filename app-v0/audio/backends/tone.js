@@ -20,13 +20,12 @@ const talaDb = (v) => trackDb(v) - 8;
 // Drone variant: extra headroom since its three S/P/>S voices sum.
 const droneDb = (v) => trackDb(v) - 14;
 
-// Melody voice factory. Each returns a PolySynth with triggerAttackRelease +
-// dispose + volume, tuned so the envelope carries a gentle sustained tone
-// rather than the stock pluck.
+// Melody voice factory. The srgm melody is monophonic (notes never overlap), so
+// each timbre is a single MONO synth — not a PolySynth.
 function makeMelody(timbre) {
   switch (timbre) {
     case 'reed': {      // filtered MonoSynth — soft, mellow reed
-      const s = new Tone.PolySynth(Tone.MonoSynth).toDestination();
+      const s = new Tone.MonoSynth().toDestination();
       s.set({ oscillator: { type: 'triangle' },   // few harmonics → gentle
               envelope: { attack: 0.14, decay: 0.2, sustain: 0.8, release: 0.6 },
               filter: { Q: 0.5, type: 'lowpass', rolloff: -24 },
@@ -35,7 +34,7 @@ function makeMelody(timbre) {
       return s;
     }
     case 'soft-am': {   // AM, gentle reed/soft pad
-      const s = new Tone.PolySynth(Tone.AMSynth).toDestination();
+      const s = new Tone.AMSynth().toDestination();
       s.set({ harmonicity: 2, oscillator: { type: 'sine' }, modulation: { type: 'sine' },
               envelope: { attack: 0.08, decay: 0.2, sustain: 0.85, release: 0.6 },
               modulationEnvelope: { attack: 0.2, decay: 0, sustain: 1, release: 0.5 } });
@@ -43,7 +42,7 @@ function makeMelody(timbre) {
     }
     case 'bowed-fm':
     default: {          // FM, bowed-string swell
-      const s = new Tone.PolySynth(Tone.FMSynth).toDestination();
+      const s = new Tone.FMSynth().toDestination();
       s.set({ harmonicity: 2, modulationIndex: 6, oscillator: { type: 'sine' }, modulation: { type: 'sine' },
               envelope: { attack: 0.12, decay: 0.1, sustain: 0.9, release: 0.4, attackCurve: 'sine' },
               modulationEnvelope: { attack: 0.2, decay: 0.2, sustain: 0.8, release: 0.4 } });
@@ -89,7 +88,7 @@ function makeTala(timbre) {
 }
 
 export function createToneBackend() {
-  let synth = null;      // melody voice
+  let synth = null;      // melody voice (mono)
   let tala = null;       // tala voice — separate so its volume is live
   let drone = null;      // separate sustained voice; survives load/play/stop
   let droneKey = '';     // freqs signature — lets volume change without re-voicing

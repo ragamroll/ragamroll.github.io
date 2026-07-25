@@ -13,10 +13,12 @@ export function scheduleEvents(sequence) {
   for (const track of sequence.tracks) {
     const name = track.channel === 0 ? 'melody' : 'tala';
     for (const n of track.notes) {
-      const ev = { midi: n.pitch, startSec: n.startTicks * spt, durSec: n.durTicks * spt, track: name };
+      const startSec = n.startTicks * spt, durSec = n.durTicks * spt;
+      const freq = n.freq;
+      const ev = { midi: n.pitch, startSec, durSec, track: name };
       // Optional microtonal override (experimental 53-EDO scale). Absent unless
       // an app-level retune set it — so the default event shape is unchanged.
-      if (n.freq != null) ev.freq = n.freq;
+      if (freq != null) ev.freq = freq;
       events.push(ev);
     }
   }

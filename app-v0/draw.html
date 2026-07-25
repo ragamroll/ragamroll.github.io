@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>RagamRoll — Draw Gamakas</title>
+<style>
+:root{
+  --bg:#15140f; --panel:#1e1c15; --panel2:#26231a; --ink:#ece7d9; --muted:#9a9280;
+  --hair:rgba(236,231,217,.12); --hair2:rgba(236,231,217,.06);
+  --amber:#d8a13f; --amberSoft:rgba(216,161,63,.55);
+  --teal:#46c39a; --tealSoft:rgba(70,195,154,.9); --terra:#c96b5a;
+  --serif:ui-serif,Georgia,"Iowan Old Style","Times New Roman",serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:light){:root{
+  --bg:#f4f0e6;--panel:#fbf8f0;--panel2:#f0ead9;--ink:#2a2418;--muted:#6f6752;
+  --hair:rgba(42,36,24,.14);--hair2:rgba(42,36,24,.07);
+  --amber:#a76f16;--amberSoft:rgba(167,111,22,.6);--teal:#177f5e;--tealSoft:rgba(23,127,94,.95);--terra:#b4553f;
+}}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);overflow:hidden;-webkit-font-smoothing:antialiased}
+.wrap{height:100dvh;display:flex;flex-direction:column;gap:.5rem;padding:.6rem clamp(.55rem,3vw,1.3rem)}
+.head{flex:0 0 auto;display:flex;align-items:center;gap:.7rem}
+h1{font-family:var(--serif);font-weight:600;font-size:clamp(1.1rem,3.2vw,1.5rem);margin:0;letter-spacing:-.01em}
+.back-app{font-family:var(--mono);font-size:.78rem;color:var(--muted);text-decoration:none;border:1px solid var(--hair);border-radius:999px;padding:.2rem .6rem}
+.back-app:hover{border-color:var(--amberSoft);color:var(--ink)}
+.help-icon{width:1.7rem;height:1.7rem;border-radius:999px;border:1px solid var(--hair);background:var(--panel2);color:var(--muted);font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;flex:0 0 auto}
+.help-icon:hover{border-color:var(--amberSoft);color:var(--ink)}
+.helppop{position:fixed;top:3rem;right:1rem;z-index:60;max-width:min(88vw,340px);background:var(--panel);border:1px solid var(--hair);border-radius:10px;padding:.9rem 1rem;box-shadow:0 10px 30px rgba(0,0,0,.4);font-size:.86rem;color:var(--muted);line-height:1.5}
+.helppop[hidden]{display:none}
+.helppop b{color:var(--ink)}
+.helppop button{margin-top:.8rem}
+.stage{flex:1 1 auto;min-height:0;background:var(--panel);border:1px solid var(--hair);border-radius:13px;padding:.55rem;display:flex;flex-direction:column;gap:.5rem}
+.topbar,.botbar{flex:0 0 auto;display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+#holder{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden}
+canvas{display:block;width:100%;height:100%;border-radius:9px;touch-action:none;cursor:crosshair}
+button{font-family:var(--sans);font-size:.9rem;cursor:pointer;border-radius:8px;padding:.5rem .85rem;background:var(--panel2);color:var(--ink);border:1px solid var(--hair)}
+button:hover{border-color:var(--amberSoft)} button.pri{background:var(--teal);color:#08110d;border-color:var(--teal);font-weight:600}
+button:disabled{opacity:.4;cursor:default}
+button.mini{padding:.1rem .5rem;font-size:1rem;line-height:1;margin-left:.3rem}
+.spacer{flex:1} .hint{color:var(--muted);font-size:.8rem;font-family:var(--mono)}
+.tog{display:inline-flex;align-items:center;gap:.35rem;color:var(--muted);font-size:.82rem}
+.mode{font-family:var(--mono);font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;color:var(--amber);border:1px solid var(--hair);border-radius:999px;padding:.14rem .5rem}
+.legend{flex:0 0 auto;display:flex;gap:1rem;flex-wrap:wrap;color:var(--muted);font-size:.76rem;align-items:center}
+.legend .k{display:inline-flex;align-items:center;gap:.4rem}
+.sw{width:20px;border-top:2.5px solid;display:inline-block}
+@media (max-height:720px){ .lede{display:none} .legend{display:none} }
+.ctxmenu{position:fixed;z-index:50;background:var(--panel);border:1px solid var(--hair);border-radius:8px;
+  padding:.25rem;display:none;box-shadow:0 8px 24px rgba(0,0,0,.35);min-width:130px}
+.ctxmenu button{display:block;width:100%;text-align:left;border:0;background:none;color:var(--ink);
+  padding:.4rem .55rem;border-radius:5px;font-size:.88rem}
+.ctxmenu button:hover:not(:disabled){background:var(--panel2)}
+.ctxmenu button:disabled{opacity:.4}
+.ctxsep{height:1px;background:var(--hair);margin:.25rem 0}
+</style>
+</head>
+<body>
+<div class="wrap" id="wrap">
+  <div class="head">
+    <h1>RagaM-Roll</h1>
+    <a class="back-app" href="./index.html">‹ back to app</a>
+    <span class="spacer"></span>
+    <button id="helpbtn" class="help-icon" title="How to use" aria-label="Help">?</button>
+  </div>
+  <div class="stage">
+    <div class="topbar">
+      <span class="mode" id="mode">select a note</span>
+      <span class="hint" id="crumb"></span>
+      <span class="spacer"></span>
+      <span class="tog" id="tzoom">expand<button id="tmin" class="mini">−</button><button id="tplus" class="mini">+</button></span>
+      <span class="tog" id="rangectl" style="display:none">pitch range<button id="rmin" class="mini">−</button><button id="rplus" class="mini">+</button></span>
+      <label class="tog" id="snapctl" style="display:none"><input type="checkbox" id="snap" checked> snap</label>
+    </div>
+    <div id="holder"><canvas id="cv"></canvas></div>
+    <div class="botbar">
+      <button class="pri" id="play">▶ Play phrase</button>
+      <button id="stop">■ Stop</button>
+      <button id="clear" disabled>Clear</button>
+      <button id="copy" disabled>Copy</button>
+      <button id="paste" disabled>Paste</button>
+      <button id="back" disabled>‹ Back</button>
+      <button id="share">Share ⧉</button>
+      <button id="load">Load ⤵</button>
+      <span class="spacer"></span>
+      <span class="hint" id="read"></span>
+    </div>
+    <div class="legend">
+      <span class="k"><span class="sw" style="border-color:var(--amberSoft)"></span> note (written)</span>
+      <span class="k"><span class="sw" style="border-color:var(--teal)"></span> gamaka curve (played)</span>
+      <span class="k"><span class="sw" style="border-color:var(--terra)"></span> onset · thick = start</span>
+    </div>
+  </div>
+</div>
+<div class="ctxmenu" id="ctxmenu">
+  <button data-act="copy">Copy gamaka</button>
+  <button data-act="paste">Paste gamaka</button>
+  <div class="ctxsep"></div>
+  <button data-act="seta">Set start ⟦ here</button>
+  <button data-act="setb">Set end ⟧ here</button>
+  <button data-act="playfrom">Play from here</button>
+  <button data-act="clearmk">Clear markers</button>
+</div>
+<div class="helppop" id="helppop" hidden>
+  <b>RagaM-Roll — draw gamakas.</b> Your current composition as a pitch roll — time flows down, pitch across.
+  <b>Tap a note</b> to zoom in, then <b>drag to draw its pitch curve</b> (you hear the pitch as you draw); drag the handles to tweak, <b>snap</b> locks to the 22 shrutis.
+  <b>Right-click</b> a note to copy/paste its gamaka. <b>Play</b> rolls it under a playhead; <b>Share</b> / <b>Load</b> pack the melody + curves into a link.
+  <button id="helpclose">Got it</button>
+</div>
+<script type="module" src="./draw.js"></script>
+<script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');</script>
+</body>
+</html>
