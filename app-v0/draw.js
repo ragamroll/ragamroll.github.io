@@ -11,6 +11,7 @@ import { BOXES, EDO, stepFreq, defaultShrutiStep } from './core/shruti.js';
 import { encodeShareToken, decodeShareToken } from './core/share.js';
 import { VERSION, BUILD_DATE } from './version.js';
 import { midiToName } from './core/tuning.js';
+import { serializeInline } from './core/gamaka-inline.js';
 
 const LS_KEY = 'ragamroll.srgm';
 const SHRUTI = [...new Set(BOXES.map(b => b.step))].sort((a, b) => a - b);   // 22 steps in an octave
@@ -27,15 +28,24 @@ function stepOfSemitone(semi){ const oct = Math.floor(semi / 12), pc = semi - oc
 function buildModel(src){
   srcText = src || '';
   const model = parse(srcText);
-  const notes = model.events.filter(e => e.type === 'note' && !e.rest && e.absLen > 0);
+  // Keep the ordinal of each in-model note among ALL note tokens (rests included),
+  // so serialization lands the gamaka on the exact source token (rests + out-of-raga
+  // swaras are note events too and must be counted). `tok` = that ordinal.
+  const allNotes = model.events.filter(e => e.type === 'note');
+  const keep = []; allNotes.forEach((e, ord) => { if (!e.rest && e.absLen > 0) keep.push(ord); });
+  const notes = keep.map(ord => allNotes[ord]);
   compTempo = (model.meta && model.meta.tempo > 0) ? model.meta.tempo : 120;
   tempoBpm = compTempo;   // reset to the composition tempo on (re)load; the slider re-applies its multiplier
   const sNote = notes.find(n => n.swara === 'S' || n.swara === 's');
   saRef = sNote ? sNote.midi - (sNote.octave - 5) * 12 : (notes.length ? Math.min(...notes.map(n => n.midi)) : 60);
   saPlay = null;          // reset Sa override to auto on a new composition
   saFreq = midiToFreq(saRef);   // saRef is the LAYOUT anchor (steps); saPlay only retunes playback
-  NOTES = notes.map(n => ({ step: stepOfSemitone(n.midi - saRef), dur: n.absLen,
-                            swara: n.swara.toUpperCase(), octave: n.octave, curve: null }));
+  NOTES = notes.map((n, i) => {
+    const step = stepOfSemitone(n.midi - saRef);
+    // Inline gamaka is stored NOTE-RELATIVE (delta); the roll model is absolute.
+    const curve = (Array.isArray(n.gamaka) && n.gamaka.length) ? n.gamaka.map(([u, d]) => [u, step + d]) : null;
+    return { step, dur: n.absLen, swara: n.swara.toUpperCase(), octave: n.octave, curve, tok: keep[i] };
+  });
   starts = []; let t = 0; for (const n of NOTES){ starts.push(t); t += n.dur; } TOTAL = t || 1;
   const tp = [...model.events].reverse().find(e => e.type === 'tala');   // accent strums (veena) at tala accents
   talaMeasure = (tp && tp.props && tp.props.measure > 0) ? tp.props.measure : 0;
@@ -231,6 +241,13 @@ function syncControls(){ $('sapick').value=saPlay==null?'':String(saPlay);
 // Back to the app: carry the composition CURRENTLY open here into the app (it reads
 // the same localStorage key), so the app opens the same piece — not whatever it held.
 $('backapp').onclick=e=>{ e.preventDefault(); try{ localStorage.setItem(LS_KEY, srcText); }catch(_){}; location.href='./index.html'; };
+// Editor dialog: the full srgm (inline gamaka included), freely editable; native
+// ctrl-z works for typing. Edits reparse (debounced) and rebuild the roll.
+$('editbtn').onclick=()=>{ const t=$('editor'); t.value=srcText; $('editdlg').hidden=false; t.focus(); };
+$('editclose').onclick=()=>{ $('editdlg').hidden=true; };
+$('editdlg').addEventListener('pointerdown', e=>{ if (e.target===$('editdlg')) $('editdlg').hidden=true; });
+document.addEventListener('keydown', e=>{ if (e.key==='Escape' && !$('editdlg').hidden) $('editdlg').hidden=true; });
+$('editor').addEventListener('input', ()=>{ clearTimeout(editTimer); editTimer=setTimeout(onEditorInput, 300); });
 function autoZoom(){ const baseH=$('holder').clientHeight||600; timeZoom=Math.max(3, Math.min(12, (NOTES.length*64)/baseH)); }
 
 // ---------- audio ----------
@@ -312,12 +329,28 @@ $('play').onclick=()=>{ if (mode==='draw'){ playNote(sel); return; }
   const [lo,hi]=segRange(); playFrom(lo,hi); };
 $('stop').onclick=()=>{ stopPlayback(); paused=false; playPos=null; $('play').textContent='▶ '+playLabel(); if (mode==='roll') render(); };
 
-// ---------- share (melody + curves) ----------
+// ---------- source text (inline gamaka) + share ----------
 let shareLink='', shareTimer=null;
-function pack(){ const g={}; NOTES.forEach((n,i)=>{ if (n.curve) g[i]=n.curve.map(p=>[Math.round(p[0]*100)/100, Math.round(p[1])]); });
-  return JSON.stringify({ v:1, src:srcText, g }); }
-async function rebuildShare(){ try{ shareLink=location.origin+location.pathname+'#'+await encodeShareToken(pack()); }catch(e){ shareLink=''; } }
+// The composition text with the drawn curves inline, each NOTE-RELATIVE (delta).
+function inlineSrc(){ const curves={};
+  NOTES.forEach((n)=>{ if (n.curve) curves[n.tok]=n.curve.map(([u,s])=>[Math.round(u*100)/100, Math.round(s-n.step)]); });
+  return serializeInline(srcText, curves); }
+// Reflect srcText into the editor textarea — but never clobber the box the user
+// is actively typing in (that also preserves its native ctrl-z history).
+function syncEditor(){ const t=$('editor'); if (t && document.activeElement!==t) t.value=srcText; }
+// A draw changed the curves: regenerate the inline srgm, show it in the editor,
+// persist it, and refresh the share link.
+async function rebuildShare(){ srcText=inlineSrc(); syncEditor();
+  try{ localStorage.setItem(LS_KEY, srcText); }catch(_){}
+  try{ shareLink=location.origin+location.pathname+'#'+await encodeShareToken(srcText); }catch(e){ shareLink=''; } }
 function scheduleShare(){ clearTimeout(shareTimer); shareTimer=setTimeout(rebuildShare,150); }
+// Editor edits: reparse the srgm the user typed (debounced), rebuild the roll.
+let editTimer=null;
+async function onEditorInput(){ if (mode==='draw') $('back').click();   // a reparse changes NOTES; leave draw mode so sel can't dangle
+  srcText=$('editor').value; buildModel(srcText);
+  syncControls(); resizeCanvas(); render();
+  try{ localStorage.setItem(LS_KEY, srcText); }catch(_){}
+  try{ shareLink=location.origin+location.pathname+'#'+await encodeShareToken(srcText); }catch(e){ shareLink=''; } }
 $('share').onclick=()=>{ const url=shareLink; if (!url){ rebuildShare(); return; }
   const b=$('share'), orig=b.textContent, done=m=>{ b.textContent=m; setTimeout(()=>b.textContent=orig,1800); };
   if (navigator.share){ navigator.share({ title:'RagamRoll gamakas', url }).then(()=>done('Shared ✓')).catch(()=>{}); return; }
@@ -325,22 +358,35 @@ $('share').onclick=()=>{ const url=shareLink; if (!url){ rebuildShare(); return;
   window.prompt('Copy this link:', url); };
 
 // ---------- load / boot ----------
-function applyShared(decoded){ let src=decoded, curves=null;
-  try{ const obj=JSON.parse(decoded); if (obj&&typeof obj.src==='string'){ src=obj.src; curves=obj.g||null; } }catch(_){}
-  buildModel(src);
-  if (curves) for (const k in curves){ const i=+k; if (NOTES[i]) NOTES[i].curve=curves[k].map(p=>[p[0],p[1]]); }
+// Debug dump: log the note map (index, source token ordinal, swara, curve points).
+function logNotes(tag){ try{ console.log(`[draw] ${tag} — idx:tok swara [pts]:`,
+  NOTES.map((n,i)=>`${i}:t${n.tok} ${n.swara}${n.octave}${n.curve?` [${n.curve.length}]`:''}`).join('   ')); }catch(_){}
+}
+// A share hash is pako(srgm text). Legacy links were pako(JSON {v,src,g}); detect
+// and convert those once (apply the index-keyed curves; they re-emit inline).
+function applyShared(decoded){
+  let legacy=null;
+  try{ const o=JSON.parse(decoded); if (o&&typeof o.src==='string') legacy=o; }catch(_){}
+  console.log(`[draw] pako decoded — ${legacy?'LEGACY {v,src,g}':'raw srgm text'} (${decoded.length} chars):\n%s`,
+    legacy ? JSON.stringify(legacy, null, 1) : decoded);
+  if (legacy){ buildModel(legacy.src);
+    if (legacy.g) for (const k in legacy.g){ const i=+k; if (NOTES[i]) NOTES[i].curve=legacy.g[k].map(p=>[p[0],p[1]]); } }
+  else buildModel(decoded);   // raw srgm text; inline gamaka decoded in buildModel
+  logNotes('after applyShared');
 }
 async function loadComposition(){
   const h=location.hash.replace(/^#/,'');
-  if (h){ try{ applyShared(await decodeShareToken(h)); return; }catch(e){ /* fall through */ } }
-  buildModel(localStorage.getItem(LS_KEY) || 'Raga=hamsadhwani,0 O=5 L=1 S R G P N >S');
+  if (h){ try{ applyShared(await decodeShareToken(h)); return; }catch(e){ console.warn('[draw] pako decode failed', e); } }
+  const ls=localStorage.getItem(LS_KEY) || 'Raga=hamsadhwani,0 O=5 L=1 S R G P N >S';
+  console.log(`[draw] loaded from localStorage (${ls.length} chars):\n%s`, ls);
+  buildModel(ls); logNotes('after localStorage load');
 }
 // paste a share link/token in-page and load its melody + curves
 $('load').onclick=async()=>{ const inp=window.prompt('Paste a RagamRoll share link or pako token:'); if (!inp) return;
   const m=/pako:[A-Za-z0-9\-_]+/.exec(inp); const tok=m?m[0]:inp.trim().replace(/^#/,'');
   try{ applyShared(await decodeShareToken(tok)); if (mode==='draw') $('back').click(); syncControls(); resizeCanvas(); rebuildShare(); }
   catch(e){ window.alert('That isn’t a valid RagamRoll link — it should contain a pako: token.'); } };
-window.__rr = { notes:()=>NOTES, X, Y, starts:()=>starts, get shareLink(){ return shareLink; }, get playPos(){ return playPos; }, get markerA(){ return markerA; }, get markerB(){ return markerB; }, get talaMeasure(){ return talaMeasure; }, get talaAccents(){ return talaAccents; }, get droneVol(){ return droneVol; }, get talaVol(){ return talaVol; } };
+window.__rr = { notes:()=>NOTES, X, Y, starts:()=>starts, get shareLink(){ return shareLink; }, get playPos(){ return playPos; }, get markerA(){ return markerA; }, get markerB(){ return markerB; }, get talaMeasure(){ return talaMeasure; }, get talaAccents(){ return talaAccents; }, get droneVol(){ return droneVol; }, get talaVol(){ return talaVol; }, inlineSrc:()=>inlineSrc(), rebuild:()=>rebuildShare(), get src(){ return srcText; } };
 Promise.all([
   fetch('./core/raga-base.json').then(r=>r.json()),
   fetch('./core/raga-ext.json').then(r=>r.json()).catch(()=>({})),

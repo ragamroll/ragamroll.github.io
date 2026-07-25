@@ -1,6 +1,32 @@
 import { noteToMidi } from './tuning.js';
 import { swaraMap, resolveRagaName } from './raga-base.js';
 import { GM } from './midi/gm.js';
+import { parseAttrs } from './gamaka-inline.js';
+
+// Split into whitespace-delimited tokens, but keep a note's trailing {…} block
+// attached (brace-balanced; whitespace/newlines inside preserved) as one token.
+function tokenizeSrgm(s) {
+  const toks = [];
+  const isWs = (c) => c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === '\f' || c === '\v';
+  let i = 0;
+  while (i < s.length) {
+    if (isWs(s[i])) { i++; continue; }
+    let j = i;
+    while (j < s.length && !isWs(s[j]) && s[j] !== '{') j++;
+    if (s[j] !== '{') { toks.push(s.slice(i, j)); i = j; continue; }
+    let d = 0, k = j;
+    for (; k < s.length; k++) {
+      if (s[k] === '{') d++;
+      else if (s[k] === '}') { d--; if (d === 0) { k++; break; } }
+    }
+    toks.push(s.slice(i, k));   // note + {…} (or to end if unbalanced)
+    i = k;
+  }
+  return toks;
+}
+
+// Peel a "NOTE{…}" token; requires a brace-balanced, correctly-closed block.
+const NOTE_ATTR_RE = /^((?:>*|<*)[sSrRgGmMpPdDnNzZ]\d*)\{([\s\S]*)\}$/;
 
 // tala_map: name -> [beatsPerCycleUnit, [accentedAngaStarts...]]  (verbatim)
 export const TALA_MAP = {
@@ -96,8 +122,29 @@ export function parse(input) {
   };
 
   let tokenIndex = -1;
-  for (const token of inStr.split(/\s+/).filter(Boolean)) {
+  for (const token of tokenizeSrgm(inStr)) {
     tokenIndex++;
+
+    // A note with a trailing {…} attribute block (inline gamaka / sahitya).
+    if (token.includes('{')) {
+      const am = NOTE_ATTR_RE.exec(token);
+      const head = am ? am[1] : token.slice(0, token.indexOf('{'));
+      const hm = SWARA_RE.exec(head);
+      if (!hm) { diagnostics.push({ token, index: tokenIndex, message: `unrecognized token "${token}" — ignored` }); continue; }
+      let attrs = null;
+      if (am) { try { attrs = parseAttrs(am[2]); } catch { attrs = null; } }
+      octshift(hm[1]);
+      const rl = /^\d+$/.test(hm[3]) ? parseInt(hm[3], 10) : 1;
+      const ev = noteEvent(hm[2], curOctave, rl);
+      if (!attrs) {
+        diagnostics.push({ token, index: tokenIndex, message: `malformed attributes on "${token}" — playing the plain note` });
+      } else {
+        if (Array.isArray(attrs.gamaka)) ev.gamaka = attrs.gamaka;
+        if (typeof attrs.sahitya === 'string') ev.sahitya = attrs.sahitya;
+      }
+      events.push(ev);
+      continue;
+    }
 
     const m = SWARA_RE.exec(token);
     if (m) {

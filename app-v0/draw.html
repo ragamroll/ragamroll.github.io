@@ -48,6 +48,16 @@ button.mini{padding:.1rem .5rem;font-size:1rem;line-height:1;margin-left:.3rem}
 .tog select{background:var(--panel2);color:var(--ink);border:1px solid var(--hair);border-radius:6px;padding:.12rem .3rem;font-size:.8rem}
 .tog input[type=range]{width:72px;accent-color:var(--teal)}
 #tempolbl{min-width:3.6em}
+.edit-btn{font-family:var(--mono);font-size:.78rem;color:var(--muted);background:var(--panel2);border:1px solid var(--hair);border-radius:999px;padding:.2rem .6rem;cursor:pointer}
+.edit-btn:hover{border-color:var(--amberSoft);color:var(--ink)}
+.editdlg{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:1rem}
+.editdlg[hidden]{display:none}
+.editdlg-box{width:min(92vw,760px);height:min(80vh,560px);display:flex;flex-direction:column;gap:.5rem;background:var(--panel);border:1px solid var(--hair);border-radius:12px;padding:.8rem;box-shadow:0 16px 48px rgba(0,0,0,.5)}
+.editdlg-head{display:flex;align-items:center;gap:.7rem}
+.editor{flex:1 1 auto;min-height:0;width:100%;box-sizing:border-box;resize:none;
+  font-family:var(--mono);font-size:.9rem;line-height:1.5;background:var(--panel2);color:var(--ink);
+  border:1px solid var(--hair);border-radius:8px;padding:.6rem .7rem}
+.editor:focus{outline:none;border-color:var(--amberSoft)}
 .mode{font-family:var(--mono);font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;color:var(--amber);border:1px solid var(--hair);border-radius:999px;padding:.14rem .5rem}
 .legend{flex:0 0 auto;display:flex;gap:1rem;flex-wrap:wrap;color:var(--muted);font-size:.76rem;align-items:center}
 .legend .k{display:inline-flex;align-items:center;gap:.4rem}
@@ -71,6 +81,7 @@ button.mini{padding:.1rem .5rem;font-size:1rem;line-height:1;margin-left:.3rem}
     <h1>RagaM-Roll</h1>
     <a class="back-app" id="backapp" href="./index.html">‹ back to app</a>
     <span class="spacer"></span>
+    <button id="editbtn" class="edit-btn" title="Edit the srgm notation">srgm ✎</button>
     <button id="helpbtn" class="help-icon" title="How to use" aria-label="Help">?</button>
   </div>
   <div class="stage">
@@ -99,11 +110,6 @@ button.mini{padding:.1rem .5rem;font-size:1rem;line-height:1;margin-left:.3rem}
       <span class="spacer"></span>
       <span class="hint" id="read"></span>
     </div>
-    <div class="legend">
-      <span class="k"><span class="sw" style="border-color:var(--amberSoft)"></span> note (written)</span>
-      <span class="k"><span class="sw" style="border-color:var(--teal)"></span> gamaka curve (played)</span>
-      <span class="k"><span class="sw" style="border-color:var(--terra)"></span> onset · thick = start</span>
-    </div>
   </div>
   <footer class="footer">
     <span class="copyright">© 2010 ragamroll</span>
@@ -124,6 +130,12 @@ button.mini{padding:.1rem .5rem;font-size:1rem;line-height:1;margin-left:.3rem}
   <b>Tap a note</b> to zoom in, then <b>drag to draw its pitch curve</b> (you hear the pitch as you draw); drag the handles to tweak, <b>snap</b> locks to the 22 shrutis.
   <b>Right-click</b> a note to copy/paste its gamaka. <b>Play</b> rolls it under a playhead; <b>Share</b> / <b>Load</b> pack the melody + curves into a link.
   <button id="helpclose">Got it</button>
+</div>
+<div class="editdlg" id="editdlg" hidden>
+  <div class="editdlg-box">
+    <div class="editdlg-head"><b>srgm notation</b><span class="hint">inline gamaka included · edit freely · ctrl-z undoes typing</span><span class="spacer"></span><button id="editclose">Close</button></div>
+    <textarea id="editor" class="editor" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+  </div>
 </div>
 <script type="module" src="./draw.js"></script>
 <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');</script>
