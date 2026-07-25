@@ -42,11 +42,16 @@ button:hover{border-color:var(--amberSoft)} button.pri{background:var(--teal);co
 button:disabled{opacity:.4;cursor:default}
 button.mini{padding:.1rem .5rem;font-size:1rem;line-height:1;margin-left:.3rem}
 .spacer{flex:1} .hint{color:var(--muted);font-size:.8rem;font-family:var(--mono)}
+.vol{display:inline-flex;align-items:center;gap:.3rem;color:var(--muted);font-size:.8rem}
+.vol input[type=range]{width:66px;accent-color:var(--teal)}
 .tog{display:inline-flex;align-items:center;gap:.35rem;color:var(--muted);font-size:.82rem}
 .mode{font-family:var(--mono);font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;color:var(--amber);border:1px solid var(--hair);border-radius:999px;padding:.14rem .5rem}
 .legend{flex:0 0 auto;display:flex;gap:1rem;flex-wrap:wrap;color:var(--muted);font-size:.76rem;align-items:center}
 .legend .k{display:inline-flex;align-items:center;gap:.4rem}
 .sw{width:20px;border-top:2.5px solid;display:inline-block}
+.footer{flex:0 0 auto;display:flex;gap:.6rem;align-items:center;padding:.1rem .3rem 0;font-size:.75rem;color:var(--muted)}
+.footer .build{margin-left:auto}
+.footer .ver{color:var(--teal);font-family:var(--mono)}
 @media (max-height:720px){ .lede{display:none} .legend{display:none} }
 .ctxmenu{position:fixed;z-index:50;background:var(--panel);border:1px solid var(--hair);border-radius:8px;
   padding:.25rem;display:none;box-shadow:0 8px 24px rgba(0,0,0,.35);min-width:130px}
@@ -78,6 +83,8 @@ button.mini{padding:.1rem .5rem;font-size:1rem;line-height:1;margin-left:.3rem}
     <div class="botbar">
       <button class="pri" id="play">▶ Play phrase</button>
       <button id="stop">■ Stop</button>
+      <label class="vol" title="Drone volume (applies on the next Play)">🎶<input type="range" id="dronevol" min="0" max="1" step="0.05" value="0.5"></label>
+      <label class="vol" title="Tala accent-strum volume (applies on the next Play)">🪕<input type="range" id="talavol" min="0" max="1" step="0.05" value="0.5"></label>
       <button id="clear" disabled>Clear</button>
       <button id="copy" disabled>Copy</button>
       <button id="paste" disabled>Paste</button>
@@ -93,6 +100,10 @@ button.mini{padding:.1rem .5rem;font-size:1rem;line-height:1;margin-left:.3rem}
       <span class="k"><span class="sw" style="border-color:var(--terra)"></span> onset · thick = start</span>
     </div>
   </div>
+  <footer class="footer">
+    <span class="copyright">© 2010 ragamroll</span>
+    <span class="build" id="footbuild"></span>
+  </footer>
 </div>
 <div class="ctxmenu" id="ctxmenu">
   <button data-act="copy">Copy gamaka</button>

@@ -9,6 +9,7 @@ import { setRagaExt } from './core/raga-ext.js';
 import { midiToFreq } from './audio/schedule.js';
 import { BOXES, EDO, stepFreq, defaultShrutiStep } from './core/shruti.js';
 import { encodeShareToken, decodeShareToken } from './core/share.js';
+import { VERSION, BUILD_DATE } from './version.js';
 
 const LS_KEY = 'ragamroll.srgm';
 const SHRUTI = [...new Set(BOXES.map(b => b.step))].sort((a, b) => a - b);   // 22 steps in an octave
@@ -17,6 +18,7 @@ const SHRUTI = [...new Set(BOXES.map(b => b.step))].sort((a, b) => a - b);   // 
 let NOTES = [];        // [{step, dur, swara, octave, curve:null|[[u,step]...]}]
 let saRef = 60, saFreq = midiToFreq(60), tempoBpm = 120, TOTAL = 0;
 let starts = [], gridPitches = [], stepMin = -26, stepMax = 66, srcText = '';
+let talaMeasure = 0, talaAccents = [];   // cycle length (length-units) + 1-based accent slots
 
 function stepOfSemitone(semi){ const oct = Math.floor(semi / 12), pc = semi - oct * 12; return oct * EDO + defaultShrutiStep(pc); }
 function buildModel(src){
@@ -30,6 +32,9 @@ function buildModel(src){
   NOTES = notes.map(n => ({ step: stepOfSemitone(n.midi - saRef), dur: n.absLen,
                             swara: n.swara.toUpperCase(), octave: n.octave, curve: null }));
   starts = []; let t = 0; for (const n of NOTES){ starts.push(t); t += n.dur; } TOTAL = t || 1;
+  const tp = [...model.events].reverse().find(e => e.type === 'tala');   // accent strums (veena) at tala accents
+  talaMeasure = (tp && tp.props && tp.props.measure > 0) ? tp.props.measure : 0;
+  talaAccents = (tp && tp.props && Array.isArray(tp.props.accents)) ? tp.props.accents : [];
   const seen = new Map();
   for (const n of NOTES){ if (!seen.has(n.step)) seen.set(n.step, { step: n.step, label: n.swara + n.octave }); }
   gridPitches = [...seen.values()].sort((a, b) => a.step - b.step);
@@ -200,10 +205,17 @@ $('rmin').onclick=()=>{ drawSpan=Math.max(10,drawSpan-8); resizeCanvas(); };
 $('rplus').onclick=()=>{ drawSpan=Math.min(60,drawSpan+8); resizeCanvas(); };   // 60 ≈ a bit over an octave (53-EDO) each side
 $('tmin').onclick=()=>{ timeZoom=Math.max(1,timeZoom-0.5); resizeCanvas(); };
 $('tplus').onclick=()=>{ timeZoom=Math.min(12,timeZoom+0.5); resizeCanvas(); };
+// Drone/tala levels are LIVE: each routes through a per-session gain bus, so a
+// slider change scales the currently-playing drone / accent strums immediately.
+$('dronevol').oninput=e=>{ droneVol=Number(e.target.value); if (session&&session.dBus&&AC) session.dBus.gain.setTargetAtTime(droneVol,AC.currentTime,0.02); };
+$('talavol').oninput=e=>{ talaVol=Number(e.target.value); if (session&&session.tBus&&AC) session.tBus.gain.setTargetAtTime(talaVol,AC.currentTime,0.02); };
+// Footer build/version — mirrors the app's Footer component (build-app-v0.sh stamps both).
+$('footbuild').innerHTML=(BUILD_DATE?`built ${BUILD_DATE} · `:'')+`<span class="ver">${VERSION}</span>`;
 function autoZoom(){ const baseH=$('holder').clientHeight||600; timeZoom=Math.max(3, Math.min(12, (NOTES.length*64)/baseH)); }
 
 // ---------- audio ----------
 let AC=null, live=null;
+let droneVol=0.5, talaVol=0.5;   // 0..1; live via the per-session dBus/tBus gains
 function ensureAudio(){ if (!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return null; } }
   if (AC.state==='suspended') AC.resume();
   if (!live){ const osc=AC.createOscillator(); osc.type='triangle'; osc.frequency.value=freqOf(0);
@@ -223,7 +235,7 @@ function newSession(a){ stopPlayback(); const g=a.createGain(); g.gain.value=1; 
 function stopPlayback(){ playing=false; playPos=null; if (rafId){ cancelAnimationFrame(rafId); rafId=0; }
   if (session&&AC){ const a=AC, now=a.currentTime, s=session;
     s.gain.gain.cancelScheduledValues(now); s.gain.gain.setTargetAtTime(0.0001,now,0.02);
-    setTimeout(()=>{ for (const o of s.oscs){ try{ o.stop(); o.disconnect(); }catch(e){} } try{ s.gain.disconnect(); }catch(e){} }, 90);
+    setTimeout(()=>{ for (const o of s.oscs){ try{ o.stop(); o.disconnect(); }catch(e){} } try{ s.dBus&&s.dBus.disconnect(); }catch(e){} try{ s.tBus&&s.tBus.disconnect(); }catch(e){} try{ s.gain.disconnect(); }catch(e){} }, 90);
     session=null; }
   if (mode==='roll') render(); }
 // playhead loop — advance a line down the roll and scroll so it stays in view ("rolls up")
@@ -234,10 +246,25 @@ function tick(){ if (!playing||!AC) return; const el=Math.max(0, AC.currentTime-
   const hd=$('holder'); hd.scrollTop=Math.max(0, Math.min(CSSH-hd.clientHeight, Y(playPos)-hd.clientHeight*0.4));
   rafId=requestAnimationFrame(tick); }
 function playLabel(){ return (markerA!=null&&markerB!=null) ? 'Play A–B' : 'Play phrase'; }
-// sustained S–P–S drone (53-EDO): mandra Sa, Sa, Pa
-function drone(a,dest,now,dur){ for (const st of [-EDO,0,31]){ const o=a.createOscillator(); o.type='sine'; o.frequency.value=freqOf(st);
-  const g=a.createGain(); g.gain.setValueAtTime(0,now); g.gain.linearRampToValueAtTime(0.045,now+0.12); g.gain.setValueAtTime(0.045,now+dur-0.2); g.gain.linearRampToValueAtTime(0,now+dur);
-  o.connect(g); g.connect(dest); o.start(now); o.stop(now+dur+0.05); if (session) session.oscs.push(o); } }
+// Per-session drone/tala gain buses (live volume). Created lazily on the current
+// session; drone()/strum() feed them at a FIXED nominal level and the bus gain
+// (= droneVol / talaVol) scales it live from the sliders.
+function droneBus(a,dest){ if (!session) return dest; if (!session.dBus){ const g=a.createGain(); g.gain.value=droneVol; g.connect(dest); session.dBus=g; } return session.dBus; }
+function talaBus(a,dest){ if (!session) return dest; if (!session.tBus){ const g=a.createGain(); g.gain.value=talaVol; g.connect(dest); session.tBus=g; } return session.tBus; }
+// sustained S–P–S drone (53-EDO): mandra Sa, Sa, Pa. Volume is the dBus gain (live).
+function drone(a,dest,now,dur){ const bus=droneBus(a,dest), pk=0.09; for (const st of [-EDO,0,31]){ const o=a.createOscillator(); o.type='sine'; o.frequency.value=freqOf(st);
+  const g=a.createGain(); g.gain.setValueAtTime(0,now); g.gain.linearRampToValueAtTime(pk,now+0.12); g.gain.setValueAtTime(pk,now+dur-0.2); g.gain.linearRampToValueAtTime(0,now+dur);
+  o.connect(g); g.connect(bus); o.start(now); o.stop(now+dur+0.05); if (session) session.oscs.push(o); } }
+// Tala accent strum (veena-like pluck): S + P plucked on each accent slot of the
+// cycle that falls inside [from,to]. Volume is the tBus gain (live).
+function strum(a,bus,when){ const pk=0.24; for (const st of [0,31]){ const o=a.createOscillator(); o.type='triangle'; o.frequency.value=freqOf(st);
+  const g=a.createGain(); g.gain.setValueAtTime(0.0001,when); g.gain.exponentialRampToValueAtTime(pk,when+0.006); g.gain.exponentialRampToValueAtTime(0.0008,when+0.34);
+  o.connect(g); g.connect(bus); o.start(when); o.stop(when+0.4); if (session) session.oscs.push(o); } }
+// Schedule strums regardless of talaVol (0 just means the bus is silent) so raising
+// the slider mid-play brings them in.
+function tala(a,dest,from,to,start,spu){ if (!talaMeasure||!talaAccents.length) return; const bus=talaBus(a,dest);
+  for (let cyc=0; cyc<to; cyc+=talaMeasure){ for (const acc of talaAccents){ const u=cyc+(acc-1);
+    if (u<from-1e-6||u>=to) continue; strum(a,bus,start+(u-from)*spu); } } }
 // play note nn from when for dur, sounding the sub-range [uStart,uEnd] of its curve
 function voice(a,dest,when,dur,nn,uStart=0,uEnd=1){ const o=a.createOscillator(); o.type='triangle';
   const g=a.createGain(); g.gain.setValueAtTime(0,when); g.gain.linearRampToValueAtTime(0.2,when+0.03); g.gain.setValueAtTime(0.2,when+dur-0.05); g.gain.linearRampToValueAtTime(0,when+dur);
@@ -251,6 +278,7 @@ function autoPlay(){ if (sel>=0&&NOTES[sel].curve) playNote(sel); }
 function playFrom(from,to){ const a=ensureAudio(); if (!a) return; from=Math.max(0,from); to=Math.min(TOTAL,to); if (to<=from) return;
   const dest=newSession(a), spu=secPerUnit(), start=a.currentTime+0.06;
   drone(a,dest,start,(to-from)*spu+0.4);
+  tala(a,dest,from,to,start,spu);
   for (let i=0;i<NOTES.length;i++){ const s0=starts[i], s1=s0+NOTES[i].dur; const aU=Math.max(from,s0), bU=Math.min(to,s1);
     if (bU<=aU) continue; voice(a,dest,start+(aU-from)*spu, (bU-aU)*spu, NOTES[i], (aU-s0)/NOTES[i].dur, (bU-s0)/NOTES[i].dur); }
   playing=true; paused=false; playStart=start; playFromU=from; playToU=to; playPos=from;
@@ -292,7 +320,7 @@ $('load').onclick=async()=>{ const inp=window.prompt('Paste a RagamRoll share li
   const m=/pako:[A-Za-z0-9\-_]+/.exec(inp); const tok=m?m[0]:inp.trim().replace(/^#/,'');
   try{ applyShared(await decodeShareToken(tok)); if (mode==='draw') $('back').click(); resizeCanvas(); rebuildShare(); }
   catch(e){ window.alert('That isn’t a valid RagamRoll link — it should contain a pako: token.'); } };
-window.__rr = { notes:()=>NOTES, X, Y, starts:()=>starts, get shareLink(){ return shareLink; }, get playPos(){ return playPos; }, get markerA(){ return markerA; }, get markerB(){ return markerB; } };
+window.__rr = { notes:()=>NOTES, X, Y, starts:()=>starts, get shareLink(){ return shareLink; }, get playPos(){ return playPos; }, get markerA(){ return markerA; }, get markerB(){ return markerB; }, get talaMeasure(){ return talaMeasure; }, get talaAccents(){ return talaAccents; }, get droneVol(){ return droneVol; }, get talaVol(){ return talaVol; } };
 Promise.all([
   fetch('./core/raga-base.json').then(r=>r.json()),
   fetch('./core/raga-ext.json').then(r=>r.json()).catch(()=>({})),
