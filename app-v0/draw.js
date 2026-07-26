@@ -226,10 +226,10 @@ function enterDraw(i){ sel=i; mode='draw';
   $('mode').textContent='draw the curve'; $('crumb').textContent='note '+(i+1)+' · '+NOTES[i].swara+NOTES[i].octave;
   for (const b of ['clear','copy','paste','back']) $(b).style.display='';   // draw-only buttons appear
   $('back').disabled=false; $('clear').disabled=!NOTES[i].curve; $('copy').disabled=!NOTES[i].curve; $('paste').disabled=!clipRel;
-  $('play').textContent='▶ Play note'; $('rangectl').style.display=''; $('snapctl').style.display=''; $('tzoom').style.display='none'; resizeCanvas(); }
+  setPlayBtn('▶','Play note'); $('rangectl').style.display=''; $('snapctl').style.display=''; $('tzoom').style.display='none'; resizeCanvas(); }
 $('back').onclick=()=>{ mode='roll'; sel=-1; $('mode').textContent='select a note'; $('crumb').textContent='';
   for (const b of ['clear','copy','paste','back']) $(b).style.display='none';   // draw-only buttons hidden in roll mode
-  $('read').textContent=''; $('play').textContent='▶ Play phrase';
+  $('read').textContent=''; setPlayBtn('▶',playLabel());
   $('rangectl').style.display='none'; $('snapctl').style.display='none'; $('tzoom').style.display=''; resizeCanvas(); };
 $('clear').onclick=()=>{ if (sel>=0){ NOTES[sel].curve=null; $('clear').disabled=true; $('copy').disabled=true; render(); scheduleShare(); } };
 function flashBtn(id,msg){ const b=$(id),t=b.textContent; b.textContent=msg; setTimeout(()=>b.textContent=t,1100); }
@@ -242,7 +242,9 @@ $('copy').onclick=()=>{ if (sel>=0&&NOTES[sel].curve){ copyFrom(sel); flashBtn('
 $('paste').onclick=()=>{ if (sel>=0) pasteTo(sel); };
 // desktop: right-click / ctrl-click a note in the roll to copy or paste its gamaka
 let ctxNote=-1;
-function setPlayIdle(){ if (!playing&&!paused) $('play').textContent='▶ '+playLabel(); }
+// Play button shows only an icon (compact on mobile); the words go in its title.
+function setPlayBtn(icon, title){ const b=$('play'); b.textContent=icon; b.title=title; }
+function setPlayIdle(){ if (!playing&&!paused) setPlayBtn('▶', playLabel()); }
 cv.addEventListener('contextmenu', e=>{ if (mode!=='roll') return; e.preventDefault(); const {x,y}=evtPos(e);
   ctxNote=hitNote(x,y); ctxTime=Math.max(0,Math.min(TOTAL,tAtY(y))); const cm=$('ctxmenu');
   cm.querySelector('[data-act=copy]').disabled=!(ctxNote>=0&&NOTES[ctxNote].curve);
@@ -301,13 +303,22 @@ function syncControls(){ $('sapick').value=saPlay==null?'':String(saPlay);
 // Back to the app: carry the composition CURRENTLY open here into the app (it reads
 // the same localStorage key), so the app opens the same piece — not whatever it held.
 $('backapp').onclick=e=>{ e.preventDefault(); try{ localStorage.setItem(LS_KEY, srcText); }catch(_){}; location.href='./index.html'; };
-// Editor dialog: the full srgm (inline gamaka included), freely editable; native
-// ctrl-z works for typing. Edits reparse (debounced) and rebuild the roll.
-$('editbtn').onclick=()=>{ const t=$('editor'); t.value=srcText; $('editdlg').hidden=false; t.focus(); };
-$('editclose').onclick=()=>{ $('editdlg').hidden=true; };
-$('editdlg').addEventListener('pointerdown', e=>{ if (e.target===$('editdlg')) $('editdlg').hidden=true; });
-document.addEventListener('keydown', e=>{ if (e.key==='Escape' && !$('editdlg').hidden) $('editdlg').hidden=true; });
+// srgm editor: a slide-up panel below the buttons. Drag the grip to resize; tap to
+// toggle. Native ctrl-z works for typing; edits reparse (debounced) → rebuild roll.
+let editorH=0, gripDrag=null;
+function setEditorH(h){ editorH=Math.max(0, Math.min(h, Math.round((window.innerHeight||600)*0.6)));
+  const t=$('editor'); t.style.height=editorH+'px'; t.style.padding=editorH>0?'.5rem .6rem':'0'; t.style.borderWidth=editorH>0?'1px':'0';
+  if (editorH>0 && document.activeElement!==t) t.value=srcText;
+  requestAnimationFrame(resizeCanvas); }
+$('grip').addEventListener('pointerdown', e=>{ e.preventDefault(); try{ $('grip').setPointerCapture(e.pointerId); }catch(_){}; gripDrag={y:e.clientY,h:editorH,moved:false}; });
+$('grip').addEventListener('pointermove', e=>{ if (!gripDrag) return; const dy=gripDrag.y-e.clientY; if (Math.abs(dy)>3) gripDrag.moved=true; setEditorH(gripDrag.h+dy); });
+$('grip').addEventListener('pointerup', ()=>{ if (gripDrag&&!gripDrag.moved) setEditorH(editorH>10?0:Math.round((window.innerHeight||600)*0.35)); gripDrag=null; });
 $('editor').addEventListener('input', ()=>{ clearTimeout(editTimer); editTimer=setTimeout(onEditorInput, 300); });
+// Fullscreen toggle — on mobile this hides the browser address bar.
+$('fsbtn').onclick=()=>{ const d=document, el=d.documentElement;
+  if (!d.fullscreenElement && !d.webkitFullscreenElement){ (el.requestFullscreen||el.webkitRequestFullscreen||(()=>{})).call(el); }
+  else { (d.exitFullscreen||d.webkitExitFullscreen||(()=>{})).call(d); } };
+document.addEventListener('fullscreenchange', ()=>setTimeout(fit,100));
 
 // ---------- audio ----------
 let AC=null, live=null;
@@ -337,7 +348,7 @@ function stopPlayback(){ playing=false; playPos=null; if (rafId){ cancelAnimatio
 // playhead loop — advance a line down the roll and scroll so it stays in view ("rolls up")
 function tick(){ if (!playing||!AC) return; const el=Math.max(0, AC.currentTime-playStart);
   const pos=playFromU + el/secPerUnit();
-  if (pos>=playToU){ playing=false; playPos=null; $('play').textContent='▶ '+playLabel(); render(); return; }
+  if (pos>=playToU){ playing=false; playPos=null; setPlayBtn('▶',playLabel()); render(); return; }
   playPos=pos;
   // Auto-scroll so the playhead stays ~40% down the viewport (virtual coords). Setting
   // scrollTop fires the scroll listener → render(); we also render() to be safe.
@@ -385,14 +396,14 @@ function playFrom(from,to){ const a=ensureAudio(); if (!a) return; from=Math.max
   for (let i=0;i<NOTES.length;i++){ const s0=starts[i], s1=s0+NOTES[i].dur; const aU=Math.max(from,s0), bU=Math.min(to,s1);
     if (bU<=aU) continue; voice(a,dest,start+(aU-from)*spu, (bU-aU)*spu, NOTES[i], (aU-s0)/NOTES[i].dur, (bU-s0)/NOTES[i].dur); }
   playing=true; paused=false; playStart=start; playFromU=from; playToU=to; playPos=from;
-  $('play').textContent='⏸ Pause'; if (rafId) cancelAnimationFrame(rafId); rafId=requestAnimationFrame(tick); }
-function pausePlayback(){ if (!playing) return; pausedAt=playPos; pausedTo=playToU; stopPlayback(); paused=true; playPos=pausedAt; $('play').textContent='▶ Resume'; render(); }
+  setPlayBtn('⏸','Pause'); if (rafId) cancelAnimationFrame(rafId); rafId=requestAnimationFrame(tick); }
+function pausePlayback(){ if (!playing) return; pausedAt=playPos; pausedTo=playToU; stopPlayback(); paused=true; playPos=pausedAt; setPlayBtn('▶','Resume'); render(); }
 function segRange(){ return [Math.min(markerA,markerB), Math.max(markerA,markerB)]; }
 $('play').onclick=()=>{ if (mode==='draw'){ playNote(sel); return; }
   if (playing){ pausePlayback(); return; }
   if (paused){ playFrom(pausedAt,pausedTo); return; }
   const [lo,hi]=segRange(); playFrom(lo,hi); };
-$('stop').onclick=()=>{ stopPlayback(); paused=false; playPos=null; $('play').textContent='▶ '+playLabel(); if (mode==='roll') render(); };
+$('stop').onclick=()=>{ stopPlayback(); paused=false; playPos=null; setPlayBtn('▶',playLabel()); if (mode==='roll') render(); };
 
 // ---------- source text (inline gamaka) + share ----------
 let shareLink='', shareTimer=null;

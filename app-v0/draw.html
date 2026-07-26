@@ -43,6 +43,9 @@ canvas{display:block;position:sticky;top:0;width:100%;border-radius:9px;touch-ac
   font:bold 11px var(--mono);color:#08110d;background:var(--amber);border:0;border-radius:4px 11px 11px 4px;
   cursor:grab;pointer-events:auto;touch-action:none;box-shadow:0 1px 3px rgba(0,0,0,.45)}
 .mk:active{cursor:grabbing}
+#grip{flex:0 0 auto;height:14px;display:flex;align-items:center;justify-content:center;cursor:ns-resize;touch-action:none}
+#grip span{width:44px;height:4px;border-radius:2px;background:var(--hair)}
+#grip:hover span{background:var(--amberSoft)}
 button{font-family:var(--sans);font-size:.9rem;cursor:pointer;border-radius:8px;padding:.5rem .85rem;background:var(--panel2);color:var(--ink);border:1px solid var(--hair)}
 button:hover{border-color:var(--amberSoft)} button.pri{background:var(--teal);color:#08110d;border-color:var(--teal);font-weight:600}
 button:disabled{opacity:.4;cursor:default}
@@ -54,15 +57,9 @@ button.mini{padding:.1rem .5rem;font-size:1rem;line-height:1;margin-left:.3rem}
 .tog select{background:var(--panel2);color:var(--ink);border:1px solid var(--hair);border-radius:6px;padding:.12rem .3rem;font-size:.8rem}
 .tog input[type=range]{width:72px;accent-color:var(--teal)}
 #tempolbl{min-width:3.6em}
-.edit-btn{font-family:var(--mono);font-size:.78rem;color:var(--muted);background:var(--panel2);border:1px solid var(--hair);border-radius:999px;padding:.2rem .6rem;cursor:pointer}
-.edit-btn:hover{border-color:var(--amberSoft);color:var(--ink)}
-.editdlg{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:1rem}
-.editdlg[hidden]{display:none}
-.editdlg-box{width:min(92vw,760px);height:min(80vh,560px);display:flex;flex-direction:column;gap:.5rem;background:var(--panel);border:1px solid var(--hair);border-radius:12px;padding:.8rem;box-shadow:0 16px 48px rgba(0,0,0,.5)}
-.editdlg-head{display:flex;align-items:center;gap:.7rem}
-.editor{flex:1 1 auto;min-height:0;width:100%;box-sizing:border-box;resize:none;
-  font-family:var(--mono);font-size:.9rem;line-height:1.5;background:var(--panel2);color:var(--ink);
-  border:1px solid var(--hair);border-radius:8px;padding:.6rem .7rem}
+.editor{flex:0 0 auto;height:0;width:100%;box-sizing:border-box;resize:none;overflow:auto;
+  font-family:var(--mono);font-size:.85rem;line-height:1.5;background:var(--panel2);color:var(--ink);
+  border:0 solid var(--hair);border-radius:8px;padding:0}
 .editor:focus{outline:none;border-color:var(--amberSoft)}
 .mode{font-family:var(--mono);font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;color:var(--amber);border:1px solid var(--hair);border-radius:999px;padding:.14rem .5rem}
 .legend{flex:0 0 auto;display:flex;gap:1rem;flex-wrap:wrap;color:var(--muted);font-size:.76rem;align-items:center}
@@ -86,11 +83,11 @@ button.mini{padding:.1rem .5rem;font-size:1rem;line-height:1;margin-left:.3rem}
 <body>
 <div class="wrap" id="wrap">
   <div class="head">
-    <h1>RagaM-Roll</h1>
-    <a class="back-app" id="backapp" href="./index.html">‹ back to app</a>
-    <span class="spacer"></span>
-    <button id="editbtn" class="edit-btn" title="Edit the srgm notation">srgm ✎</button>
     <button id="helpbtn" class="help-icon" title="How to use" aria-label="Help">?</button>
+    <h1>RagaM-Roll</h1>
+    <span class="spacer"></span>
+    <a class="back-app" id="backapp" href="./index.html">‹ back to app</a>
+    <button id="fsbtn" class="help-icon" title="Fullscreen (hide the address bar)" aria-label="Fullscreen">⛶</button>
   </div>
   <div class="stage">
     <div class="topbar">
@@ -105,9 +102,10 @@ button.mini{padding:.1rem .5rem;font-size:1rem;line-height:1;margin-left:.3rem}
       <label class="tog" id="snapctl" style="display:none"><input type="checkbox" id="snap" checked> snap</label>
     </div>
     <div id="holder"><div id="content"><canvas id="cv"></canvas><div id="gutter"><button class="mk" id="mkA">A</button><button class="mk" id="mkB">B</button></div></div></div>
+    <div id="grip" title="Slide up for the srgm editor · tap to toggle"><span></span></div>
     <div class="botbar">
-      <button class="pri" id="play">▶ Play phrase</button>
-      <button id="stop">■ Stop</button>
+      <button class="pri" id="play" title="Play phrase">▶</button>
+      <button id="stop" title="Stop">■</button>
       <label class="vol" title="Drone volume (applies on the next Play)">🎶<input type="range" id="dronevol" min="0" max="1" step="0.05" value="0.5"></label>
       <label class="vol" title="Tala accent-strum volume (applies on the next Play)">🪕<input type="range" id="talavol" min="0" max="1" step="0.05" value="0.5"></label>
       <button id="clear" disabled style="display:none">Clear</button>
@@ -121,6 +119,8 @@ button.mini{padding:.1rem .5rem;font-size:1rem;line-height:1;margin-left:.3rem}
       <span class="spacer"></span>
       <span class="hint" id="read"></span>
     </div>
+    <textarea id="editor" class="editor" spellcheck="false" autocapitalize="off" autocomplete="off"
+              title="srgm notation (inline gamaka included) — edit freely; ctrl-z undoes typing"></textarea>
   </div>
   <footer class="footer">
     <span class="copyright">© 2010 ragamroll</span>
@@ -150,12 +150,6 @@ button.mini{padding:.1rem .5rem;font-size:1rem;line-height:1;margin-left:.3rem}
   <b>Tap a note</b> to zoom in, then <b>drag to draw its pitch curve</b> (you hear the pitch as you draw); drag the handles to tweak, <b>snap</b> locks to the 22 shrutis.
   <b>Right-click</b> a note to copy/paste its gamaka. <b>Play</b> rolls it under a playhead; <b>Share</b> / <b>Load</b> pack the melody + curves into a link.
   <button id="helpclose">Got it</button>
-</div>
-<div class="editdlg" id="editdlg" hidden>
-  <div class="editdlg-box">
-    <div class="editdlg-head"><b>srgm notation</b><span class="hint">inline gamaka included · edit freely · ctrl-z undoes typing</span><span class="spacer"></span><button id="editclose">Close</button></div>
-    <textarea id="editor" class="editor" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
-  </div>
 </div>
 <script type="module" src="./draw.js"></script>
 <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');</script>
