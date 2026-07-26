@@ -36,7 +36,8 @@ h1{font-family:var(--serif);font-weight:600;font-size:clamp(1.1rem,3.2vw,1.5rem)
 .stage{flex:1 1 auto;min-height:0;background:var(--panel);border:1px solid var(--hair);border-radius:13px;padding:.55rem;display:flex;flex-direction:column;gap:.5rem}
 .topbar,.botbar{flex:0 0 auto;display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
 #holder{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden}
-canvas{display:block;width:100%;height:100%;border-radius:9px;touch-action:none;cursor:crosshair}
+#content{position:relative;width:100%}
+canvas{display:block;position:sticky;top:0;width:100%;border-radius:9px;touch-action:none;cursor:crosshair}
 button{font-family:var(--sans);font-size:.9rem;cursor:pointer;border-radius:8px;padding:.5rem .85rem;background:var(--panel2);color:var(--ink);border:1px solid var(--hair)}
 button:hover{border-color:var(--amberSoft)} button.pri{background:var(--teal);color:#08110d;border-color:var(--teal);font-weight:600}
 button:disabled{opacity:.4;cursor:default}
@@ -94,10 +95,11 @@ button.mini{padding:.1rem .5rem;font-size:1rem;line-height:1;margin-left:.3rem}
       <label class="tog" title="Sa reference pitch — transposes playback (Auto = the composition's Sa)">Sa<select id="sapick"></select></label>
       <label class="tog" title="Playback tempo (× the composition's tempo)">♩<input type="range" id="tempo" min="0.5" max="2" step="0.05" value="1"><span class="hint" id="tempolbl"></span></label>
       <span class="spacer"></span>
+      <span class="tog" id="tzoom">expand<button id="tmin" class="mini">−</button><button id="tplus" class="mini">+</button></span>
       <span class="tog" id="rangectl" style="display:none">pitch range<button id="rmin" class="mini">−</button><button id="rplus" class="mini">+</button></span>
       <label class="tog" id="snapctl" style="display:none"><input type="checkbox" id="snap" checked> snap</label>
     </div>
-    <div id="holder"><canvas id="cv"></canvas></div>
+    <div id="holder"><div id="content"><canvas id="cv"></canvas></div></div>
     <div class="botbar">
       <button class="pri" id="play">▶ Play phrase</button>
       <button id="stop">■ Stop</button>

@@ -76,7 +76,11 @@ let CSSW=0, CSSH=0, dpr=1, mode='roll', sel=-1, drawing=false, drawSpan=22, drag
 // Roll is always fully expanded: scale time so the SHORTEST note cell is at least
 // CELL_PX tall — enough to render its swara glyph, mobile portrait included.
 const CELL_PX = 24;
+let zoom = 1;   // expand multiplier (1 = fully expanded: shortest cell = CELL_PX)
 function pxPerUnit(){ if (!NOTES.length) return CELL_PX; const minDur=Math.min(...NOTES.map(n=>n.dur)); return CELL_PX/Math.max(0.25,minDur); }
+function pxU(){ return pxPerUnit()*zoom; }                          // pixels per length-unit (virtual roll space)
+function virtH(){ return Math.round(PAD.t + TOTAL*pxU() + PAD.b); } // full virtual scroll height (roll)
+const sTop = () => (mode==='roll' ? document.getElementById('holder').scrollTop : 0);
 let playing=false, paused=false, playStart=0, rafId=0, playPos=null;   // playhead (length-units)
 let playFromU=0, playToU=0, pausedAt=0, pausedTo=0;                    // playback range + pause point
 let markerA=null, markerB=null, ctxTime=0;                            // A–B segment markers (length-units)
@@ -87,14 +91,23 @@ function xRange(){ if (mode==='draw'){ const c=NOTES[sel].step; return [c-drawSp
 function X(s){ const [a,b]=xRange(), p=plot(); return p.x + (s-a)/(b-a)*p.w; }
 function stepAtX(px){ const [a,b]=xRange(), p=plot(); return a + (px-p.x)/p.w*(b-a); }
 function yStartEnd(){ if (mode==='draw') return [starts[sel], starts[sel]+NOTES[sel].dur]; return [0, TOTAL]; }
-function Y(t){ const [a,b]=yStartEnd(), p=plot(); return p.y + (t-a)/(b-a)*p.h; }
-function tAtY(py){ const [a,b]=yStartEnd(), p=plot(); return a + (py-p.y)/p.h*(b-a); }
+// Draw mode fits the single note to the viewport. Roll mode is WINDOWED: time maps
+// to a virtual space (PAD.t + t*pxU) taller than the canvas; only the slice under
+// the scroll offset (sTop) is drawn, so a long piece never needs a giant canvas.
+function Y(t){ if (mode==='draw'){ const [a,b]=yStartEnd(), p=plot(); return p.y + (t-a)/(b-a)*p.h; }
+  return PAD.t + t*pxU() - sTop(); }
+function tAtY(py){ if (mode==='draw'){ const [a,b]=yStartEnd(), p=plot(); return a + (py-p.y)/p.h*(b-a); }
+  return (py + sTop() - PAD.t)/pxU(); }
 
 function fit(){ const h=(window.visualViewport&&window.visualViewport.height)||window.innerHeight;
   document.getElementById('wrap').style.height=h+'px'; requestAnimationFrame(resizeCanvas); }
 function resizeCanvas(){ const hd=document.getElementById('holder'); const baseH=Math.max(150,hd.clientHeight);
-  CSSW=hd.clientWidth; CSSH = mode==='roll' ? Math.max(baseH, Math.round(TOTAL*pxPerUnit()) + PAD.t + PAD.b) : baseH;
-  dpr=Math.min(2,window.devicePixelRatio||1); cv.width=CSSW*dpr; cv.height=CSSH*dpr; cv.style.width=CSSW+'px'; cv.style.height=CSSH+'px';
+  dpr=Math.min(2,window.devicePixelRatio||1);
+  CSSW=hd.clientWidth; CSSH=baseH;   // canvas is always viewport-sized (windowed) — never overflows the browser limit
+  const content=document.getElementById('content');
+  if (mode==='roll'){ content.style.height=virtH()+'px'; }   // a tall empty div gives the scrollbar its range
+  else { content.style.height=baseH+'px'; hd.scrollTop=0; }   // draw mode: one note fills the viewport, no scroll
+  cv.width=CSSW*dpr; cv.height=CSSH*dpr; cv.style.width=CSSW+'px'; cv.style.height=CSSH+'px';
   cv.style.touchAction = mode==='draw' ? 'none' : 'pan-y';   // draw: no scroll; roll: allow vertical scroll
   ctx.setTransform(dpr,0,0,dpr,0,0); render(); }
 
@@ -108,11 +121,15 @@ function render(){
     ctx.strokeStyle=hair; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x,p.y); ctx.lineTo(x,p.y+p.h); ctx.stroke();
     ctx.fillStyle=muted; ctx.textAlign='center'; ctx.fillText(g.label, x, p.y-8); }
   const [ta,tb]=yStartEnd();
-  for (let i=0;i<=NOTES.length;i++){ const t=(i<NOTES.length)?starts[i]:TOTAL; if (t<ta-1e-6||t>tb+1e-6) continue; const y=Y(t);
+  // Visible time window (roll: only the scrolled slice; draw: the whole note).
+  const vLo = mode==='roll' ? (sTop()-PAD.t)/pxU()-1 : ta-1e-6;
+  const vHi = mode==='roll' ? (sTop()+CSSH-PAD.t)/pxU()+1 : tb+1e-6;
+  for (let i=0;i<=NOTES.length;i++){ const t=(i<NOTES.length)?starts[i]:TOTAL; if (t<vLo||t>vHi) continue; const y=Y(t);
     const sam=(t===0); ctx.strokeStyle=terra; ctx.globalAlpha=sam?.85:.22; ctx.lineWidth=sam?2.2:.8;
     ctx.beginPath(); ctx.moveTo(p.x,y); ctx.lineTo(p.x+p.w,y); ctx.stroke(); ctx.globalAlpha=1; }
   const colW = mode==='draw' ? 0 : Math.max(9, p.w/(stepMax-stepMin)*4);
   for (let i=0;i<NOTES.length;i++){ if (mode==='draw'&&i!==sel) continue;
+    if (mode==='roll'){ const s0=starts[i], s1=s0+NOTES[i].dur; if (s1<vLo||s0>vHi) continue; }   // cull off-screen notes
     const nn=NOTES[i], y0=Y(starts[i]), y1=Y(starts[i]+nn.dur), x=X(nn.step), selNow=i===sel;
     const w = mode==='draw' ? Math.max(30,p.w*0.14) : colW;
     ctx.fillStyle = selNow?'rgba(216,161,63,.16)':'rgba(216,161,63,.07)';
@@ -189,11 +206,11 @@ function enterDraw(i){ sel=i; mode='draw';
   $('mode').textContent='draw the curve'; $('crumb').textContent='note '+(i+1)+' · '+NOTES[i].swara+NOTES[i].octave;
   for (const b of ['clear','copy','paste','back']) $(b).style.display='';   // draw-only buttons appear
   $('back').disabled=false; $('clear').disabled=!NOTES[i].curve; $('copy').disabled=!NOTES[i].curve; $('paste').disabled=!clipRel;
-  $('play').textContent='▶ Play note'; $('rangectl').style.display=''; $('snapctl').style.display=''; resizeCanvas(); }
+  $('play').textContent='▶ Play note'; $('rangectl').style.display=''; $('snapctl').style.display=''; $('tzoom').style.display='none'; resizeCanvas(); }
 $('back').onclick=()=>{ mode='roll'; sel=-1; $('mode').textContent='select a note'; $('crumb').textContent='';
   for (const b of ['clear','copy','paste','back']) $(b).style.display='none';   // draw-only buttons hidden in roll mode
   $('read').textContent=''; $('play').textContent='▶ Play phrase';
-  $('rangectl').style.display='none'; $('snapctl').style.display='none'; resizeCanvas(); };
+  $('rangectl').style.display='none'; $('snapctl').style.display='none'; $('tzoom').style.display=''; resizeCanvas(); };
 $('clear').onclick=()=>{ if (sel>=0){ NOTES[sel].curve=null; $('clear').disabled=true; $('copy').disabled=true; render(); scheduleShare(); } };
 function flashBtn(id,msg){ const b=$(id),t=b.textContent; b.textContent=msg; setTimeout(()=>b.textContent=t,1100); }
 // Copy stores the curve relative to its note's step; Paste re-anchors it (transpose
@@ -223,7 +240,7 @@ $('ctxmenu').addEventListener('click', e=>{ const act=e.target.getAttribute&&e.t
   hideCtx(); });
 document.addEventListener('pointerdown', e=>{ if (!$('ctxmenu').contains(e.target)) hideCtx(); });
 document.addEventListener('keydown', e=>{ if (e.key==='Escape') hideCtx(); });
-$('holder').addEventListener('scroll', hideCtx);
+$('holder').addEventListener('scroll', ()=>{ hideCtx(); if (mode==='roll') render(); });   // windowed roll: redraw the visible slice
 // help popup
 $('helpbtn').onclick=()=>{ const h=$('helppop'); h.hidden=!h.hidden; };
 $('helpclose').onclick=()=>{ $('helppop').hidden=true; };
@@ -231,6 +248,10 @@ document.addEventListener('pointerdown', e=>{ const h=$('helppop'); if (!h.hidde
 document.addEventListener('keydown', e=>{ if (e.key==='Escape') $('helppop').hidden=true; });
 $('rmin').onclick=()=>{ drawSpan=Math.max(10,drawSpan-8); resizeCanvas(); };
 $('rplus').onclick=()=>{ drawSpan=Math.min(60,drawSpan+8); resizeCanvas(); };   // 60 ≈ a bit over an octave (53-EDO) each side
+// Expand: scale up the roll (taller cells). Windowing means any zoom is safe — the
+// canvas stays viewport-sized; only the scroll range grows. 1 = fully expanded floor.
+$('tmin').onclick=()=>{ zoom=Math.max(1, Math.round((zoom-0.5)*10)/10); resizeCanvas(); };
+$('tplus').onclick=()=>{ zoom=Math.min(8, Math.round((zoom+0.5)*10)/10); resizeCanvas(); };
 // Drone/tala levels are LIVE: each routes through a per-session gain bus, so a
 // slider change scales the currently-playing drone / accent strums immediately.
 $('dronevol').oninput=e=>{ droneVol=Number(e.target.value); if (session&&session.dBus&&AC) session.dBus.gain.setTargetAtTime(droneVol,AC.currentTime,0.02); };
@@ -290,8 +311,11 @@ function stopPlayback(){ playing=false; playPos=null; if (rafId){ cancelAnimatio
 function tick(){ if (!playing||!AC) return; const el=Math.max(0, AC.currentTime-playStart);
   const pos=playFromU + el/secPerUnit();
   if (pos>=playToU){ playing=false; playPos=null; $('play').textContent='▶ '+playLabel(); render(); return; }
-  playPos=pos; render();
-  const hd=$('holder'); hd.scrollTop=Math.max(0, Math.min(CSSH-hd.clientHeight, Y(playPos)-hd.clientHeight*0.4));
+  playPos=pos;
+  // Auto-scroll so the playhead stays ~40% down the viewport (virtual coords). Setting
+  // scrollTop fires the scroll listener → render(); we also render() to be safe.
+  const hd=$('holder'); hd.scrollTop=Math.max(0, Math.min(Math.max(0,virtH()-hd.clientHeight), (PAD.t+pos*pxU())-hd.clientHeight*0.4));
+  render();
   rafId=requestAnimationFrame(tick); }
 function playLabel(){ return (markerA!=null&&markerB!=null) ? 'Play A–B' : 'Play phrase'; }
 // Per-session drone/tala gain buses (live volume). Created lazily on the current
@@ -315,7 +339,11 @@ function tala(a,dest,from,to,start,spu){ if (!talaMeasure||!talaAccents.length) 
     if (u<from-1e-6||u>=to) continue; strum(a,bus,start+(u-from)*spu); } } }
 // play note nn from when for dur, sounding the sub-range [uStart,uEnd] of its curve
 function voice(a,dest,when,dur,nn,uStart=0,uEnd=1){ const o=a.createOscillator(); o.type='triangle';
-  const g=a.createGain(); g.gain.setValueAtTime(0,when); g.gain.linearRampToValueAtTime(0.2,when+0.03); g.gain.setValueAtTime(0.2,when+dur-0.05); g.gain.linearRampToValueAtTime(0,when+dur);
+  // Attack/release scale with the note so a rapid note never has its hold point
+  // land before the attack peak (that produced click/pop on fast passages).
+  const atk=Math.min(0.012,dur*0.35), rel=Math.min(0.035,dur*0.45), hold=Math.max(when+atk, when+dur-rel);
+  const g=a.createGain(); g.gain.setValueAtTime(0.0001,when); g.gain.linearRampToValueAtTime(0.2,when+atk);
+  g.gain.setValueAtTime(0.2,hold); g.gain.linearRampToValueAtTime(0.0001,when+dur);
   if (nn.curve&&nn.curve.length>=2){ const N=64,arr=new Float32Array(N); for (let k=0;k<N;k++) arr[k]=freqOf(sampleCurve(nn.curve,uStart+(uEnd-uStart)*k/(N-1))); o.frequency.setValueCurveAtTime(arr,when,dur); }
   else o.frequency.setValueAtTime(freqOf(nn.step),when);
   o.connect(g); g.connect(dest); o.start(when); o.stop(when+dur+0.05); if (session) session.oscs.push(o); }
