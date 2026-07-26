@@ -12,6 +12,8 @@ import { encodeShareToken, decodeShareToken } from './core/share.js';
 import { VERSION, BUILD_DATE } from './version.js';
 import { midiToName } from './core/tuning.js';
 import { serializeInline } from './core/gamaka-inline.js';
+import { buildSequence } from './core/midi/sequence.js';
+import { writeSMF } from './core/midi/smf.js';
 
 const LS_KEY = 'ragamroll.srgm';
 const SHRUTI = [...new Set(BOXES.map(b => b.step))].sort((a, b) => a - b);   // 22 steps in an octave
@@ -23,6 +25,8 @@ let saPlay = null;     // Sa reference-pitch override (midi); null = auto (= saR
 let compTempo = 120;   // the composition's own tempo; the tempo slider is a multiplier of this
 let starts = [], gridPitches = [], stepMin = -26, stepMax = 66, srcText = '';
 let talaMeasure = 0, talaAccents = [];   // cycle length (length-units) + 1-based accent slots
+let docName = 'ragamroll';               // base filename for Save / Export MIDI
+let curRaga = '', curTala = '';          // readout
 
 function stepOfSemitone(semi){ const oct = Math.floor(semi / 12), pc = semi - oct * 12; return oct * EDO + defaultShrutiStep(pc); }
 function buildModel(src){
@@ -50,6 +54,9 @@ function buildModel(src){
   const tp = [...model.events].reverse().find(e => e.type === 'tala');   // accent strums (veena) at tala accents
   talaMeasure = (tp && tp.props && tp.props.measure > 0) ? tp.props.measure : 0;
   talaAccents = (tp && tp.props && Array.isArray(tp.props.accents)) ? tp.props.accents : [];
+  const rk = [...model.events].reverse().find(e => e.type === 'raga');
+  curRaga = rk ? String(rk.key[0]) : '';
+  curTala = tp ? `beat ${tp.props.beat}` : '';
   const seen = new Map();
   for (const n of NOTES){ if (!seen.has(n.step)) seen.set(n.step, { step: n.step, label: n.swara + n.octave }); }
   gridPitches = [...seen.values()].sort((a, b) => a.step - b.step);
@@ -65,7 +72,11 @@ function snapStep(s){ const oct = Math.floor(s / EDO), base = s - oct * EDO; let
 
 // ---------- canvas ----------
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
-let CSSW=0, CSSH=0, dpr=1, mode='roll', sel=-1, drawing=false, drawSpan=22, dragIdx=-1, timeZoom=2;
+let CSSW=0, CSSH=0, dpr=1, mode='roll', sel=-1, drawing=false, drawSpan=22, dragIdx=-1;
+// Roll is always fully expanded: scale time so the SHORTEST note cell is at least
+// CELL_PX tall — enough to render its swara glyph, mobile portrait included.
+const CELL_PX = 24;
+function pxPerUnit(){ if (!NOTES.length) return CELL_PX; const minDur=Math.min(...NOTES.map(n=>n.dur)); return CELL_PX/Math.max(0.25,minDur); }
 let playing=false, paused=false, playStart=0, rafId=0, playPos=null;   // playhead (length-units)
 let playFromU=0, playToU=0, pausedAt=0, pausedTo=0;                    // playback range + pause point
 let markerA=null, markerB=null, ctxTime=0;                            // A–B segment markers (length-units)
@@ -82,7 +93,7 @@ function tAtY(py){ const [a,b]=yStartEnd(), p=plot(); return a + (py-p.y)/p.h*(b
 function fit(){ const h=(window.visualViewport&&window.visualViewport.height)||window.innerHeight;
   document.getElementById('wrap').style.height=h+'px'; requestAnimationFrame(resizeCanvas); }
 function resizeCanvas(){ const hd=document.getElementById('holder'); const baseH=Math.max(150,hd.clientHeight);
-  CSSW=hd.clientWidth; CSSH = mode==='roll' ? Math.round(baseH*timeZoom) : baseH;
+  CSSW=hd.clientWidth; CSSH = mode==='roll' ? Math.max(baseH, Math.round(TOTAL*pxPerUnit()) + PAD.t + PAD.b) : baseH;
   dpr=Math.min(2,window.devicePixelRatio||1); cv.width=CSSW*dpr; cv.height=CSSH*dpr; cv.style.width=CSSW+'px'; cv.style.height=CSSH+'px';
   cv.style.touchAction = mode==='draw' ? 'none' : 'pan-y';   // draw: no scroll; roll: allow vertical scroll
   ctx.setTransform(dpr,0,0,dpr,0,0); render(); }
@@ -176,11 +187,13 @@ const $ = id => document.getElementById(id);
 let clipRel=null;   // copied curve, stored RELATIVE to its note's step (so it re-anchors on paste)
 function enterDraw(i){ sel=i; mode='draw';
   $('mode').textContent='draw the curve'; $('crumb').textContent='note '+(i+1)+' · '+NOTES[i].swara+NOTES[i].octave;
+  for (const b of ['clear','copy','paste','back']) $(b).style.display='';   // draw-only buttons appear
   $('back').disabled=false; $('clear').disabled=!NOTES[i].curve; $('copy').disabled=!NOTES[i].curve; $('paste').disabled=!clipRel;
-  $('play').textContent='▶ Play note'; $('rangectl').style.display=''; $('snapctl').style.display=''; $('tzoom').style.display='none'; resizeCanvas(); }
+  $('play').textContent='▶ Play note'; $('rangectl').style.display=''; $('snapctl').style.display=''; resizeCanvas(); }
 $('back').onclick=()=>{ mode='roll'; sel=-1; $('mode').textContent='select a note'; $('crumb').textContent='';
-  $('back').disabled=true; $('clear').disabled=true; $('copy').disabled=true; $('paste').disabled=true; $('read').textContent=''; $('play').textContent='▶ Play phrase';
-  $('rangectl').style.display='none'; $('snapctl').style.display='none'; $('tzoom').style.display=''; resizeCanvas(); };
+  for (const b of ['clear','copy','paste','back']) $(b).style.display='none';   // draw-only buttons hidden in roll mode
+  $('read').textContent=''; $('play').textContent='▶ Play phrase';
+  $('rangectl').style.display='none'; $('snapctl').style.display='none'; resizeCanvas(); };
 $('clear').onclick=()=>{ if (sel>=0){ NOTES[sel].curve=null; $('clear').disabled=true; $('copy').disabled=true; render(); scheduleShare(); } };
 function flashBtn(id,msg){ const b=$(id),t=b.textContent; b.textContent=msg; setTimeout(()=>b.textContent=t,1100); }
 // Copy stores the curve relative to its note's step; Paste re-anchors it (transpose
@@ -218,8 +231,6 @@ document.addEventListener('pointerdown', e=>{ const h=$('helppop'); if (!h.hidde
 document.addEventListener('keydown', e=>{ if (e.key==='Escape') $('helppop').hidden=true; });
 $('rmin').onclick=()=>{ drawSpan=Math.max(10,drawSpan-8); resizeCanvas(); };
 $('rplus').onclick=()=>{ drawSpan=Math.min(60,drawSpan+8); resizeCanvas(); };   // 60 ≈ a bit over an octave (53-EDO) each side
-$('tmin').onclick=()=>{ timeZoom=Math.max(1,timeZoom-0.5); resizeCanvas(); };
-$('tplus').onclick=()=>{ timeZoom=Math.min(12,timeZoom+0.5); resizeCanvas(); };
 // Drone/tala levels are LIVE: each routes through a per-session gain bus, so a
 // slider change scales the currently-playing drone / accent strums immediately.
 $('dronevol').oninput=e=>{ droneVol=Number(e.target.value); if (session&&session.dBus&&AC) session.dBus.gain.setTargetAtTime(droneVol,AC.currentTime,0.02); };
@@ -237,7 +248,8 @@ $('tempo').oninput=e=>{ tempoBpm=Math.round(compTempo*Number(e.target.value)); $
 // Sync the Sa / tempo controls to the current model (after a load/reload).
 function syncControls(){ $('sapick').value=saPlay==null?'':String(saPlay);
   const auto=$('sapick').querySelector('option[value=""]'); if (auto) auto.textContent='Auto ('+midiToName(saRef)+')';
-  $('tempo').value=String(Math.max(0.5,Math.min(2, tempoBpm/compTempo))); $('tempolbl').textContent=tempoBpm+' BPM'; }
+  $('tempo').value=String(Math.max(0.5,Math.min(2, tempoBpm/compTempo))); $('tempolbl').textContent=tempoBpm+' BPM';
+  $('rt').textContent = curRaga ? `${curRaga} · ${curTala}` : ''; }
 // Back to the app: carry the composition CURRENTLY open here into the app (it reads
 // the same localStorage key), so the app opens the same piece — not whatever it held.
 $('backapp').onclick=e=>{ e.preventDefault(); try{ localStorage.setItem(LS_KEY, srcText); }catch(_){}; location.href='./index.html'; };
@@ -248,7 +260,6 @@ $('editclose').onclick=()=>{ $('editdlg').hidden=true; };
 $('editdlg').addEventListener('pointerdown', e=>{ if (e.target===$('editdlg')) $('editdlg').hidden=true; });
 document.addEventListener('keydown', e=>{ if (e.key==='Escape' && !$('editdlg').hidden) $('editdlg').hidden=true; });
 $('editor').addEventListener('input', ()=>{ clearTimeout(editTimer); editTimer=setTimeout(onEditorInput, 300); });
-function autoZoom(){ const baseH=$('holder').clientHeight||600; timeZoom=Math.max(3, Math.min(12, (NOTES.length*64)/baseH)); }
 
 // ---------- audio ----------
 let AC=null, live=null;
@@ -381,12 +392,39 @@ async function loadComposition(){
   console.log(`[draw] loaded from localStorage (${ls.length} chars):\n%s`, ls);
   buildModel(ls); logNotes('after localStorage load');
 }
-// paste a share link/token in-page and load its melody + curves
-$('load').onclick=async()=>{ const inp=window.prompt('Paste a RagamRoll share link or pako token:'); if (!inp) return;
+// ---------- composition I/O: Open (examples / file / link), Save, Export MIDI ----------
+const baseName = s => String(s||'ragamroll').replace(/^.*[\/\\]/,'').replace(/\.[^.]+$/,'') || 'ragamroll';
+// Load a whole new composition into the roll + editor (and persist / reshare).
+async function loadSrc(text, name){ if (mode==='draw') $('back').click(); stopPlayback();
+  if (name) docName=name; buildModel(text); syncControls(); resizeCanvas(); render(); await rebuildShare(); }
+async function pasteLink(){ const inp=window.prompt('Paste a RagamRoll share link or pako token:'); if (!inp) return;
   const m=/pako:[A-Za-z0-9\-_]+/.exec(inp); const tok=m?m[0]:inp.trim().replace(/^#/,'');
-  try{ applyShared(await decodeShareToken(tok)); if (mode==='draw') $('back').click(); syncControls(); resizeCanvas(); rebuildShare(); }
-  catch(e){ window.alert('That isn’t a valid RagamRoll link — it should contain a pako: token.'); } };
+  try{ if (mode==='draw') $('back').click(); stopPlayback(); applyShared(await decodeShareToken(tok));
+    syncControls(); resizeCanvas(); render(); await rebuildShare(); }
+  catch(e){ window.alert('That isn’t a valid RagamRoll link — it should contain a pako: token.'); } }
+// Open ▾ menu (examples list + open file + paste link)
+function hideOpen(){ $('openmenu').style.display='none'; }
+$('openbtn').onclick=e=>{ e.stopPropagation(); const m=$('openmenu');
+  if (m.style.display==='block'){ hideOpen(); return; }
+  m.style.display='block'; const r=$('openbtn').getBoundingClientRect();
+  m.style.left=Math.max(6, Math.min(r.left, innerWidth-m.offsetWidth-8))+'px';
+  m.style.top=Math.max(6, r.top-m.offsetHeight-6)+'px'; };
+document.addEventListener('pointerdown', e=>{ const m=$('openmenu'); if (m.style.display==='block' && !m.contains(e.target) && e.target!==$('openbtn')) hideOpen(); });
+$('exsel').onchange=async e=>{ const name=e.target.value; e.target.value=''; if (!name) return; hideOpen();
+  try{ loadSrc(await fetch('./examples/'+name+'.srgm').then(r=>{ if(!r.ok) throw 0; return r.text(); }), name); }
+  catch(_){ window.alert('Could not load that example.'); } };
+$('openmenu').addEventListener('click', e=>{ const act=e.target.getAttribute('data-act'); if (!act) return; hideOpen();
+  if (act==='file') $('fileinput').click(); else if (act==='link') pasteLink(); });
+$('fileinput').onchange=async e=>{ const f=e.target.files[0]; e.target.value=''; if (f) loadSrc(await f.text(), baseName(f.name)); };
+// Save / Export MIDI (gamakas are audio-only; MIDI stays plain)
+function download(name, data, type){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([data],{type})); a.download=name; a.click(); URL.revokeObjectURL(a.href); }
+$('save').onclick=()=>download(docName+'.srgm', srcText, 'text/plain');
+$('exportmidi').onclick=()=>{ try{ download(docName+'.mid', writeSMF(buildSequence(parse(srcText))), 'audio/midi'); }catch(e){ window.alert('MIDI export failed: '+e.message); } };
 window.__rr = { notes:()=>NOTES, X, Y, starts:()=>starts, get shareLink(){ return shareLink; }, get playPos(){ return playPos; }, get markerA(){ return markerA; }, get markerB(){ return markerB; }, get talaMeasure(){ return talaMeasure; }, get talaAccents(){ return talaAccents; }, get droneVol(){ return droneVol; }, get talaVol(){ return talaVol; }, inlineSrc:()=>inlineSrc(), rebuild:()=>rebuildShare(), get src(){ return srcText; } };
+// Populate the examples dropdown from the manifest (same source as the app).
+fetch('./examples/index.json').then(r=>r.json()).then(list=>{
+  const sel=$('exsel'); for (const n of list){ const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); }
+}).catch(()=>{});
 Promise.all([
   fetch('./core/raga-base.json').then(r=>r.json()),
   fetch('./core/raga-ext.json').then(r=>r.json()).catch(()=>({})),
@@ -396,4 +434,4 @@ Promise.all([
     window.addEventListener('orientationchange',()=>setTimeout(fit,200));
     new MutationObserver(render).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
     if (!NOTES.length) $('mode').textContent='no notes — open a composition in the app first';
-    syncControls(); fit(); autoZoom(); resizeCanvas(); rebuildShare(); });
+    syncControls(); fit(); resizeCanvas(); rebuildShare(); });
