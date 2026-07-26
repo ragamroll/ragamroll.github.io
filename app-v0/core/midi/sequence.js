@@ -19,7 +19,11 @@ export function buildSequence(model, { ppq = 480 } = {}) {
     // Zero-duration notes are skipped: on/off at the same tick sorts off-first
     // (dropped by readers, stuck note on real players).
     if (!e.rest && dur > 0) {
-      notes.push({ pitch: e.midi, startTicks: cursor, durTicks: dur });
+      const note = { pitch: e.midi, startTicks: cursor, durTicks: dur };
+      // Carry the inline gamaka (note-relative 53-EDO curve) for the audio path;
+      // MIDI export ignores it, so .mid stays plain.
+      if (Array.isArray(e.gamaka) && e.gamaka.length >= 2) note.gamaka = e.gamaka;
+      notes.push(note);
     }
     cursor += dur;
   }

@@ -20,6 +20,16 @@ export function stringifyAttrs(obj) {
   return Object.entries(obj).map(([k, v]) => `${k}:${JSON.stringify(v)}`).join(', ');
 }
 
+// Sample a curve [[u,val]…] (increasing u in [0,1]) at position u, smoothstep
+// between points. Shared by the draw roll and the audio path so they sound alike.
+export function sampleCurve(c, u) {
+  if (c.length === 1) return c[0][1];
+  for (let k = 1; k < c.length; k++) {
+    if (u <= c[k][0]) { const [u0, s0] = c[k - 1], [u1, s1] = c[k]; let t = (u - u0) / Math.max(1e-6, u1 - u0); t = t * t * (3 - 2 * t); return s0 + (s1 - s0) * t; }
+  }
+  return c[c.length - 1][1];
+}
+
 const NOTE_HEAD = /^(>*|<*)([sSrRgGmMpPdDnNzZ])(\d*)$/;
 const isWs = (c) => c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === '\f' || c === '\v';
 

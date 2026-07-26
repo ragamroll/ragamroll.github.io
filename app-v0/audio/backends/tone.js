@@ -124,7 +124,17 @@ export function createToneBackend() {
         // e.freq: experimental 53-EDO retune; falls back to 12-TET midi.
         const freq = e.freq != null ? e.freq : midiToFreq(e.midi);
         tr.schedule((time) => {
-          dest.triggerAttackRelease(freq, e.durSec, time, vel);
+          // Inline gamaka: ramp the (mono) melody voice's frequency through the
+          // sampled curve instead of a fixed pitch. Linear ramps (strictly
+          // increasing times) — robust across browsers; same voice = same timbre.
+          if (e.gamaka && e.gamaka.length) {
+            const arr = e.gamaka, N = arr.length;
+            synth.triggerAttack(arr[0], time, vel);
+            for (let k = 1; k < N; k++) synth.frequency.linearRampToValueAtTime(arr[k], time + e.durSec * k / (N - 1));
+            synth.triggerRelease(time + e.durSec);
+          } else {
+            dest.triggerAttackRelease(freq, e.durSec, time, vel);
+          }
         }, e.startSec);
       }
       if (totalSec > 0) {
