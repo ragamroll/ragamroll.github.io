@@ -24,7 +24,7 @@ let saRef = 60, saFreq = midiToFreq(60), tempoBpm = 120, TOTAL = 0;
 let saPlay = null;     // Sa reference-pitch override (midi); null = auto (= saRef, the layout anchor)
 let compTempo = 120;   // the composition's own tempo; the tempo slider is a multiplier of this
 let starts = [], gridPitches = [], stepMin = -26, stepMax = 66, srcText = '';
-let talaMeasure = 0, talaAccents = [];   // cycle length (length-units) + 1-based accent slots
+let talaMeasure = 0, talaAccents = [], talaBeat = 0;   // cycle length + 1-based accent slots + akshara length (length-units)
 let docName = 'ragamroll';               // base filename for Save / Export MIDI
 let curRaga = '', curTala = '';          // readout
 
@@ -55,6 +55,7 @@ function buildModel(src){
   const tp = [...model.events].reverse().find(e => e.type === 'tala');   // accent strums (veena) at tala accents
   talaMeasure = (tp && tp.props && tp.props.measure > 0) ? tp.props.measure : 0;
   talaAccents = (tp && tp.props && Array.isArray(tp.props.accents)) ? tp.props.accents : [];
+  talaBeat = (tp && tp.props && tp.props.beat > 0) ? tp.props.beat : 0;
   const rk = [...model.events].reverse().find(e => e.type === 'raga');
   curRaga = rk ? String(rk.key[0]) : '';
   curTala = tp ? `beat ${tp.props.beat}` : '';
@@ -137,8 +138,19 @@ function render(){
   // Visible time window (roll: only the scrolled slice; draw: the whole note).
   const vLo = mode==='roll' ? (sTop()-PAD.t)/pxU()-1 : ta-1e-6;
   const vHi = mode==='roll' ? (sTop()+CSSH-PAD.t)/pxU()+1 : tb+1e-6;
+  // Tala grid (time axis): akshara pulse (faint), anga/accent starts (amber),
+  // avartana cycle boundaries (terra, bold) with a cycle number.
+  if (mode==='roll' && talaMeasure>0){
+    const gline=(t,col,w,al)=>{ if (t<vLo||t>vHi||t<-1e-6||t>TOTAL+1e-6) return; const y=Y(t);
+      ctx.strokeStyle=col; ctx.lineWidth=w; ctx.globalAlpha=al; ctx.beginPath(); ctx.moveTo(p.x,y); ctx.lineTo(p.x+p.w,y); ctx.stroke(); ctx.globalAlpha=1; };
+    if (talaBeat>0){ for (let t=Math.max(0,Math.floor(vLo/talaBeat)*talaBeat); t<=Math.min(TOTAL,vHi); t+=talaBeat) gline(t,muted,0.6,.13); }
+    for (let c=Math.floor(Math.max(0,vLo)/talaMeasure)*talaMeasure; c<=vHi && c<TOTAL; c+=talaMeasure){ for (const a of talaAccents) gline(c+(a-1), amber, 1, .3); }
+    for (let t=Math.max(0,Math.floor(vLo/talaMeasure)*talaMeasure); t<=Math.min(TOTAL,vHi); t+=talaMeasure){ gline(t,terra,1.8,.5);
+      if (t<TOTAL-1e-6){ const y=Y(t); ctx.fillStyle=terra; ctx.globalAlpha=.7; ctx.textAlign='left'; ctx.font='bold 10px '+cssvar('--mono'); ctx.fillText(String(Math.round(t/talaMeasure)+1), PAD.l+3, y+11); ctx.globalAlpha=1; } }
+  }
+  // Note onsets (irregular) — kept faint so the tala grid reads as the metric guide.
   for (let i=0;i<=NOTES.length;i++){ const t=(i<NOTES.length)?starts[i]:TOTAL; if (t<vLo||t>vHi) continue; const y=Y(t);
-    const sam=(t===0); ctx.strokeStyle=terra; ctx.globalAlpha=sam?.85:.22; ctx.lineWidth=sam?2.2:.8;
+    ctx.strokeStyle=terra; ctx.globalAlpha=(talaMeasure>0)?.12:.22; ctx.lineWidth=.7;
     ctx.beginPath(); ctx.moveTo(p.x,y); ctx.lineTo(p.x+p.w,y); ctx.stroke(); ctx.globalAlpha=1; }
   const colW = mode==='draw' ? 0 : Math.max(9, p.w/(stepMax-stepMin)*4);
   for (let i=0;i<NOTES.length;i++){ if (mode==='draw'&&i!==sel) continue;
