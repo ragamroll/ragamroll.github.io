@@ -51,6 +51,7 @@ function buildModel(src){
     return { step, dur: n.absLen, swara: n.swara.toUpperCase(), octave: n.octave, curve, tok: keep[i] };
   });
   starts = []; let t = 0; for (const n of NOTES){ starts.push(t); t += n.dur; } TOTAL = t || 1;
+  markerA = 0; markerB = TOTAL;   // segment bounds default to the whole piece; draggable in the gutter
   const tp = [...model.events].reverse().find(e => e.type === 'tala');   // accent strums (veena) at tala accents
   talaMeasure = (tp && tp.props && tp.props.measure > 0) ? tp.props.measure : 0;
   talaAccents = (tp && tp.props && Array.isArray(tp.props.accents)) ? tp.props.accents : [];
@@ -80,10 +81,11 @@ let zoom = 1;   // expand multiplier (1 = fully expanded: shortest cell = CELL_P
 function pxPerUnit(){ if (!NOTES.length) return CELL_PX; const minDur=Math.min(...NOTES.map(n=>n.dur)); return CELL_PX/Math.max(0.25,minDur); }
 function pxU(){ return pxPerUnit()*zoom; }                          // pixels per length-unit (virtual roll space)
 function virtH(){ return Math.round(PAD.t + TOTAL*pxU() + PAD.b); } // full virtual scroll height (roll)
+const yVirt = t => PAD.t + t*pxU();                                // roll virtual y (content coords, pre-scroll)
 const sTop = () => (mode==='roll' ? document.getElementById('holder').scrollTop : 0);
 let playing=false, paused=false, playStart=0, rafId=0, playPos=null;   // playhead (length-units)
 let playFromU=0, playToU=0, pausedAt=0, pausedTo=0;                    // playback range + pause point
-let markerA=null, markerB=null, ctxTime=0;                            // A–B segment markers (length-units)
+let markerA=0, markerB=0, ctxTime=0, markerDrag=null;                 // A–B segment markers (length-units) + drag state
 const cssvar = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
 const PAD = { l:40, r:12, t:24, b:12 };
 const plot = () => ({ x:PAD.l, y:PAD.t, w:CSSW-PAD.l-PAD.r, h:CSSH-PAD.t-PAD.b });
@@ -115,6 +117,17 @@ function render(){
   const p=plot(); ctx.clearRect(0,0,CSSW,CSSH);
   const amber=cssvar('--amber'),amberS=cssvar('--amberSoft'),teal=cssvar('--teal'),terra=cssvar('--terra'),hair=cssvar('--hair2'),muted=cssvar('--muted');
   ctx.font='11px '+cssvar('--mono'); const [sa,sb]=xRange();
+  // Octave bands (pitch axis): alternate shade per octave (53-EDO); Sa lines at
+  // multiples of EDO, with the MIDDLE Sa (step 0) drawn distinctly.
+  { const oLo=Math.floor(sa/EDO), oHi=Math.ceil(sb/EDO);
+    for (let k=oLo;k<oHi;k++){ if ((((k%2)+2)%2)!==0) continue; const x0=Math.max(p.x,X(k*EDO)), x1=Math.min(p.x+p.w,X((k+1)*EDO));
+      if (x1>x0){ ctx.fillStyle='rgba(216,161,63,.05)'; ctx.fillRect(x0,p.y,x1-x0,p.h); } }
+    for (let k=oLo;k<=oHi;k++){ const s=k*EDO; if (s<sa-1||s>sb+1) continue; const x=X(s);
+      ctx.strokeStyle=(k===0)?terra:amberS; ctx.lineWidth=(k===0)?2:1; ctx.globalAlpha=(k===0)?.5:.28;
+      ctx.beginPath(); ctx.moveTo(x,p.y); ctx.lineTo(x,p.y+p.h); ctx.stroke(); ctx.globalAlpha=1; } }
+  // Left gutter (holds the draggable A/B segment handles).
+  ctx.fillStyle=cssvar('--panel2'); ctx.globalAlpha=.55; ctx.fillRect(0,0,PAD.l,CSSH); ctx.globalAlpha=1;
+  ctx.strokeStyle=hair; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(PAD.l,0); ctx.lineTo(PAD.l,CSSH); ctx.stroke();
   if (mode==='draw'){ for (let oct=Math.floor(sa/EDO)-1; oct<=Math.floor(sb/EDO)+1; oct++) for (const sh of SHRUTI){ const s=oct*EDO+sh;
     if (s<sa||s>sb) continue; const x=X(s); ctx.strokeStyle=hair; ctx.globalAlpha=.5; ctx.beginPath(); ctx.moveTo(x,p.y); ctx.lineTo(x,p.y+p.h); ctx.stroke(); ctx.globalAlpha=1; } }
   for (const g of gridPitches){ if (g.step<sa-1||g.step>sb+1) continue; const x=X(g.step);
@@ -143,14 +156,21 @@ function render(){
     for (let k=0;k<c.length;k++){ const cx=X(c[k][1]),cy=Y(t0+(t1-t0)*c[k][0]);
       ctx.beginPath();ctx.arc(cx,cy,6.5,0,7);ctx.fillStyle=cssvar('--bg');ctx.fill();
       ctx.lineWidth=2;ctx.strokeStyle=teal;ctx.stroke(); ctx.beginPath();ctx.arc(cx,cy,2.4,0,7);ctx.fillStyle=teal;ctx.fill(); } }
-  if (mode==='roll'){   // A–B segment markers
-    if (markerA!=null&&markerB!=null){ const y0=Y(Math.min(markerA,markerB)), y1=Y(Math.max(markerA,markerB)); ctx.fillStyle='rgba(216,161,63,.07)'; ctx.fillRect(p.x,y0,p.w,y1-y0); }
-    const mk=(m,lbl)=>{ if (m==null) return; const y=Y(m); ctx.strokeStyle=amber; ctx.setLineDash([6,4]); ctx.lineWidth=1.6; ctx.beginPath(); ctx.moveTo(p.x,y); ctx.lineTo(p.x+p.w,y); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle=amber; ctx.textAlign='left'; ctx.font='bold 11px '+cssvar('--mono'); ctx.fillText(lbl,p.x+3,y-3); };
-    mk(markerA,'A'); mk(markerB,'B'); }
+  if (mode==='roll'){   // A–B segment: dashed bounds + shaded region (handles live in the gutter)
+    const lo=Math.min(markerA,markerB), hi=Math.max(markerA,markerB);
+    if (lo>0.01||hi<TOTAL-0.01){ const y0=Y(lo),y1=Y(hi); ctx.fillStyle='rgba(216,161,63,.07)'; ctx.fillRect(p.x,y0,p.w,y1-y0); }
+    const mk=(m)=>{ const y=Y(m); if (y<p.y-2||y>CSSH) return; ctx.strokeStyle=amber; ctx.globalAlpha=.8; ctx.setLineDash([6,4]); ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(PAD.l,y); ctx.lineTo(p.x+p.w,y); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha=1; };
+    mk(markerA); mk(markerB); }
   if (mode==='roll'&&playPos!=null){ const y=Y(playPos);   // playhead sweeps down as the roll plays
     ctx.strokeStyle=teal; ctx.globalAlpha=.95; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(p.x,y); ctx.lineTo(p.x+p.w,y); ctx.stroke(); ctx.globalAlpha=1;
     ctx.fillStyle=teal; ctx.beginPath(); ctx.moveTo(p.x,y-4); ctx.lineTo(p.x+7,y); ctx.lineTo(p.x,y+4); ctx.closePath(); ctx.fill(); }
+  positionHandles();
 }
+// Position the draggable A/B gutter handles at their marker times. The gutter is
+// absolute-in-content (scrolls with the roll), so handles sit at VIRTUAL y and stay
+// aligned with their marker lines as you scroll.
+function positionHandles(){ const g=$('gutter'); if (mode!=='roll'){ g.style.display='none'; return; } g.style.display='';
+  $('mkA').style.top=yVirt(markerA)+'px'; $('mkB').style.top=yVirt(markerB)+'px'; }
 function roundRect(x,y,w,h,r){ r=Math.min(r,w/2,h/2); ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
 function sampleCurve(c,u){ if (c.length===1) return c[0][1];
   for (let k=1;k<c.length;k++){ if (u<=c[k][0]){ const [u0,s0]=c[k-1],[u1,s1]=c[k]; let t=(u-u0)/Math.max(1e-6,u1-u0); t=t*t*(3-2*t); return s0+(s1-s0)*t; } }
@@ -227,7 +247,7 @@ cv.addEventListener('contextmenu', e=>{ if (mode!=='roll') return; e.preventDefa
   ctxNote=hitNote(x,y); ctxTime=Math.max(0,Math.min(TOTAL,tAtY(y))); const cm=$('ctxmenu');
   cm.querySelector('[data-act=copy]').disabled=!(ctxNote>=0&&NOTES[ctxNote].curve);
   cm.querySelector('[data-act=paste]').disabled=!(ctxNote>=0&&clipRel);
-  cm.querySelector('[data-act=clearmk]').disabled=(markerA==null&&markerB==null);
+  cm.querySelector('[data-act=clearmk]').disabled=(markerA<=0.01&&markerB>=TOTAL-0.01);
   cm.style.left=Math.min(e.clientX, window.innerWidth-170)+'px'; cm.style.top=Math.min(e.clientY, window.innerHeight-210)+'px'; cm.style.display='block'; });
 function hideCtx(){ $('ctxmenu').style.display='none'; }
 $('ctxmenu').addEventListener('click', e=>{ const act=e.target.getAttribute&&e.target.getAttribute('data-act'); if (!act){ hideCtx(); return; }
@@ -235,9 +255,16 @@ $('ctxmenu').addEventListener('click', e=>{ const act=e.target.getAttribute&&e.t
   else if (act==='paste'&&ctxNote>=0) pasteTo(ctxNote);
   else if (act==='seta'){ markerA=ctxTime; setPlayIdle(); render(); }
   else if (act==='setb'){ markerB=ctxTime; setPlayIdle(); render(); }
-  else if (act==='clearmk'){ markerA=markerB=null; setPlayIdle(); render(); }
+  else if (act==='clearmk'){ markerA=0; markerB=TOTAL; setPlayIdle(); render(); }
   else if (act==='playfrom'){ playFrom(ctxTime, (markerB!=null&&markerB>ctxTime)?markerB:TOTAL); }
   hideCtx(); });
+// Draggable A/B gutter handles — grab and slide to set the play segment bounds.
+function startMk(which){ return e=>{ e.preventDefault(); e.stopPropagation(); markerDrag=which; try{ $('mk'+which).setPointerCapture(e.pointerId); }catch(_){} }; }
+$('mkA').addEventListener('pointerdown', startMk('A'));
+$('mkB').addEventListener('pointerdown', startMk('B'));
+window.addEventListener('pointermove', e=>{ if (!markerDrag) return; const r=cv.getBoundingClientRect();
+  const t=Math.max(0,Math.min(TOTAL, tAtY(e.clientY-r.top))); if (markerDrag==='A') markerA=t; else markerB=t; setPlayIdle(); render(); });
+window.addEventListener('pointerup', ()=>{ markerDrag=null; });
 document.addEventListener('pointerdown', e=>{ if (!$('ctxmenu').contains(e.target)) hideCtx(); });
 document.addEventListener('keydown', e=>{ if (e.key==='Escape') hideCtx(); });
 $('holder').addEventListener('scroll', ()=>{ hideCtx(); if (mode==='roll') render(); });   // windowed roll: redraw the visible slice
@@ -317,7 +344,7 @@ function tick(){ if (!playing||!AC) return; const el=Math.max(0, AC.currentTime-
   const hd=$('holder'); hd.scrollTop=Math.max(0, Math.min(Math.max(0,virtH()-hd.clientHeight), (PAD.t+pos*pxU())-hd.clientHeight*0.4));
   render();
   rafId=requestAnimationFrame(tick); }
-function playLabel(){ return (markerA!=null&&markerB!=null) ? 'Play A–B' : 'Play phrase'; }
+function playLabel(){ const lo=Math.min(markerA,markerB), hi=Math.max(markerA,markerB); return (lo>0.01||hi<TOTAL-0.01) ? 'Play A–B' : 'Play phrase'; }
 // Per-session drone/tala gain buses (live volume). Created lazily on the current
 // session; drone()/strum() feed them at a FIXED nominal level and the bus gain
 // (= droneVol / talaVol) scales it live from the sliders.
@@ -360,8 +387,7 @@ function playFrom(from,to){ const a=ensureAudio(); if (!a) return; from=Math.max
   playing=true; paused=false; playStart=start; playFromU=from; playToU=to; playPos=from;
   $('play').textContent='⏸ Pause'; if (rafId) cancelAnimationFrame(rafId); rafId=requestAnimationFrame(tick); }
 function pausePlayback(){ if (!playing) return; pausedAt=playPos; pausedTo=playToU; stopPlayback(); paused=true; playPos=pausedAt; $('play').textContent='▶ Resume'; render(); }
-function segRange(){ const lo=(markerA!=null&&markerB!=null)?Math.min(markerA,markerB):(markerA!=null?markerA:0);
-  const hi=(markerA!=null&&markerB!=null)?Math.max(markerA,markerB):(markerB!=null?markerB:TOTAL); return [lo,hi]; }
+function segRange(){ return [Math.min(markerA,markerB), Math.max(markerA,markerB)]; }
 $('play').onclick=()=>{ if (mode==='draw'){ playNote(sel); return; }
   if (playing){ pausePlayback(); return; }
   if (paused){ playFrom(pausedAt,pausedTo); return; }
