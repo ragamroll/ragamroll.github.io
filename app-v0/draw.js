@@ -50,7 +50,15 @@ function buildModel(src){
     const curve = (Array.isArray(n.gamaka) && n.gamaka.length) ? n.gamaka.map(([u, d]) => [u, step + d]) : null;
     return { step, dur: n.absLen, swara: n.swara.toUpperCase(), octave: n.octave, curve, tok: keep[i] };
   });
-  starts = []; let t = 0; for (const n of NOTES){ starts.push(t); t += n.dur; } TOTAL = t || 1;
+  // True composition time: advance the cursor over rests too (silent gaps, no box),
+  // so the roll's time axis matches the audio and the tala grid — a leading/interior
+  // rest shows as empty time instead of being compressed out.
+  starts = []; let t = 0, ki = 0;
+  for (let o = 0; o < allNotes.length; o++){
+    if (ki < keep.length && keep[ki] === o){ starts.push(t); ki++; }
+    if (allNotes[o].absLen > 0) t += allNotes[o].absLen;
+  }
+  TOTAL = t || 1;
   markerA = 0; markerB = TOTAL;   // segment bounds default to the whole piece; draggable in the gutter
   const tp = [...model.events].reverse().find(e => e.type === 'tala');   // accent strums (veena) at tala accents
   talaMeasure = (tp && tp.props && tp.props.measure > 0) ? tp.props.measure : 0;
