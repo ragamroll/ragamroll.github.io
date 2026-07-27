@@ -57,9 +57,13 @@ button.mini{padding:.1rem .5rem;font-size:1rem;line-height:1;margin-left:.3rem}
 .tog select{background:var(--panel2);color:var(--ink);border:1px solid var(--hair);border-radius:6px;padding:.12rem .3rem;font-size:.8rem}
 .tog input[type=range]{width:72px;accent-color:var(--teal)}
 #tempolbl{min-width:3.6em}
-.editor{flex:0 0 auto;height:0;width:100%;box-sizing:border-box;resize:none;overflow:auto;
+#editpanel{flex:0 0 auto;height:0;overflow:hidden;display:flex;flex-direction:column;gap:.35rem}
+#edittools{flex:0 0 auto;display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;color:var(--muted);font-size:.8rem}
+#edittools input,#edittools select{background:var(--panel2);color:var(--ink);border:1px solid var(--hair);border-radius:6px;padding:.15rem .35rem;font-size:.82rem}
+#edittools input:disabled,#edittools select:disabled{opacity:.45}
+.editor{flex:1 1 auto;min-height:0;width:100%;box-sizing:border-box;resize:none;overflow:auto;
   font-family:var(--mono);font-size:.85rem;line-height:1.5;background:var(--panel2);color:var(--ink);
-  border:0 solid var(--hair);border-radius:8px;padding:0}
+  border:1px solid var(--hair);border-radius:8px;padding:.5rem .6rem}
 .editor:focus{outline:none;border-color:var(--amberSoft)}
 .mode{font-family:var(--mono);font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;color:var(--amber);border:1px solid var(--hair);border-radius:999px;padding:.14rem .5rem}
 .legend{flex:0 0 auto;display:flex;gap:1rem;flex-wrap:wrap;color:var(--muted);font-size:.76rem;align-items:center}
@@ -119,8 +123,16 @@ button.mini{padding:.1rem .5rem;font-size:1rem;line-height:1;margin-left:.3rem}
       <span class="spacer"></span>
       <span class="hint" id="read"></span>
     </div>
-    <textarea id="editor" class="editor" spellcheck="false" autocapitalize="off" autocomplete="off"
-              title="srgm notation (inline gamaka included) — edit freely; ctrl-z undoes typing"></textarea>
+    <div id="editpanel">
+      <div id="edittools">
+        <label class="tog">Raga <input id="ragasearch" list="ragalist" placeholder="type / pick…" autocomplete="off"></label>
+        <datalist id="ragalist"></datalist>
+        <label class="tog">Tala <select id="talasel"></select></label>
+        <span class="hint" id="editnote"></span>
+      </div>
+      <textarea id="editor" class="editor" spellcheck="false" autocapitalize="off" autocomplete="off"
+                title="srgm notation (inline gamaka included) — edit freely; ctrl-z undoes typing"></textarea>
+    </div>
   </div>
   <footer class="footer">
     <span class="copyright">© 2010 ragamroll</span>
@@ -128,6 +140,8 @@ button.mini{padding:.1rem .5rem;font-size:1rem;line-height:1;margin-left:.3rem}
   </footer>
 </div>
 <div class="ctxmenu" id="openmenu">
+  <button data-act="new">Blank / New</button>
+  <div class="ctxsep"></div>
   <label class="omlabel">example
     <select id="exsel"><option value="">— pick —</option></select>
   </label>

@@ -3,7 +3,7 @@
 // Pitch is 53-EDO (22-shruti): notes sit on their default shruti, snap targets
 // the 22 shrutis, audio is microtonal. Curves + the srgm source pack into a
 // #pako link (melody + gamakas).
-import { parse } from './core/parser.js';
+import { parse, TALA_MAP } from './core/parser.js';
 import { setRagas } from './core/raga-base.js';
 import { setRagaExt } from './core/raga-ext.js';
 import { midiToFreq } from './audio/schedule.js';
@@ -26,7 +26,9 @@ let compTempo = 120;   // the composition's own tempo; the tempo slider is a mul
 let starts = [], gridPitches = [], stepMin = -26, stepMax = 66, srcText = '';
 let talaMeasure = 0, talaAccents = [], talaBeat = 0;   // cycle length + 1-based accent slots + akshara length (length-units)
 let docName = 'ragamroll';               // base filename for Save / Export MIDI
-let curRaga = '', curTala = '';          // readout
+let curRaga = '', curTala = '', curTalaName = 'adi';   // readout + current tala name (for the picker)
+let defaultRaga = 'c12';                                 // set at boot to the first raga in the picker list
+const blankSrc = () => `Raga=${defaultRaga},0\nTala=adi,4\nO=5 L=1\n`;   // Blank/New skeleton (no notes)
 
 function stepOfSemitone(semi){ const oct = Math.floor(semi / 12), pc = semi - oct * 12; return oct * EDO + defaultShrutiStep(pc); }
 function buildModel(src){
@@ -67,6 +69,7 @@ function buildModel(src){
   const rk = [...model.events].reverse().find(e => e.type === 'raga');
   curRaga = rk ? String(rk.key[0]) : '';
   curTala = tp ? `beat ${tp.props.beat}` : '';
+  curTalaName = (srcText.match(/(?:^|\s)Tala=([A-Za-z0-9]+)/) || [])[1] || 'adi';
   const seen = new Map();
   for (const n of NOTES){ if (!seen.has(n.step)) seen.set(n.step, { step: n.step, label: n.swara + n.octave }); }
   gridPitches = [...seen.values()].sort((a, b) => a.step - b.step);
@@ -343,7 +346,18 @@ $('tempo').oninput=e=>{ tempoBpm=Math.round(compTempo*Number(e.target.value)); $
 function syncControls(){ $('sapick').value=saPlay==null?'':String(saPlay);
   const auto=$('sapick').querySelector('option[value=""]'); if (auto) auto.textContent='Auto ('+midiToName(saRef)+')';
   $('tempo').value=String(Math.max(0.5,Math.min(2, tempoBpm/compTempo))); $('tempolbl').textContent=tempoBpm+' BPM';
-  $('rt').textContent = curRaga ? `${curRaga} · ${curTala}` : ''; }
+  $('rt').textContent = curRaga ? `${curRaga} · ${curTala}` : '';
+  // Raga/tala pickers apply only to a BLANK piece (no notes) — lock once notes exist.
+  const blank = NOTES.length===0;
+  $('ragasearch').disabled=!blank; $('talasel').disabled=!blank;
+  $('editnote').textContent = blank ? 'pick a raga / tala, then type swaras below' : 'raga · tala locked while notes exist';
+  $('ragasearch').value = curRaga || ''; $('talasel').value = curTalaName; }
+// Set the Raga=/Tala= directive in the srgm (blank pieces only) and reload.
+function applyRagaTala(kind, name){ if (NOTES.length || !name) return; let s=srcText;
+  const nv = kind==='Raga' ? 'Raga='+name+',0' : 'Tala='+name+',4';
+  const re = kind==='Raga' ? /(^|\s)Raga=\S+/ : /(^|\s)Tala=\S+/;
+  s = re.test(s) ? s.replace(re, (m,p)=>p+nv) : nv+'\n'+s;
+  loadSrc(s, docName); setEditorH(editorH>10?editorH:Math.round((window.innerHeight||600)*0.35)); }
 // Back to the app: carry the composition CURRENTLY open here into the app (it reads
 // the same localStorage key), so the app opens the same piece — not whatever it held.
 $('backapp').onclick=e=>{ e.preventDefault(); try{ localStorage.setItem(LS_KEY, srcText); }catch(_){}; location.href='./index.html'; };
@@ -351,13 +365,15 @@ $('backapp').onclick=e=>{ e.preventDefault(); try{ localStorage.setItem(LS_KEY, 
 // toggle. Native ctrl-z works for typing; edits reparse (debounced) → rebuild roll.
 let editorH=0, gripDrag=null;
 function setEditorH(h){ editorH=Math.max(0, Math.min(h, Math.round((window.innerHeight||600)*0.6)));
-  const t=$('editor'); t.style.height=editorH+'px'; t.style.padding=editorH>0?'.5rem .6rem':'0'; t.style.borderWidth=editorH>0?'1px':'0';
-  if (editorH>0 && document.activeElement!==t) t.value=srcText;
+  $('editpanel').style.height=editorH+'px';
+  if (editorH>0 && document.activeElement!==$('editor')) $('editor').value=srcText;
   requestAnimationFrame(resizeCanvas); }
 $('grip').addEventListener('pointerdown', e=>{ e.preventDefault(); try{ $('grip').setPointerCapture(e.pointerId); }catch(_){}; gripDrag={y:e.clientY,h:editorH,moved:false}; });
 $('grip').addEventListener('pointermove', e=>{ if (!gripDrag) return; const dy=gripDrag.y-e.clientY; if (Math.abs(dy)>3) gripDrag.moved=true; setEditorH(gripDrag.h+dy); });
 $('grip').addEventListener('pointerup', ()=>{ if (gripDrag&&!gripDrag.moved) setEditorH(editorH>10?0:Math.round((window.innerHeight||600)*0.35)); gripDrag=null; });
 $('editor').addEventListener('input', ()=>{ clearTimeout(editTimer); editTimer=setTimeout(onEditorInput, 300); });
+$('ragasearch').onchange=()=>applyRagaTala('Raga', $('ragasearch').value.trim());
+$('talasel').onchange=()=>applyRagaTala('Tala', $('talasel').value);
 // Fullscreen toggle — on mobile this hides the browser address bar.
 $('fsbtn').onclick=()=>{ const d=document, el=d.documentElement;
   if (!d.fullscreenElement && !d.webkitFullscreenElement){ (el.requestFullscreen||el.webkitRequestFullscreen||(()=>{})).call(el); }
@@ -523,7 +539,8 @@ $('exsel').onchange=async e=>{ const name=e.target.value; e.target.value=''; if 
   try{ loadSrc(await fetch('./examples/'+name+'.srgm').then(r=>{ if(!r.ok) throw 0; return r.text(); }), name); }
   catch(_){ window.alert('Could not load that example.'); } };
 $('openmenu').addEventListener('click', e=>{ const act=e.target.getAttribute('data-act'); if (!act) return; hideOpen();
-  if (act==='file') $('fileinput').click(); else if (act==='link') pasteLink(); });
+  if (act==='new'){ loadSrc(blankSrc(), 'untitled'); setEditorH(Math.round((window.innerHeight||600)*0.35)); }
+  else if (act==='file') $('fileinput').click(); else if (act==='link') pasteLink(); });
 $('fileinput').onchange=async e=>{ const f=e.target.files[0]; e.target.value=''; if (f) loadSrc(await f.text(), baseName(f.name)); };
 // Save / Export MIDI (gamakas are audio-only; MIDI stays plain)
 function download(name, data, type){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([data],{type})); a.download=name; a.click(); URL.revokeObjectURL(a.href); }
@@ -538,7 +555,11 @@ Promise.all([
   fetch('./core/raga-base.json').then(r=>r.json()),
   fetch('./core/raga-ext.json').then(r=>r.json()).catch(()=>({})),
   fetch('./core/raga-add.json').then(r=>r.json()).catch(()=>({})),
-]).then(([base,ext,add])=>{ setRagas({ ...base, ...add }); setRagaExt(ext); return loadComposition(); })
+]).then(([base,ext,add])=>{ const ragas={ ...base, ...add }; setRagas(ragas); setRagaExt(ext);
+    const ragaNames=Object.keys(ragas).filter(n=>!/^mela_\d+$/i.test(n)).sort((a,b)=>a.toLowerCase().localeCompare(b.toLowerCase())); defaultRaga=ragaNames[0]||'c12';
+    const rl=$('ragalist'); for (const n of ragaNames){ const o=document.createElement('option'); o.value=n; rl.appendChild(o); }
+    const ts=$('talasel'); for (const n of Object.keys(TALA_MAP)){ const o=document.createElement('option'); o.value=n; o.textContent=n; ts.appendChild(o); }
+    return loadComposition(); })
   .then(()=>{ window.addEventListener('resize',fit); if (window.visualViewport) window.visualViewport.addEventListener('resize',fit);
     window.addEventListener('orientationchange',()=>setTimeout(fit,200));
     new MutationObserver(render).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});

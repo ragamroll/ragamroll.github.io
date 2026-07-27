@@ -1,0 +1,22 @@
+T80
+Raga=anandabhairavi,0
+Tala=adi,4
+O=5 L=1
+n{gamaka:[[0,8],[0.61,0],[1,0]]} d n >s s2 <n >s 
+g{gamaka:[[0,-14],[0.01,-14],[0.55,0],[1,0]]} r s <n n d p m 
+p p p d n d p m
+m p m p g r s2 
+s2 <n2 >s g g m
+g m p m g r s2
+p2 m g m2 g r
+g2 r <n >s2 s2
+p p m g m m g r
+g r r <n >s2 s2
+s g r g m g m2
+p n d n p d n >s
+g r r <n n d p m
+
+p p p d n d p m
+m p m p g r s2 
+s2 <n2 >s g  g m
+g m p m g r s2
