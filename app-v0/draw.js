@@ -75,6 +75,10 @@ function buildModel(src){
   if (!(stepMax > stepMin)) { stepMin = -26; stepMax = 66; }
 }
 const freqOf = step => stepFreq(saFreq, step);
+// Is a swara (53-EDO step from Sa) nearest a black piano key, given the chosen Sa?
+// 53-EDO shrutis don't align exactly with 12-EDO — this snaps to the nearest semitone.
+const BLACK_PC = new Set([1,3,6,8,10]);
+function keyIsBlack(step){ const saMidi=(saPlay==null?saRef:saPlay); const m=Math.round(saMidi+12*step/EDO); return BLACK_PC.has(((m%12)+12)%12); }
 const secPerUnit = () => 30 / tempoBpm;
 function snapStep(s){ const oct = Math.floor(s / EDO), base = s - oct * EDO; let best = SHRUTI[0], bd = Infinity;
   for (const sh of [...SHRUTI, EDO]){ const d = Math.abs(base - sh); if (d < bd){ bd = d; best = sh; } }
@@ -141,7 +145,14 @@ function render(){
     if (s<sa||s>sb) continue; const x=X(s); ctx.strokeStyle=hair; ctx.globalAlpha=.5; ctx.beginPath(); ctx.moveTo(x,p.y); ctx.lineTo(x,p.y+p.h); ctx.stroke(); ctx.globalAlpha=1; } }
   for (const g of gridPitches){ if (g.step<sa-1||g.step>sb+1) continue; const x=X(g.step);
     ctx.strokeStyle=hair; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x,p.y); ctx.lineTo(x,p.y+p.h); ctx.stroke();
-    ctx.fillStyle=muted; ctx.textAlign='center'; ctx.fillText(g.label, x, p.y-8); }
+    // Header label as a piano-key chip: dark = black key, light = white key
+    // (nearest 12-EDO semitone to the chosen Sa).
+    const black=keyIsBlack(g.step); ctx.font='bold 10px '+cssvar('--mono');
+    const cw=ctx.measureText(g.label).width+8, ch=14, cx=x-cw/2, cy=p.y-19;
+    ctx.fillStyle=black?'#20242b':'#efe6d0'; roundRect(cx,cy,cw,ch,4); ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,.25)'; ctx.lineWidth=.5; ctx.stroke();
+    ctx.fillStyle=black?'#efe6d0':'#20242b'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(g.label, x, cy+ch/2+.5); ctx.textBaseline='alphabetic';
+    ctx.font='11px '+cssvar('--mono'); }
   const [ta,tb]=yStartEnd();
   // Visible time window (roll: only the scrolled slice; draw: the whole note).
   const vLo = mode==='roll' ? (sTop()-PAD.t)/pxU()-1 : ta-1e-6;
@@ -149,12 +160,22 @@ function render(){
   // Tala grid (time axis): akshara pulse (faint), anga/accent starts (amber),
   // avartana cycle boundaries (terra, bold) with a cycle number.
   if (mode==='roll' && talaMeasure>0){
+    const angOff=talaAccents.map(a=>a-1);                                   // 0-based anga-start offsets in a cycle
+    const angs=angOff.map((o,i)=>[o, i+1<angOff.length?angOff[i+1]:talaMeasure]);   // [start,end) per anga
+    const glyphOf=(s,e)=>{ const k=talaBeat>0?Math.round((e-s)/talaBeat):0; return k===2?'O':(k===1?'U':'I'); };  // O drutam · U anudrutam · I laghu
     const gline=(t,col,w,al)=>{ if (t<vLo||t>vHi||t<-1e-6||t>TOTAL+1e-6) return; const y=Y(t);
       ctx.strokeStyle=col; ctx.lineWidth=w; ctx.globalAlpha=al; ctx.beginPath(); ctx.moveTo(p.x,y); ctx.lineTo(p.x+p.w,y); ctx.stroke(); ctx.globalAlpha=1; };
-    if (talaBeat>0){ for (let t=Math.max(0,Math.floor(vLo/talaBeat)*talaBeat); t<=Math.min(TOTAL,vHi); t+=talaBeat) gline(t,muted,0.6,.13); }
-    for (let c=Math.floor(Math.max(0,vLo)/talaMeasure)*talaMeasure; c<=vHi && c<TOTAL; c+=talaMeasure){ for (const a of talaAccents) gline(c+(a-1), amber, 1, .3); }
+    const c0=Math.floor(Math.max(0,vLo)/talaMeasure)*talaMeasure;
+    // Anga part bands — alternate shade, like the octave bands but on the time axis.
+    for (let c=c0; c<vHi && c<TOTAL; c+=talaMeasure){ angs.forEach(([s,e],i)=>{ if (i%2!==0) return;
+      const y0=Math.max(p.y,Y(c+s)), y1=Math.min(p.y+p.h,Y(Math.min(c+e,TOTAL))); if (y1>y0){ ctx.fillStyle='rgba(70,195,154,.05)'; ctx.fillRect(p.x,y0,p.w,y1-y0); } }); }
+    if (talaBeat>0){ for (let t=Math.max(0,Math.floor(vLo/talaBeat)*talaBeat); t<=Math.min(TOTAL,vHi); t+=talaBeat) gline(t,muted,0.6,.13); }  // akshara pulse
+    // Anga starts (accent lines) + I/O/U glyph.
+    for (let c=c0; c<vHi && c<TOTAL; c+=talaMeasure){ angs.forEach(([s,e])=>{ const t=c+s; if (t>TOTAL) return; gline(t,amber,1,.3);
+      if (t>=vLo&&t<=vHi){ const y=Y(t); ctx.fillStyle=amber; ctx.globalAlpha=.8; ctx.textAlign='left'; ctx.font='bold 10px '+cssvar('--mono'); ctx.fillText(glyphOf(s,e), PAD.l+3, y-4); ctx.globalAlpha=1; ctx.font='11px '+cssvar('--mono'); } }); }
+    // Avartana (cycle) boundaries + number.
     for (let t=Math.max(0,Math.floor(vLo/talaMeasure)*talaMeasure); t<=Math.min(TOTAL,vHi); t+=talaMeasure){ gline(t,terra,1.8,.5);
-      if (t<TOTAL-1e-6){ const y=Y(t); ctx.fillStyle=terra; ctx.globalAlpha=.7; ctx.textAlign='left'; ctx.font='bold 10px '+cssvar('--mono'); ctx.fillText(String(Math.round(t/talaMeasure)+1), PAD.l+3, y+11); ctx.globalAlpha=1; } }
+      if (t<TOTAL-1e-6){ const y=Y(t); ctx.fillStyle=terra; ctx.globalAlpha=.75; ctx.textAlign='left'; ctx.font='bold 10px '+cssvar('--mono'); ctx.fillText(String(Math.round(t/talaMeasure)+1), PAD.l+3, y+12); ctx.globalAlpha=1; ctx.font='11px '+cssvar('--mono'); } }
   }
   // Note onsets (irregular) — kept faint so the tala grid reads as the metric guide.
   for (let i=0;i<=NOTES.length;i++){ const t=(i<NOTES.length)?starts[i]:TOTAL; if (t<vLo||t>vHi) continue; const y=Y(t);
@@ -165,11 +186,14 @@ function render(){
     if (mode==='roll'){ const s0=starts[i], s1=s0+NOTES[i].dur; if (s1<vLo||s0>vHi) continue; }   // cull off-screen notes
     const nn=NOTES[i], y0=Y(starts[i]), y1=Y(starts[i]+nn.dur), x=X(nn.step), selNow=i===sel;
     const w = mode==='draw' ? Math.max(30,p.w*0.14) : colW;
-    ctx.fillStyle = selNow?'rgba(216,161,63,.16)':'rgba(216,161,63,.07)';
+    // Roll note boxes are piano-key colored (dark = black key, light = white key);
+    // draw mode keeps the amber highlight for the note being edited.
+    const black = mode==='roll' && keyIsBlack(nn.step);
+    ctx.fillStyle = mode==='draw' ? (selNow?'rgba(216,161,63,.16)':'rgba(216,161,63,.07)') : (black?'rgba(32,36,43,.82)':'rgba(239,230,208,.85)');
     ctx.strokeStyle = selNow?amber:amberS; ctx.lineWidth=selNow?2:1.3; ctx.setLineDash(mode==='draw'?[5,4]:[]);
     roundRect(x-w/2, y0+1, w, Math.max(3,y1-y0-2), 5); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
     if (nn.curve) drawCurve(nn, starts[i], starts[i]+nn.dur, teal, mode==='draw'?3:2);
-    if (mode!=='draw'){ ctx.fillStyle=amber; ctx.textAlign='center'; ctx.fillText(nn.swara, x, y0+13); } }
+    if (mode!=='draw'){ ctx.fillStyle = black?'#efe6d0':'#20242b'; ctx.textAlign='center'; ctx.fillText(nn.swara, x, y0+13); } }
   if (mode==='draw'&&!NOTES[sel].curve){ ctx.fillStyle=muted; ctx.textAlign='center'; ctx.font='13px '+cssvar('--sans');
     ctx.fillText('drag top→bottom to draw the pitch', p.x+p.w/2, p.y+p.h/2); }
   if (mode==='draw'&&NOTES[sel].curve&&!drawing){ const c=NOTES[sel].curve,[t0,t1]=yStartEnd();
