@@ -1,0 +1,33 @@
+% Copyright (c) 2012, Mani Balasubramanian <ragamroll@gmail.com>
+% All rights reserved.
+
+% Lines starting with % are comments and are ignored
+
+% Swaravali
+
+% Jfugue tempo and instrument
+T80 I[ALTO_SAX] 
+
+% All talas in their default jati are supported
+Tala=adi,1
+
+% A limited set of ragas are only supported. However using C12 notation
+% all ragas can be notated. 
+
+% This is Raga Mayamalavagowla, pitch of Sa is set to C
+Raga=Mayamalavagowla,0
+
+% Set the octave to 5 and unit length to 1
+L=1 O=5
+
+% empty measure to get prepared
+m p d{gamaka:[[0,-5],[0.17,-5],[0.54,0],[1,0]]} >s{gamaka:[[0,-17],[0,-17],[0.13,0],[1,0]]} s r{gamaka:[[0,-5],[0.17,-5],[0.54,0],[1,0]]}
+r{gamaka:[[0,-5],[0.17,-5],[0.54,0],[1,0]]} s <d{gamaka:[[0,17],[0.37,0],[1,0]]} p m p
+r m p d{gamaka:[[0,-5],[0.17,-5],[0.54,0],[1,0]]} m p
+d{gamaka:[[0,-5],[0.17,-5],[0.54,0],[1,0]]} p m g r s
+s r{gamaka:[[0,-5],[0.17,-5],[0.54,0],[1,0]]} m2  g r
+s r{gamaka:[[0,-5],[0.17,-5],[0.54,0],[1,0]]} g r s2
+r{gamaka:[[0,-5],[0.17,-5],[0.54,0],[1,0]]} m p d{gamaka:[[0,-5],[0.17,-5],[0.54,0],[1,0]]} m p
+d{gamaka:[[0,-5],[0.17,-5],[0.54,0],[1,0]]} p m g r s
+s r{gamaka:[[0,-5],[0.17,-5],[0.54,0],[1,0]]} m2  g r
+s r{gamaka:[[0,-5],[0.17,-5],[0.54,0],[1,0]]} g r s2
