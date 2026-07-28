@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audio Pitch Curve & Data Extractor</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #121214;
+      color: #e0e0e0;
+      margin: 0;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    h1 {
+      margin-top: 0;
+      font-size: 1.5rem;
+      color: #ffffff;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    input[type="file"] {
+      color: #ccc;
+    }
+
+    button {
+      background-color: #00e5ff;
+      color: #000;
+      border: none;
+      padding: 8px 16px;
+      font-weight: bold;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    button:hover {
+      background-color: #00b3cc;
+    }
+
+    button:disabled {
+      background-color: #444;
+      color: #888;
+      cursor: not-allowed;
+    }
+
+    .status {
+      font-size: 0.9rem;
+      color: #aaa;
+      margin-bottom: 12px;
+      min-height: 1.2em;
+    }
+
+    #scroll {
+      max-width: 100%;
+      max-height: 74vh;
+      overflow: auto;
+      border: 1px solid #333;
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      background-color: #1a1a1e;
+    }
+    #scroll canvas { display: block; }
+    #hdr { position: sticky; top: 0; z-index: 2; background-color: #1a1a1e; }
+
+    #tools2, #tools4 { font-size: 0.85rem; color: #bbb; gap: 8px; }
+    #tools4 .grp { gap: 6px; }
+    #tools2 .grp { display: inline-flex; align-items: center; gap: 4px; }
+    #tools2 button.z { padding: 3px 9px; font-size: 0.9rem; line-height: 1; }
+    button.z.active { background: #ffb454; }
+    #tools2 select {
+      background: #222; color: #ddd; border: 1px solid #444;
+      padding: 5px 6px; border-radius: 4px; font-size: 0.85rem;
+    }
+    #stage { display: flex; gap: 12px; align-items: flex-start; max-width: 100%; }
+    #notewrap { width: 300px; position: sticky; top: 8px; }
+    #notation {
+      width: 100%; box-sizing: border-box; height: 70vh; resize: vertical;
+      background: #16161a; color: #d8d8d8; border: 1px solid #333; border-radius: 6px;
+      font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.85rem; padding: 8px;
+    }
+    @media (max-width: 760px) {
+      #stage { flex-direction: column; align-items: center; }
+      #notewrap { width: 440px; max-width: 100%; position: static; }
+      #notation { height: 120px; }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Audio Pitch Curve & Data Extractor</h1>
+
+  <div class="controls">
+    <input type="file" id="audio-input" accept="audio/*">
+    <button id="download-btn" disabled>Download CSV (Time vs Pitch)</button>
+    <button id="open-btn" disabled>Open in RagamRoll</button>
+  </div>
+
+  <div class="status" id="status-msg">Select an audio file to begin...</div>
+  <div class="status" id="sa-info"></div>
+
+  <div class="controls" id="tools2">
+    <span class="grp">Raga
+      <select id="raga-sel"><option value="">— none —</option></select>
+    </span>
+    <span class="grp">Pitch
+      <button class="z" id="zxo">−</button><button class="z" id="zxi">+</button>
+    </span>
+    <span class="grp">Time
+      <button class="z" id="zyo">−</button><button class="z" id="zyi">+</button>
+    </span>
+    <button class="z" id="zreset">Reset</button>
+    <span class="grp">Notes <b id="notecount">0</b>
+      <button class="z" id="seedbtn">Seed markers</button>
+      <button class="z" id="selfuse">Select ↕ to fuse</button>
+      <button class="z" id="undonote">Undo</button><button class="z" id="clearnotes">Clear</button>
+    </span>
+    <label class="grp"><input type="checkbox" id="snapcross" checked> snap to crossing</label>
+    <label class="grp"><input type="checkbox" id="gamakas"> gamaka from curve</label>
+  </div>
+
+  <div class="controls" id="tools3">
+    <span class="grp">🎙 Audio
+      <input type="range" id="audiovol" min="0" max="1" step="0.01" value="1">
+      <button class="z" id="audiomute" data-on="1">🔊</button>
+    </span>
+    <span class="grp">🎵 Notes
+      <input type="range" id="notevol" min="0" max="1" step="0.01" value="0.5">
+      <button class="z" id="notemute" data-on="1">🔊</button>
+    </span>
+  </div>
+
+  <div class="controls" id="tools4">
+    <span class="grp">Clarity ≥
+      <input type="range" id="claritythr" min="0.5" max="0.95" step="0.01" value="0.85">
+      <b id="claritylbl">0.85</b>
+    </span>
+    <span class="grp">Bridge gap
+      <input type="range" id="bridgems" min="0" max="500" step="10" value="250">
+      <b id="bridgelbl">250ms</b>
+    </span>
+  </div>
+
+  <div id="stage">
+    <div id="scroll"><canvas id="hdr" width="440" height="24"></canvas><canvas id="pitch-canvas" width="440" height="760"></canvas></div>
+    <div id="notewrap">
+      <div class="status" style="margin:0 0 6px; display:flex; gap:8px; align-items:center">
+        <button id="rewind-btn" disabled title="Rewind to start">⏮</button>
+        <button id="play-btn" disabled>▶ Play</button>
+        Notation
+        <button class="z" id="regennotation" title="Regenerate text from the drawn notes">↻ from notes</button>
+        <button class="z" id="applynotation" title="Parse the text into notes">notes ← text</button>
+      </div>
+      <textarea id="notation" placeholder="Draw notes (Seed / tap / gutter / drag a crossing to insert) — srgm appears here. Editable; ↻ resyncs."></textarea>
+    </div>
+  </div>
+
+  <script type="module">
+    // ESM.sh resolves the package automatically and provides valid CORS headers
+    import { PitchDetector } from 'https://esm.sh/pitchy@4.1.0';
+    // Local, same-origin: pack the generated srgm into a #pako: link that draw.html opens.
+    import { encodeShareToken } from './core/share.js';
+    // The 22 shrutis (53-EDO steps in an octave) for the pitch-axis grid.
+    import { BOXES, EDO, nameForSlot, defaultShrutiStep } from './core/shruti.js';
+    // Parse pasted srgm back into notes (two-way notation).
+    import { parse } from './core/parser.js';
+    // Raga data — to emphasize a chosen raga's swaras among the 22 lines and
+    // name each by the LETTER the raga assigns (a shared shruti like step 14 is
+    // R3b or G2b depending on whether the raga uses it as Ri or Ga).
+    import { setRagas, getRagas } from './core/raga-base.js';
+    import { setRagaExt } from './core/raga-ext.js';
+    import { ragaVarieties, presentLetters, defaultAb } from './core/raga-shruti.js';
+    import { stepForVariety } from './core/melakarta.js';
+
+    const fileInput = document.getElementById('audio-input');
+    const playBtn = document.getElementById('play-btn');
+    const rewindBtn = document.getElementById('rewind-btn');
+    const downloadBtn = document.getElementById('download-btn');
+    const openBtn = document.getElementById('open-btn');
+    const statusMsg = document.getElementById('status-msg');
+    const canvas = document.getElementById('pitch-canvas');
+    const ctx = canvas.getContext('2d');
+
+    let pitchDataPoints = [];   // raw detector output (CSV exports this, unchanged)
+    let cleanedPoints = [];     // octave-corrected + smoothed + gap-bridged (canvas + srgm)
+    let audioDuration = 0;
+
+    // Playback: an <audio> element off the file's object URL drives a playhead
+    // that traverses the pitch curve's time axis in sync (rAF reads currentTime).
+    const player = new Audio();
+    let objectUrl = null;
+    let rafId = 0;
+    const saInfo = document.getElementById('sa-info');
+
+    // Sa reference pitch -> MIDI note name. Ragamroll convention: MIDI 60 = C5
+    // (the O=5 middle octave), so octave = floor(midi/12).
+    const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+    function noteName(hz) {
+      if (!(hz > 0)) return '';
+      const midi = 69 + 12 * Math.log2(hz / 440);
+      const r = Math.round(midi), cents = Math.round((midi - r) * 100);
+      const name = NOTE_NAMES[((r % 12) + 12) % 12] + Math.floor(r / 12);
+      return name + (cents ? (cents > 0 ? ` +${cents}¢` : ` ${cents}¢`) : '');
+    }
+    function refreshSaInfo() {
+      saInfo.textContent = saRefHz > 0
+        ? `Sa (step 0) = ${saRefHz.toFixed(1)} Hz ≈ ${noteName(saRefHz)}  — first voiced frame`
+        : '';
+    }
+
+    // Persist the loaded session (audio blob + analysis) in IndexedDB so a page
+    // reload restores the curve and playback instead of losing everything.
+    const IDB_NAME = 'pitchy', IDB_STORE = 'sessions', IDB_KEY = 'last';
+    function idbOpen() {
+      return new Promise((res, rej) => {
+        const r = indexedDB.open(IDB_NAME, 1);
+        r.onupgradeneeded = () => r.result.createObjectStore(IDB_STORE);
+        r.onsuccess = () => res(r.result);
+        r.onerror = () => rej(r.error);
+      });
+    }
+    async function idbPut(val) {
+      const db = await idbOpen();
+      return new Promise((res, rej) => {
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).put(val, IDB_KEY);
+        tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error);
+      });
+    }
+    async function idbGet() {
+      const db = await idbOpen();
+      return new Promise((res, rej) => {
+        const tx = db.transaction(IDB_STORE, 'readonly');
+        const rq = tx.objectStore(IDB_STORE).get(IDB_KEY);
+        rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error);
+      });
+    }
+
+    fileInput.addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      statusMsg.textContent = 'Decoding audio file...';
+      downloadBtn.disabled = true;
+      openBtn.disabled = true;
+      playBtn.disabled = true; rewindBtn.disabled = true;
+      stopPlayhead();
+      player.pause();
+      if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null; }
+      pitchDataPoints = [];
+      cleanedPoints = [];
+      audioDuration = 0;
+
+      objectUrl = URL.createObjectURL(file);
+      player.src = objectUrl;
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+        statusMsg.textContent = 'Analyzing pitch contours...';
+
+        const channelData = audioBuffer.getChannelData(0);
+        const sampleRate = audioBuffer.sampleRate;
+
+        const frameSize = 2048;
+        const hopSize = 512;
+        
+        const detector = PitchDetector.forFloat32Array(frameSize);
+
+        for (let offset = 0; offset < channelData.length - frameSize; offset += hopSize) {
+          const inputBuffer = channelData.subarray(offset, offset + frameSize);
+          const [frequency, clarity] = detector.findPitch(inputBuffer, sampleRate);
+
+          const timeInSeconds = offset / sampleRate;
+
+          // Store the range-valid frequency + clarity for EVERY frame; the
+          // clarity gate is applied later (recompute) so the slider can
+          // re-threshold without re-analysing.
+          const inRange = frequency >= 50 && frequency <= 1200;
+          pitchDataPoints.push({
+            time: parseFloat(timeInSeconds.toFixed(3)),
+            frequency: inRange ? parseFloat(frequency.toFixed(2)) : null,
+            clarity: parseFloat(clarity.toFixed(2))
+          });
+        }
+
+        audioDuration = audioBuffer.duration;
+        resetMarkers();
+        recompute();
+
+        const voiced = cleanedPoints.filter(p => p.frequency !== null).length;
+        statusMsg.textContent = `Analysis complete! ${pitchDataPoints.length} frames, ${voiced} voiced (clarity ≥ ${clarityThresh}).`;
+        downloadBtn.disabled = false;
+        openBtn.disabled = voiced < 2;
+        playBtn.disabled = false; rewindBtn.disabled = false;
+        playBtn.textContent = '▶ Play';
+
+        // Persist so a reload restores this session (best-effort). Store the RAW
+        // frames (with clarity) + the slider settings; cleaned is re-derived.
+        try {
+          await idbPut({ name: file.name, blob: file, raw: pitchDataPoints,
+                         duration: audioDuration, clarityThresh, bridgeMs });
+        } catch (e) { console.warn('session save failed', e); }
+
+      } catch (err) {
+        console.error(err);
+        statusMsg.textContent = 'Error decoding or processing audio file.';
+      }
+    });
+
+    // ---- Vertical pitch roll (ragamroll-style) ------------------------------
+    // Time runs DOWN (y), pitch runs ACROSS (x) on a 53-EDO axis with the 22
+    // shruti lines drawn as a grid. Pitch is measured relative to the FIRST
+    // voiced frame = Sa (step 0) — the same anchor buildSrgm uses — so the
+    // contour reads against the shrutis exactly as it will in ragamroll.
+    const PAD = { l: 46, r: 14, t: 16, b: 16 };
+    const GUT_SPLIT = 26;   // gutter lanes: [0,GUT_SPLIT)=A/B markers, [GUT_SPLIT,l)=playhead scrub
+    let saRefHz = 0, stepMin = -4, stepMax = 4;
+    let LINES = [];        // absolute shruti-line steps within [stepMin, stepMax]
+    let crossings = [];    // {step, t} where the contour crosses a shruti line
+
+    const $ = (id) => document.getElementById(id);
+    // Zoom: canvas is BASE_W x BASE_H at zoom 1; each axis scales independently
+    // and the #scroll container provides scrolling. Coordinate maps read
+    // canvas.width/height, so redrawing after a resize is all that's needed.
+    const BASE_W = 440, BASE_H = 760;
+    let zoomX = 1, zoomY = 1;
+    function applyZoom() {
+      canvas.width = Math.round(BASE_W * zoomX);
+      canvas.height = Math.round(BASE_H * zoomY);
+      canvas.style.width = canvas.width + 'px';
+      canvas.style.height = canvas.height + 'px';
+      renderFrame(player.currentTime || 0);
+    }
+    const clampZ = (z) => Math.max(1, Math.min(8, z));
+    $('zxo').addEventListener('click', () => { zoomX = clampZ(zoomX / 1.4); applyZoom(); });
+    $('zxi').addEventListener('click', () => { zoomX = clampZ(zoomX * 1.4); applyZoom(); });
+    $('zyo').addEventListener('click', () => { zoomY = clampZ(zoomY / 1.4); applyZoom(); });
+    $('zyi').addEventListener('click', () => { zoomY = clampZ(zoomY * 1.4); applyZoom(); });
+    $('zreset').addEventListener('click', () => { zoomX = zoomY = 1; applyZoom(); });
+
+    // A/B play markers (seconds on the time axis). Play is bounded to [A, B].
+    let markerA = 0, markerB = 0, dragMk = null;
+    const yToTime = (oy) => audioDuration > 0 ? (oy - PAD.t) / plotH() * audioDuration : 0;
+    function resetMarkers() { markerA = 0; markerB = audioDuration; boundaries = []; notes = []; updateNoteUI(); }
+    // Press handling: shift = delete a boundary; gutter = playhead/A-B; a boundary
+    // line = drag it; otherwise a candidate TAP (also lets #scroll pan) that adds
+    // a boundary if it doesn't move.
+    let tapXY = null, dragBoundary = null, selMode = false, selBox = null, paintNote = null, previewing = false;
+    // Insert a note at `step` over [ta, tb], trimming the notes it overlaps: drop
+    // interior boundaries, add a start boundary (the new swara) and an end
+    // boundary resuming the note that was there (so R…M becomes R…G…M). Each
+    // note's gamaka re-derives from its new span, so the curve transfers to G.
+    function insertNote(step, ta, tb) {
+      if (!(tb - ta > 0.02)) return;
+      pushUndo();
+      let resume = null;
+      for (const n of notes) { if (tb >= n.t0 - 1e-9 && tb < n.t1 - 1e-9) { resume = n.step; break; } }
+      boundaries = boundaries.filter((b) => Math.abs(b.t - ta) > 1e-6 && Math.abs(b.t - tb) > 1e-6 && !(b.t > ta && b.t < tb));
+      boundaries.push({ t: ta, step, name: swaraNameForStep(step) });
+      // End boundary: resume ONLY a note that actually existed after tb; with
+      // nothing to resume, mark a REST (step null) so the gap is silence, not a
+      // fill that would merge with the next same-line note.
+      boundaries.push(resume != null
+        ? { t: tb, step: resume, name: swaraNameForStep(resume) }
+        : { t: tb, step: null, name: null });
+      rebuildNotes(); renderFrame(player.currentTime || 0);
+    }
+    // Fuse a time range into one note: drop every boundary strictly inside it, so
+    // the notes it covered collapse to a single note (swara from its start).
+    function fuseRange(lo, hi) {
+      if (!(hi - lo > 1e-3)) return;
+      const before = boundaries.length;
+      const kept = boundaries.filter((b) => !(b.t > lo && b.t < hi));
+      if (kept.length !== before) { pushUndo(); boundaries = kept; rebuildNotes(); }
+      renderFrame(player.currentTime || 0);
+    }
+    $('selfuse').addEventListener('click', () => {
+      selMode = !selMode;
+      $('selfuse').classList.toggle('active', selMode);
+      canvas.style.cursor = selMode ? 'crosshair' : '';
+    });
+    canvas.addEventListener('pointerdown', (e) => {
+      if (!(audioDuration > 0)) return;
+      const ox = e.offsetX, oy = e.offsetY;
+      if (selMode) { selBox = { y0: oy, y1: oy }; canvas.setPointerCapture(e.pointerId); e.preventDefault(); renderFrame(player.currentTime || 0); return; }
+      if (e.ctrlKey || e.metaKey) { deleteNoteByTime(yToTime(oy)); tapXY = null; e.preventDefault(); return; }   // ctrl/cmd-click deletes the note
+      // Left gutter, split into two lanes: right lane (x>=GUT_SPLIT) scrubs the
+      // PLAYHEAD; left lane moves the nearer A/B marker. Click jumps, drag adjusts.
+      if (ox < PAD.l) {
+        const t = Math.max(0, Math.min(audioDuration, yToTime(oy)));
+        if (ox >= GUT_SPLIT) {                          // right lane: scrub playhead
+          dragMk = 'P'; player.currentTime = t;
+          tapXY = null; canvas.setPointerCapture(e.pointerId); e.preventDefault(); renderFrame(t); return;
+        }
+        // Left lane: grab an A/B tab to drag it; click empty space to ADD a
+        // boundary at that time (its swara read from the curve there).
+        const yTop = PAD.t, yBot = canvas.height - PAD.b, tabY = (m) => Math.max(yTop + 7, Math.min(yBot - 7, Yt(m)));
+        if (Math.abs(tabY(markerA) - oy) < 10) dragMk = 'A';
+        else if (Math.abs(tabY(markerB) - oy) < 10) dragMk = 'B';
+        else { addBoundaryAtTime(t); tapXY = null; e.preventDefault(); return; }
+        tapXY = null; canvas.setPointerCapture(e.pointerId); e.preventDefault(); return;
+      }
+      const bi = boundaryIdxAtY(oy);
+      if (bi >= 0) { pushUndo(); dragBoundary = boundaries[bi]; tapXY = null; canvas.setPointerCapture(e.pointerId); e.preventDefault(); return; }
+      // Paint on a swara line: press on/near a shruti line (or shift-press
+      // anywhere) starts a paint. A drag inserts a note there; no move adds a
+      // boundary (shift + no move deletes). Press in empty space between the
+      // lines starts a scroll/tap instead.
+      const line = snapStepAtX(ox), onLine = Math.abs(Xs(line) - ox) < 6;
+      if (e.shiftKey || onLine) {
+        const t = snapTimeOnLine(line, yToTime(oy));
+        paintNote = { step: line, t0: t, t1: t, shift: e.shiftKey, y0: oy };
+        tapXY = null; canvas.setPointerCapture(e.pointerId); e.preventDefault(); return;
+      }
+      tapXY = { x: ox, y: oy };                       // empty space -> drag can still scroll
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      if (selBox) { e.preventDefault(); selBox.y1 = e.offsetY; renderFrame(player.currentTime || 0); return; }
+      if (paintNote) {
+        e.preventDefault();
+        if (!previewing) { previewing = true; stopNotes(); try { player.currentTime = paintNote.t0; player.play(); } catch {} }  // preview the audio from the note's start
+        paintNote.t1 = snapTimeOnLine(paintNote.step, Math.max(0, Math.min(audioDuration, yToTime(e.offsetY))));
+        renderFrame(player.currentTime || 0);
+        return;
+      }
+      if (dragMk) {
+        e.preventDefault();
+        const t = Math.max(0, Math.min(audioDuration, yToTime(e.offsetY)));
+        if (dragMk === 'P') { player.currentTime = t; renderFrame(t); return; }
+        if (dragMk === 'A') markerA = Math.min(t, markerB - 0.05);
+        else markerB = Math.max(t, markerA + 0.05);
+        renderFrame(player.currentTime || 0);
+        return;
+      }
+      if (dragBoundary) {
+        e.preventDefault();
+        dragBoundary.t = Math.max(0, Math.min(audioDuration, yToTime(e.offsetY)));
+        rebuildNotes(); renderFrame(player.currentTime || 0);
+        return;
+      }
+      if (tapXY && Math.hypot(e.offsetX - tapXY.x, e.offsetY - tapXY.y) > 6) tapXY = null; // became a scroll
+    });
+    const endPointer = (e) => {
+      if (selBox) {
+        const ta = yToTime(selBox.y0), tb = yToTime(selBox.y1);
+        selBox = null; try { canvas.releasePointerCapture(e.pointerId); } catch {}
+        fuseRange(Math.min(ta, tb), Math.max(ta, tb));
+        return;
+      }
+      if (paintNote) {
+        if (previewing) { previewing = false; player.pause(); }
+        const { step, t0, t1, shift, y0 } = paintNote;
+        const ta = Math.min(t0, t1), tb = Math.max(t0, t1);
+        paintNote = null; try { canvas.releasePointerCapture(e.pointerId); } catch {}
+        if (tb - ta > 0.02) insertNote(step, ta, tb);         // dragged -> insert a note
+        else if (shift) deleteBoundaryAtY(y0);                // shift + no move -> delete
+        else { pushUndo(); boundaries.push({ t: t0, step, name: swaraNameForStep(step) }); rebuildNotes(); renderFrame(player.currentTime || 0); } // tap -> add boundary
+        return;
+      }
+      if (dragMk) {
+        const wasP = dragMk === 'P';
+        dragMk = null; try { canvas.releasePointerCapture(e.pointerId); } catch {}
+        if (wasP && !player.paused) { stopNotes(); scheduleNotes(player.currentTime); } // resync notes after a scrub
+        return;
+      }
+      if (dragBoundary) { dragBoundary = null; try { canvas.releasePointerCapture(e.pointerId); } catch {} return; }
+      if (tapXY) { addBoundary(tapXY.x, tapXY.y); tapXY = null; }
+    };
+    canvas.addEventListener('pointerup', endPointer);
+    canvas.addEventListener('pointercancel', () => { if (previewing) { previewing = false; player.pause(); } dragMk = null; dragBoundary = null; tapXY = null; selBox = null; paintNote = null; });
+
+    // Chosen raga's swaras (53-EDO steps mod octave) to emphasize; null = none.
+    let ragaSteps = null;
+    const ragaSwaraName = new Map();  // step -> short swara name for the label
+    function setRaga(name) {
+      ragaSwaraName.clear();
+      if (!name) { ragaSteps = null; renderFrame(player.currentTime || 0); return; }
+      ragaSteps = new Set();
+      const ragas = getRagas();
+      const { varieties } = ragaVarieties(ragas, name);
+      const present = presentLetters(ragas, name);
+      const ab = defaultAb(varieties);
+      const add = (step, nm) => { ragaSteps.add(step); ragaSwaraName.set(step, nm); };
+      if (present.has('S')) add(0, 'S');       // S_STEP
+      if (present.has('P')) add(31, 'P');      // P_STEP
+      for (const L of ['R', 'G', 'M', 'D', 'N']) {
+        if (!present.has(L) || varieties[L] == null) continue;
+        const st = stepForVariety(L, varieties[L], ab[L]);
+        if (st != null) add(st, nameForSlot(st, L));
+      }
+      updateNoteUI();                    // raga affects the swara tokens
+      renderFrame(player.currentTime || 0);
+    }
+
+    // Boundary model: the timeline carries note-boundary markers, each on a
+    // shruti line (its swara). NOTES are the segments BETWEEN consecutive
+    // boundaries — monophonic and contiguous — each pitched at the swara of its
+    // START boundary (Q1b). `notes` is derived from `boundaries` by rebuildNotes.
+    let boundaries = [];     // {t, step (absolute 53-EDO), name} — kept sorted by t
+    let notes = [];          // derived {step, t0, t1, name}
+    let undoStack = [];      // snapshots of `boundaries` taken before each edit
+    function pushUndo() { undoStack.push(boundaries.map((b) => ({ ...b }))); if (undoStack.length > 60) undoStack.shift(); }
+    function swaraNameForStep(absStep) {
+      const mod = ((absStep % EDO) + EDO) % EDO;
+      if (ragaSteps && ragaSwaraName.has(mod)) return ragaSwaraName.get(mod);
+      const b = BOXES.find((x) => x.step === mod);
+      return b ? b.names[0] : '?';
+    }
+    // Pitch ALWAYS snaps to the nearest shruti line (a note sits on a shruti).
+    function snapStepAtX(ox) {
+      const raw = stepMin + (ox - PAD.l) / plotW() * (stepMax - stepMin);
+      let best = LINES[0], bd = Infinity;
+      for (const L of LINES) { const d = Math.abs(L - raw); if (d < bd) { bd = d; best = L; } }
+      return best;
+    }
+    // Time optionally snaps to a crossing ON that shruti line — but only when one
+    // is NEARBY (<=0.1s). Without the limit, painting on a line with no crossing
+    // near the click would snap both ends to the same distant crossing, so the
+    // span collapsed and no note was created.
+    function snapTimeOnLine(step, t) {
+      if (!$('snapcross').checked) return t;
+      let best = t, bd = 0.1;
+      for (const c of crossings) { if (c.step !== step) continue; const d = Math.abs(c.t - t); if (d < bd) { bd = d; best = c.t; } }
+      return best;
+    }
+    // Sample a note's curve slice as a NOTE-RELATIVE gamaka: [u (0..1 across the
+    // note), delta (53-EDO steps from the note's swara)]. null if flat/too short.
+    function gamakaForNote(n) {
+      const dur = n.t1 - n.t0;
+      if (!(dur > 0) || !(saRefHz > 0)) return null;
+      let pts = [];
+      for (const p of cleanedPoints) {
+        if (p.frequency == null || p.time < n.t0 - 1e-6 || p.time > n.t1 + 1e-6) continue;
+        pts.push([(p.time - n.t0) / dur, Math.round(stepOf(p.frequency) - n.step)]);
+      }
+      if (pts.length < 2) return null;
+      const N = 24;
+      if (pts.length > N) { const stride = (pts.length - 1) / (N - 1); const out = []; for (let i = 0; i < N; i++) out.push(pts[Math.round(i * stride)]); pts = out; }
+      pts[0][0] = 0; pts[pts.length - 1][0] = 1;
+      const clean = [];
+      for (let [u, d] of pts) {
+        u = Math.min(1, Math.max(0, Math.round(u * 100) / 100)); d = Math.max(-60, Math.min(60, d));
+        const pv = clean[clean.length - 1];
+        if (pv) { if (u <= pv[0]) continue; if (d === pv[1]) { clean[clean.length - 1] = [pv[0], d]; continue; } }
+        clean.push([u, d]);
+      }
+      if (clean.length < 2) return null;
+      clean[clean.length - 1][0] = 1;
+      if (clean.every((p) => p[1] === 0)) return null;   // steady swara -> no gamaka
+      return clean;
+    }
+    // Derive the monophonic note segments from the sorted boundaries. When the
+    // gamaka toggle is on, each note also carries its curve slice as a gamaka.
+    function rebuildNotes() {
+      boundaries.sort((a, b) => a.t - b.t);
+      notes = [];
+      for (let i = 0; i < boundaries.length - 1; i++) {
+        if (boundaries[i].step == null) continue;   // rest segment -> no note
+        const n = { step: boundaries[i].step, t0: boundaries[i].t, t1: boundaries[i + 1].t, name: boundaries[i].name };
+        if (boundaries[i].gamaka) n.gamaka = boundaries[i].gamaka;   // explicit (pasted) gamaka survives rebuilds
+        notes.push(n);
+      }
+      if ($('gamakas').checked) for (const n of notes) if (!n.gamaka) n.gamaka = gamakaForNote(n);
+      updateNoteUI();
+    }
+    // Expand the pitch axis to include every note's step (pasted notes may sit
+    // outside the audio-derived range).
+    function fitAxisToNotes() {
+      if (!notes.length) return;
+      const ps = notes.map((n) => n.step);
+      stepMin = Math.min(stepMin, Math.min(...ps) - 4);
+      stepMax = Math.max(stepMax, Math.max(...ps) + 4);
+      LINES = []; const o0 = Math.floor(stepMin / EDO), o1 = Math.ceil(stepMax / EDO);
+      for (let o = o0; o <= o1; o++) for (const b of BOXES) { const s = o * EDO + b.step; if (s >= stepMin && s <= stepMax) LINES.push(s); }
+      LINES.sort((a, b) => a - b);
+    }
+    // Parse the notation textarea back into notes (two-way). Each note's inline
+    // gamaka is carried onto its boundary so it survives; rests -> null
+    // boundaries; times come from the srgm lengths at its tempo.
+    function applyNotation() {
+      let model;
+      try { model = parse($('notation').value); } catch { statusMsg.textContent = 'Could not parse the notation.'; return; }
+      const evs = model.events.filter((e) => e.type === 'note');
+      if (!evs.length) { statusMsg.textContent = 'No notes in the notation.'; return; }
+      const tempo = (model.meta && model.meta.tempo > 0) ? model.meta.tempo : 120;
+      const secPerUnit = 30 / tempo;                       // 1 length-unit = an eighth note
+      const sN = evs.find((e) => !e.rest && (e.swara === 'S' || e.swara === 's'));
+      const saMidi = sN ? sN.midi - (sN.octave - 5) * 12 : 60;
+      pushUndo();
+      boundaries = [];
+      let t = 0;
+      for (const e of evs) {
+        if (!e.rest && e.absLen > 0) {
+          const step = stepOfSemitone(e.midi - saMidi);
+          const gam = (Array.isArray(e.gamaka) && e.gamaka.length >= 2) ? e.gamaka.map(([u, d]) => [u, d]) : null;
+          boundaries.push({ t, step, name: swaraNameForStep(step), gamaka: gam });
+        } else if (e.absLen > 0) {
+          boundaries.push({ t, step: null, name: null });   // rest
+        }
+        t += (e.absLen || 0) * secPerUnit;
+      }
+      boundaries.push({ t, step: null, name: null });        // bound the last note
+      if (t > audioDuration) audioDuration = t;              // extend the time axis if the notation is longer
+      rebuildNotes();
+      fitAxisToNotes();
+      notationDirty = false;
+      renderFrame(player.currentTime || 0);
+      statusMsg.textContent = `Loaded ${notes.length} notes from the notation.`;
+    }
+    // A tap adds a boundary (pitch snapped to a shruti, time optionally snapped).
+    function addBoundary(ox, oy) {
+      const step = snapStepAtX(ox), t = snapTimeOnLine(step, yToTime(oy));
+      pushUndo();
+      boundaries.push({ t, step, name: swaraNameForStep(step) });
+      rebuildNotes(); renderFrame(player.currentTime || 0);
+    }
+    // The curve's pitch at time t, snapped to the nearest shruti line (for gutter
+    // clicks, which give a time but no pitch). null if no voiced frame is near.
+    function stepOfCurveAt(t) {
+      if (!(saRefHz > 0)) return null;
+      let best = null, bd = Infinity;
+      for (const p of cleanedPoints) { if (p.frequency == null) continue; const d = Math.abs(p.time - t); if (d < bd) { bd = d; best = p; } }
+      if (!best || bd > 0.1) return null;
+      const raw = stepOf(best.frequency);
+      let bl = LINES[0], bld = Infinity;
+      for (const L of LINES) { const dd = Math.abs(L - raw); if (dd < bld) { bld = dd; bl = L; } }
+      return bl;
+    }
+    // Add a boundary at time t, taking its swara from the curve at that moment.
+    function addBoundaryAtTime(t) {
+      const step = stepOfCurveAt(t);
+      if (step == null) { statusMsg.textContent = 'No clear pitch there to place a marker.'; return; }
+      pushUndo();
+      boundaries.push({ t, step, name: swaraNameForStep(step) });
+      rebuildNotes(); renderFrame(player.currentTime || 0);
+    }
+    // Auto-seed boundaries at the curve's crossings of the raga's swara lines,
+    // collapsing same-swara crossings closer than 0.12 s (one per dwell).
+    function seedFromCrossings() {
+      if (!ragaSteps) { statusMsg.textContent = 'Pick a raga first to seed swara markers.'; return; }
+      // Non-destructive: keep existing boundaries; only add seed crossings in the
+      // time span NOT already covered by notes (before the first / after the last
+      // boundary), so fused/edited notes are left intact.
+      pushUndo();
+      const onRaga = crossings.filter((c) => ragaSteps.has(((c.step % EDO) + EDO) % EDO)).sort((a, b) => a.t - b.t);
+      const firstT = boundaries.length ? boundaries[0].t : Infinity;
+      const lastT = boundaries.length ? boundaries[boundaries.length - 1].t : -Infinity;
+      let last = null;
+      for (const c of onRaga) {
+        if (boundaries.length && c.t >= firstT && c.t <= lastT) continue;   // inside existing notes -> leave intact
+        if (last && last.step === c.step && c.t - last.t < 0.12) continue;
+        if (boundaries.some((b) => Math.abs(b.t - c.t) < 0.06)) continue;
+        boundaries.push({ t: c.t, step: c.step, name: swaraNameForStep(c.step) });
+        last = boundaries[boundaries.length - 1];
+      }
+      rebuildNotes(); renderFrame(player.currentTime || 0);
+    }
+    // Nearest boundary line to a y (they span the full width) within 6px.
+    function boundaryIdxAtY(oy) {
+      let best = -1, bd = 6;
+      for (let i = 0; i < boundaries.length; i++) { const d = Math.abs(Yt(boundaries[i].t) - oy); if (d < bd) { bd = d; best = i; } }
+      return best;
+    }
+    function deleteBoundaryAtY(oy) {
+      const i = boundaryIdxAtY(oy);
+      if (i < 0) return false;
+      pushUndo();
+      boundaries.splice(i, 1); rebuildNotes(); renderFrame(player.currentTime || 0);
+      return true;
+    }
+    // Delete the whole note at time t: drop its START boundary so the previous
+    // note extends over it (or, for the first note, its span becomes uncovered).
+    function deleteNoteByTime(t) {
+      const i = notes.findIndex((n) => t >= n.t0 - 1e-9 && t < n.t1 - 1e-9);
+      if (i < 0) return false;
+      pushUndo();
+      const bt = notes[i].t0, bi = boundaries.findIndex((b) => Math.abs(b.t - bt) < 1e-6);
+      if (bi >= 0) boundaries.splice(bi, 1);
+      rebuildNotes(); renderFrame(player.currentTime || 0);
+      return true;
+    }
+    // Right-click a boundary to delete it (shift-click also works, see pointerdown).
+    canvas.addEventListener('contextmenu', (e) => {
+      if (!(audioDuration > 0)) return;
+      e.preventDefault();
+      if (e.ctrlKey || e.metaKey) return;   // ctrl/cmd = delete note (on pointerdown), not boundary
+      deleteBoundaryAtY(e.offsetY);
+    });
+    $('seedbtn').addEventListener('click', seedFromCrossings);
+    // Write the drawn notes as srgm. No rests — notes are emitted in time order,
+    // each a swara token: octave marks (>/< from the octave relative to middle
+    // Sa) + swara letter + length (T120: 1 unit = 0.25 s). With a raga chosen,
+    // the letter is the raga swara and the pitch resolves from Raga=…; with none,
+    // c12 chromatic tokens carry the nearest semitone. (Gamaka comes in P3.)
+    const C12 = ['S', 'r', 'R', 'g', 'G', 'm', 'M', 'P', 'd', 'D', 'n', 'N'];
+    function notesToSrgm() {
+      const ns = notes.slice().sort((a, b) => a.t0 - b.t0);
+      if (!ns.length) return '';
+      const ragaName = $('raga-sel').value || 'c12';
+      const useRaga = !!$('raga-sel').value;
+      let cursor = ns[0].t0;             // gaps between notes become `z` rests
+      const toks = ns.map((n) => {
+        let pre = '';
+        if (n.t0 > cursor + 0.03) pre = 'z' + Math.max(1, Math.round((n.t0 - cursor) * 4)) + ' ';
+        cursor = n.t1;
+        let o = Math.floor(n.step / EDO);
+        const mod = n.step - o * EDO;
+        let letter;
+        if (useRaga) {
+          letter = swaraNameForStep(n.step)[0].toUpperCase();
+        } else {
+          let semi = Math.round(12 * mod / EDO);
+          if (semi >= 12) { semi -= 12; o += 1; }
+          letter = C12[semi];
+        }
+        const oct = o > 0 ? '>'.repeat(o) : (o < 0 ? '<'.repeat(-o) : '');
+        const len = Math.max(1, Math.round((n.t1 - n.t0) * 4));
+        let tok = pre + oct + letter + len;
+        if (n.gamaka && n.gamaka.length >= 2) tok += `{gamaka:[${n.gamaka.map(([u, d]) => `[${u},${d}]`).join(',')}]}`;
+        return tok;
+      });
+      // Gamaka-bearing tokens go on their own line for readability; plain notes
+      // stay grouped on shared lines.
+      const lines = []; let cur = [];
+      for (const tok of toks) {
+        if (/\{gamaka:/.test(tok)) { if (cur.length) { lines.push(cur.join(' ')); cur = []; } lines.push(tok); }
+        else cur.push(tok);
+      }
+      if (cur.length) lines.push(cur.join(' '));
+      return `T120\nRaga=${ragaName},0\nTala=adi,1\nO=5 L=1\n${lines.join('\n')}\n`;
+    }
+    // The notation textarea is editable. While the user has hand-edited it
+    // (dirty), stop auto-overwriting so edits survive; "↻ from notes" resyncs.
+    let notationDirty = false;
+    function updateNoteUI() {
+      $('notecount').textContent = notes.length;
+      if (!notationDirty) $('notation').value = notesToSrgm();
+    }
+    $('notation').addEventListener('input', () => { notationDirty = true; });
+    $('regennotation').addEventListener('click', () => { notationDirty = false; $('notation').value = notesToSrgm(); });
+    $('applynotation').addEventListener('click', applyNotation);
+    $('gamakas').addEventListener('change', () => { rebuildNotes(); renderFrame(player.currentTime || 0); });
+    $('undonote').addEventListener('click', () => {
+      if (!undoStack.length) { statusMsg.textContent = 'Nothing to undo.'; return; }
+      boundaries = undoStack.pop(); rebuildNotes(); renderFrame(player.currentTime || 0);
+    });
+    $('clearnotes').addEventListener('click', () => {
+      if (!boundaries.length) return;
+      pushUndo(); boundaries = []; rebuildNotes(); renderFrame(player.currentTime || 0);
+    });
+    const plotW = () => canvas.width - PAD.l - PAD.r;
+    const plotH = () => canvas.height - PAD.t - PAD.b;
+    const stepOf = (freq) => EDO * Math.log2(freq / saRefHz);
+    // 12-EDO semitone (relative to Sa) -> 53-EDO step, via each pitch-class's
+    // default shruti (mirrors draw.js). Used when parsing pasted notation.
+    const stepOfSemitone = (semi) => { const oct = Math.floor(semi / 12), pc = semi - oct * 12; return oct * EDO + defaultShrutiStep(pc); };
+    const Xs = (step) => PAD.l + (step - stepMin) / (stepMax - stepMin) * plotW();
+    const Yt = (t) => PAD.t + (audioDuration > 0 ? t / audioDuration : 0) * plotH();
+
+    function computeAxis(data) {
+      const v = data.filter(p => p.frequency !== null);
+      saRefHz = v.length ? v[0].frequency : 0;
+      LINES = [];
+      if (!(saRefHz > 0)) { stepMin = -4; stepMax = 4; return; }
+      const steps = v.map(p => stepOf(p.frequency));
+      stepMin = Math.floor(Math.min(...steps)) - 4;
+      stepMax = Math.ceil(Math.max(...steps)) + 4;
+      if (!(stepMax > stepMin)) { stepMin = -4; stepMax = 4; }
+      const o0 = Math.floor(stepMin / EDO), o1 = Math.ceil(stepMax / EDO);
+      for (let o = o0; o <= o1; o++) for (const b of BOXES) {
+        const s = o * EDO + b.step;
+        if (s >= stepMin && s <= stepMax) LINES.push(s);
+      }
+      LINES.sort((a, b) => a - b);
+    }
+
+    // Points where the pitch contour crosses a shruti line — candidate note
+    // anchors. Between two chosen crossings the curve becomes that note's gamaka.
+    // Linear-interpolate the crossing time for each line strictly between two
+    // adjacent voiced samples' steps.
+    function computeCrossings(data) {
+      crossings = [];
+      let prev = null;
+      for (const p of data) {
+        if (p.frequency === null) { prev = null; continue; }
+        const s = stepOf(p.frequency), t = p.time;
+        if (prev) {
+          const lo = Math.min(prev.s, s), hi = Math.max(prev.s, s);
+          for (const L of LINES) {
+            if (L > lo && L < hi) {
+              const f = (L - prev.s) / (s - prev.s);
+              crossings.push({ step: L, t: prev.t + f * (t - prev.t) });
+            }
+          }
+        }
+        prev = { s, t };
+      }
+    }
+
+    function drawRoll(data) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const yTop = PAD.t, yBot = canvas.height - PAD.b;
+
+      // 22 shruti lines per octave. Sa (step 0) is always brightest. With a raga
+      // chosen, its swaras are emphasized and the rest dimmed. The swara NAMES
+      // are drawn separately in the sticky header (drawHeader) so they stay
+      // visible while the roll scrolls.
+      const o0 = Math.floor(stepMin / EDO), o1 = Math.ceil(stepMax / EDO);
+      for (let o = o0; o <= o1; o++) {
+        for (const b of BOXES) {
+          const s = o * EDO + b.step;
+          if (s < stepMin || s > stepMax) continue;
+          const x = Xs(s), isSa = b.step === 0, isP = b.step === 31;
+          const emph = ragaSteps ? ragaSteps.has(b.step) : (isSa || isP);
+          ctx.strokeStyle = isSa ? '#67788a' : emph ? '#47576a' : (ragaSteps ? '#1f242b' : '#262c34');
+          ctx.lineWidth = isSa ? 1.5 : emph ? 1.2 : 1;
+          ctx.beginPath(); ctx.moveTo(x, yTop); ctx.lineTo(x, yBot); ctx.stroke();
+        }
+      }
+
+      // Pitch contour — break the line across unvoiced (null) gaps.
+      ctx.strokeStyle = '#00e5ff';
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      ctx.beginPath();
+      let on = false;
+      for (const p of data) {
+        if (p.frequency === null) { on = false; continue; }
+        const x = Xs(stepOf(p.frequency)), y = Yt(p.time);
+        if (!on) { ctx.moveTo(x, y); on = true; } else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // Shruti-line intersections — candidate note anchors.
+      ctx.fillStyle = '#ffb454';
+      for (const c of crossings) {
+        ctx.beginPath();
+        ctx.arc(Xs(c.step), Yt(c.t), 2.4, 0, 7);
+        ctx.fill();
+      }
+
+      // Derived note segments — a teal bar on the swara line over [t0, t1].
+      ctx.textBaseline = 'middle';
+      for (const n of notes) {
+        const x = Xs(n.step), y0 = Yt(n.t0), y1 = Yt(n.t1), h = Math.max(2, y1 - y0);
+        ctx.fillStyle = 'rgba(45,212,160,0.22)'; ctx.fillRect(x - 5, y0, 10, h);
+        ctx.strokeStyle = '#2dd4a0'; ctx.lineWidth = 1.4; ctx.strokeRect(x - 5, y0, 10, h);
+        ctx.fillStyle = '#2dd4a0'; ctx.textAlign = 'left'; ctx.fillText(n.name, x + 8, (y0 + y1) / 2);
+      }
+      // Boundary lines — thin full-width dividers you can grab (drag) or delete.
+      for (const bnd of boundaries) {
+        const y = Yt(bnd.t);
+        ctx.strokeStyle = 'rgba(140,160,180,0.5)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(PAD.l, y); ctx.lineTo(canvas.width - PAD.r, y); ctx.stroke();
+      }
+      // Paint-a-note preview (dragging a crossing along its swara).
+      if (paintNote) {
+        const x = Xs(paintNote.step), y0 = Yt(Math.min(paintNote.t0, paintNote.t1)), y1 = Yt(Math.max(paintNote.t0, paintNote.t1));
+        ctx.fillStyle = 'rgba(255,212,121,0.3)'; ctx.fillRect(x - 5, y0, 10, Math.max(2, y1 - y0));
+        ctx.strokeStyle = '#ffd479'; ctx.lineWidth = 1.5; ctx.strokeRect(x - 5, y0, 10, Math.max(2, y1 - y0));
+      }
+      // Fuse-selection rubber band (time range).
+      if (selBox) {
+        const y0 = Math.min(selBox.y0, selBox.y1), y1 = Math.max(selBox.y0, selBox.y1);
+        ctx.fillStyle = 'rgba(45,212,160,0.12)'; ctx.fillRect(PAD.l, y0, plotW(), y1 - y0);
+        ctx.strokeStyle = '#2dd4a0'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+        ctx.strokeRect(PAD.l, y0, plotW(), y1 - y0); ctx.setLineDash([]);
+      }
+
+      // Left gutter strip — a clickable lane for the markers (click to move the
+      // nearer marker to that time; no need to find and grab the line).
+      ctx.fillStyle = 'rgba(255,180,84,0.05)'; ctx.fillRect(0, yTop, PAD.l, yBot - yTop);
+      // A/B play markers — dim outside [A, B], dashed amber lines, gutter grab-tabs.
+      if (markerB > markerA) {
+        const yA = Yt(markerA), yB = Yt(markerB), x0 = PAD.l, w = plotW();
+        ctx.fillStyle = 'rgba(12,14,18,0.55)';
+        ctx.fillRect(x0, yTop, w, Math.max(0, yA - yTop));
+        ctx.fillRect(x0, yB, w, Math.max(0, yBot - yB));
+        ctx.strokeStyle = '#ffb454'; ctx.lineWidth = 1.6; ctx.setLineDash([6, 4]);
+        for (const y of [yA, yB]) { ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(canvas.width - PAD.r, y); ctx.stroke(); }
+        ctx.setLineDash([]);
+        // Grab tabs in the gutter, clamped to the viewport edges so A and B are
+        // always visible (and reachable) even when a marker is scrolled off.
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        for (const [y, lab] of [[yA, 'A'], [yB, 'B']]) {
+          const ty = Math.max(yTop + 7, Math.min(yBot - 7, y));
+          ctx.fillStyle = '#ffb454'; ctx.fillRect(0, ty - 7, GUT_SPLIT - 2, 14);
+          ctx.fillStyle = '#1a1a1e'; ctx.fillText(lab, (GUT_SPLIT - 2) / 2, ty);
+        }
+      }
+    }
+
+    // ---- Clean the raw pitch track ------------------------------------------
+    // The detector emits ~86 fps with (a) unvoiced null gaps, (b) octave flips
+    // (it jumps an octave on some frames), and (c) single-frame spikes. Three
+    // passes, all on a COPY (raw pitchDataPoints stays intact for the CSV):
+    //   1. octave CONTINUITY: snap each voiced frame to the octave nearest the
+    //      PREVIOUS corrected frame (seeded at the global median). Correcting
+    //      toward a moving neighbour instead of a fixed threshold avoids the
+    //      octave flip-flops that a hard ±1.5×median band produces near the
+    //      boundary — those showed up as 53-step (one-octave) spikes.
+    //   2. median-3: kill isolated single-frame spikes.
+    //   3. bridge: interpolate (log-freq) across null gaps <= 250 ms ONLY when
+    //      the two endpoints are within ~5 steps. A gap between far-apart
+    //      pitches is a real note change, not a glide — leave it a true break
+    //      rather than draw a spike-like connector across it.
+    let clarityThresh = 0.85;          // frames below this clarity are unvoiced (slider)
+    let bridgeMs = 250;                // max null-gap (ms) to bridge; 0 = never (slider)
+    const BRIDGE_STEPS = 5;            // max endpoint pitch gap (53-EDO) to bridge
+    const HALF = Math.SQRT2;           // half-octave ratio (octave-nearest test)
+
+    // Apply the clarity gate to the stored raw frames -> {time, frequency}.
+    // (Frames whose clarity is missing — old saved sessions — pass through.)
+    function gatePoints() {
+      return pitchDataPoints.map((p) => ({
+        time: p.time,
+        frequency: (p.frequency != null && (p.clarity == null || p.clarity >= clarityThresh)) ? p.frequency : null,
+      }));
+    }
+    // Re-derive everything downstream of the raw frames (gate -> clean -> axis ->
+    // crossings) and repaint. Cheap enough to run live on a slider drag.
+    function recompute() {
+      cleanedPoints = cleanContour(gatePoints());
+      computeAxis(cleanedPoints);
+      computeCrossings(cleanedPoints);
+      refreshSaInfo();
+      updateNoteUI();
+      renderFrame(player.currentTime || 0);
+    }
+
+    function cleanContour(points) {
+      const pts = points.map(p => ({ time: p.time, frequency: p.frequency }));
+      const vi = pts.filter(p => p.frequency !== null);
+      if (vi.length < 2) return pts;
+      const sorted = vi.map(p => p.frequency).slice().sort((a, b) => a - b);
+      const gmed = sorted[Math.floor(sorted.length / 2)];
+
+      // 1. octave continuity — each frame to the octave nearest the previous.
+      let prev = null;
+      for (const p of vi) {
+        let f = p.frequency;
+        const ref = prev == null ? gmed : prev;
+        for (let k = 0; k < 5; k++) {
+          if (f / ref > HALF) f /= 2;
+          else if (ref / f > HALF) f *= 2;
+          else break;
+        }
+        p.frequency = f; prev = f;
+      }
+
+      // 2. median-3 despike.
+      const src = vi.map(p => p.frequency);
+      for (let i = 1; i < vi.length - 1; i++) {
+        const a = src[i - 1], b = src[i], c = src[i + 1];
+        vi[i].frequency = a <= b ? (b <= c ? b : (a <= c ? c : a)) : (a <= c ? a : (b <= c ? c : b));
+      }
+
+      // 3. bridge only short, close-pitch gaps.
+      let i = 0;
+      while (i < pts.length) {
+        if (pts[i].frequency === null) {
+          let j = i; while (j < pts.length && pts[j].frequency === null) j++;
+          const a = pts[i - 1], b = pts[j];
+          if (a && b && a.frequency && b.frequency && (b.time - a.time) * 1000 <= bridgeMs
+              && Math.abs(EDO * Math.log2(b.frequency / a.frequency)) <= BRIDGE_STEPS) {
+            for (let k = i; k < j; k++) {
+              const r = (pts[k].time - a.time) / (b.time - a.time);
+              pts[k].frequency = a.frequency * Math.pow(b.frequency / a.frequency, r);
+            }
+          }
+          i = j;
+        } else i++;
+      }
+      return pts;
+    }
+
+    // ---- Audio pitch contour -> single-Sa srgm with an inline gamaka --------
+    // The whole clip becomes ONE Sa note. Its gamaka is the detected pitch,
+    // stored 53-EDO NOTE-RELATIVE to the FIRST voiced frame (that frame = Sa,
+    // step 0). u = time/duration (0..1 across the note). Note-relative, so it
+    // transposes to whatever Sa the app plays at — the shape is preserved.
+    const CLAMP = 60;          // draw's max gamaka span (± steps); EDO imported from shruti.js
+    const TARGET = 120;        // downsample the ~86 fps contour to this many points
+
+    function buildSrgm(points, duration) {
+      const voiced = points.filter(p => p.frequency !== null);
+      if (voiced.length < 2 || !(duration > 0)) return null;
+      const saRef = voiced[0].frequency;
+
+      let pts = voiced.map(p => {
+        const u = p.time / duration;
+        let step = Math.round(EDO * Math.log2(p.frequency / saRef));
+        step = Math.max(-CLAMP, Math.min(CLAMP, step));
+        return [u, step];
+      });
+
+      // Decimate to TARGET, always keeping the first and last frame.
+      if (pts.length > TARGET) {
+        const stride = (pts.length - 1) / (TARGET - 1);
+        const out = [];
+        for (let i = 0; i < TARGET; i++) out.push(pts[Math.round(i * stride)]);
+        pts = out;
+      }
+      pts[0][0] = 0;
+      pts[pts.length - 1][0] = 1;
+
+      // Round u to 2dp, force strictly-increasing u, drop consecutive same-step.
+      const clean = [];
+      for (let [u, s] of pts) {
+        u = Math.min(1, Math.max(0, Math.round(u * 100) / 100));
+        const prev = clean[clean.length - 1];
+        if (prev) {
+          if (u <= prev[0]) continue;            // keep u strictly increasing
+          if (s === prev[1]) { clean[clean.length - 1] = [prev[0], s]; continue; } // collapse flat runs
+        }
+        clean.push([u, s]);
+      }
+      if (clean.length < 2) return null;
+      clean[clean.length - 1][0] = 1;
+
+      const vec = clean.map(([u, s]) => `[${u},${s}]`).join(',');
+      const len = Math.max(1, Math.round(duration * 4)); // T120: 1 unit = 0.25s
+      return (
+        `% Generated from an audio pitch contour by pitchy.html\n` +
+        `% One Sa note; gamaka = detected pitch relative to the first voiced ` +
+        `frame (Sa = ${saRef.toFixed(1)} Hz), ${clean.length} points.\n` +
+        `T120\nRaga=c12,0\nTala=adi,1\nO=5 L=1\n` +
+        `S${len}{gamaka:[${vec}]}\n`
+      );
+    }
+
+    openBtn.addEventListener('click', async () => {
+      // Use the notation textarea (honours hand-edits); fall back to the contour.
+      const srgm = $('notation').value.trim() || buildSrgm(cleanedPoints, audioDuration);
+      if (!srgm) { statusMsg.textContent = 'Draw some notes (or load audio) first.'; return; }
+      const token = await encodeShareToken(srgm);
+      window.open('draw.html#' + token, '_blank');
+    });
+
+    // ---- Playhead synced to audio playback ----------------------------------
+    // Time is the vertical axis, so the playhead is a HORIZONTAL line sweeping
+    // down as the audio plays (same t->y mapping as the contour).
+    function drawPlayhead(t) {
+      if (!(audioDuration > 0)) return;
+      const y = Yt(Math.max(0, Math.min(audioDuration, t)));
+      ctx.strokeStyle = '#ff5c5c';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(PAD.l, y);
+      ctx.lineTo(canvas.width - PAD.r, y);
+      ctx.stroke();
+      // Playhead scrub handle in the gutter's right lane (clamped to viewport).
+      const yTop = PAD.t, yBot = canvas.height - PAD.b, ty = Math.max(yTop + 6, Math.min(yBot - 6, y));
+      ctx.fillStyle = '#ff5c5c';
+      ctx.fillRect(GUT_SPLIT, ty - 6, PAD.l - GUT_SPLIT - 1, 12);
+    }
+    // Sticky header: swara names aligned to the same pitch columns as the roll.
+    // Same width as the main canvas so it scrolls horizontally in step and pins
+    // vertically (position:sticky), staying visible as the roll scrolls in time.
+    const hdr = $('hdr'), hctx = hdr.getContext('2d');
+    function drawHeader() {
+      if (hdr.width !== canvas.width) { hdr.width = canvas.width; hdr.style.width = canvas.width + 'px'; }
+      hctx.clearRect(0, 0, hdr.width, hdr.height);
+      hctx.fillStyle = '#1a1a1e'; hctx.fillRect(0, 0, hdr.width, hdr.height);
+      hctx.font = '10px -apple-system, sans-serif';
+      hctx.textBaseline = 'middle'; hctx.textAlign = 'center';
+      if (audioDuration > 0) {
+        const o0 = Math.floor(stepMin / EDO), o1 = Math.ceil(stepMax / EDO);
+        for (let o = o0; o <= o1; o++) for (const b of BOXES) {
+          const s = o * EDO + b.step;
+          if (s < stepMin || s > stepMax) continue;
+          const isSa = b.step === 0, emph = ragaSteps ? ragaSteps.has(b.step) : (isSa || b.step === 31);
+          if (!emph) continue;
+          hctx.fillStyle = isSa ? '#9db2c4' : '#6c8093';
+          hctx.fillText(ragaSteps ? (ragaSwaraName.get(b.step) || 'S') : (isSa ? 'S' : 'P'), Xs(s), 12);
+        }
+      }
+      hctx.strokeStyle = '#333'; hctx.lineWidth = 1;
+      hctx.beginPath(); hctx.moveTo(0, hdr.height - 0.5); hctx.lineTo(hdr.width, hdr.height - 0.5); hctx.stroke();
+    }
+    function renderFrame(t) {
+      drawRoll(cleanedPoints);
+      drawPlayhead(t);
+      drawHeader();
+    }
+    function tick() {
+      if (!previewing && markerB > markerA && player.currentTime >= markerB) { player.pause(); renderFrame(markerB); return; }
+      renderFrame(player.currentTime);
+      if (!player.paused && !player.ended) rafId = requestAnimationFrame(tick);
+    }
+    function stopPlayhead() { if (rafId) { cancelAnimationFrame(rafId); rafId = 0; } }
+
+    // ---- Note synth: play the drawn notes alongside the audio ----------------
+    // Each note is one oscillator at its swara frequency (Sa = first voiced
+    // frame) for [t0, t1]. Scheduled against the AudioContext clock, anchored to
+    // the audio element's currentTime at play, so notes line up with the audio.
+    // The <audio> plays through the element (its own volume); notes play through
+    // notesGain — so the two are mixed and controlled independently.
+    let actx = null, notesGain = null, liveOsc = [];
+    function ensureCtx() {
+      if (actx) return;
+      actx = new (window.AudioContext || window.webkitAudioContext)();
+      notesGain = actx.createGain();
+      notesGain.gain.value = $('notemute').dataset.on === '0' ? 0 : parseFloat($('notevol').value);
+      notesGain.connect(actx.destination);
+    }
+    const noteFreq = (step) => saRefHz * Math.pow(2, step / EDO);
+    function scheduleNotes(fromT) {
+      ensureCtx();
+      if (actx.state === 'suspended') actx.resume();
+      const base = actx.currentTime + 0.05;   // small lead so the first note isn't clipped
+      for (const n of notes) {
+        if (n.t1 <= fromT || !(saRefHz > 0)) continue;
+        const start = base + Math.max(0, n.t0 - fromT), end = base + (n.t1 - fromT);
+        if (end <= start) continue;
+        const osc = actx.createOscillator(); osc.type = 'triangle';
+        const f0 = noteFreq(n.step);
+        if (n.gamaka && n.gamaka.length >= 2) {          // bend along the note's curve
+          const dur = end - start;
+          osc.frequency.setValueAtTime(f0 * Math.pow(2, n.gamaka[0][1] / EDO), start);
+          for (const [u, d] of n.gamaka) osc.frequency.linearRampToValueAtTime(f0 * Math.pow(2, d / EDO), start + Math.max(0, Math.min(1, u)) * dur);
+        } else {
+          osc.frequency.value = f0;
+        }
+        const g = actx.createGain(); const atk = 0.012, rel = 0.04, peak = 0.9;
+        g.gain.setValueAtTime(0, start);
+        g.gain.linearRampToValueAtTime(peak, start + atk);
+        g.gain.setValueAtTime(peak, Math.max(start + atk, end - rel));
+        g.gain.linearRampToValueAtTime(0, end);
+        osc.connect(g); g.connect(notesGain);
+        osc.start(start); osc.stop(end + 0.02);
+        liveOsc.push(osc);
+      }
+    }
+    function stopNotes() { for (const o of liveOsc) { try { o.stop(); } catch {} try { o.disconnect(); } catch {} } liveOsc = []; }
+
+    // Independent volume + mute for the audio (element) and the notes (gain bus).
+    $('audiovol').addEventListener('input', () => { if ($('audiomute').dataset.on === '1') player.volume = parseFloat($('audiovol').value); });
+    $('audiomute').addEventListener('click', () => {
+      const btn = $('audiomute'), on = btn.dataset.on === '1';
+      btn.dataset.on = on ? '0' : '1'; btn.textContent = on ? '🔇' : '🔊';
+      player.volume = on ? 0 : parseFloat($('audiovol').value);
+    });
+    $('notevol').addEventListener('input', () => { if (notesGain && $('notemute').dataset.on === '1') notesGain.gain.value = parseFloat($('notevol').value); });
+    $('notemute').addEventListener('click', () => {
+      const btn = $('notemute'), on = btn.dataset.on === '1';
+      btn.dataset.on = on ? '0' : '1'; btn.textContent = on ? '🔇' : '🔊';
+      if (notesGain) notesGain.gain.value = on ? 0 : parseFloat($('notevol').value);
+    });
+
+    // Clarity gate + bridge-gap sliders — re-derive the curve live.
+    $('claritythr').addEventListener('input', () => {
+      clarityThresh = parseFloat($('claritythr').value);
+      $('claritylbl').textContent = clarityThresh.toFixed(2);
+      if (pitchDataPoints.length) recompute();
+    });
+    $('bridgems').addEventListener('input', () => {
+      bridgeMs = parseInt($('bridgems').value, 10);
+      $('bridgelbl').textContent = bridgeMs + 'ms';
+      if (pitchDataPoints.length) recompute();
+    });
+
+    playBtn.addEventListener('click', () => {
+      if (player.paused) player.play(); else player.pause();
+    });
+    // Rewind to the segment start (marker A). If playing, restart from there.
+    rewindBtn.addEventListener('click', () => {
+      const wasPlaying = !player.paused && !previewing;
+      player.currentTime = markerA;
+      if (wasPlaying) { stopNotes(); scheduleNotes(markerA); }
+      renderFrame(markerA);
+    });
+    player.addEventListener('play',  () => {
+      if (previewing) { stopPlayhead(); tick(); return; }   // paint preview: raw audio only, no bounds/synth
+      playBtn.textContent = '⏸ Pause';
+      // Bound playback to [A, B]: (re)start at A when outside the segment.
+      if (markerB > markerA && (player.currentTime < markerA - 0.01 || player.currentTime >= markerB - 0.01)) {
+        player.currentTime = markerA;
+      }
+      stopNotes(); scheduleNotes(player.currentTime);   // play the drawn notes in sync
+      stopPlayhead(); tick(); });
+    player.addEventListener('pause', () => { playBtn.textContent = '▶ Play'; stopNotes(); stopPlayhead(); renderFrame(player.currentTime); });
+    player.addEventListener('ended', () => { playBtn.textContent = '▶ Play'; stopNotes(); stopPlayhead(); renderFrame(0); });
+
+    downloadBtn.addEventListener('click', () => {
+      if (pitchDataPoints.length === 0) return;
+
+      let csvContent = "data:text/csv;charset=utf-8,Time_Seconds,Frequency_Hz,Clarity\n";
+
+      pitchDataPoints.forEach(row => {
+        // Reflect the current clarity gate: blank the frequency when below it.
+        const passed = row.frequency !== null && (row.clarity == null || row.clarity >= clarityThresh);
+        csvContent += `${row.time},${passed ? row.frequency : ''},${row.clarity}\n`;
+      });
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "pitch_curve_data.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    });
+
+    // Debug hook (mirrors draw.js __rr) — markers, zoom, raga for headless tests.
+    window.__pv = {
+      get a() { return markerA; }, get b() { return markerB; },
+      get zoomX() { return zoomX; }, get zoomY() { return zoomY; },
+      get raga() { return ragaSteps ? [...ragaSteps] : null; },
+      setAB(a, b) { markerA = a; markerB = b; renderFrame(player.currentTime || 0); },
+      get t() { return player.currentTime; },
+      get notes() { return notes; },
+      get boundaries() { return boundaries; },
+      seed() { seedFromCrossings(); },
+      get crossings() { return crossings.length; },
+      crossingXY(k) { const c = crossings[k]; return c ? { x: Xs(c.step), y: Yt(c.t) } : null; },
+      crossingList() { return crossings.map((c) => ({ step: c.step, t: c.t })); },
+      insert(step, ta, tb) { insertNote(step, ta, tb); },
+      xyFor(step, t) { return { x: Xs(step), y: Yt(t) }; },
+      get srgm() { return notesToSrgm(); },
+      get liveNotes() { return liveOsc.length; },
+      get paused() { return player.paused; },
+      get previewing() { return previewing; },
+      get voiced() { return cleanedPoints.filter((p) => p.frequency != null).length; },
+      get audioVol() { return player.volume; },
+      get notesVol() { return notesGain ? notesGain.gain.value : null; },
+    };
+
+    // ---- Load raga data and populate the picker -----------------------------
+    (async () => {
+      try {
+        const [base, ext, add] = await Promise.all([
+          fetch('./core/raga-base.json').then(r => r.json()),
+          fetch('./core/raga-ext.json').then(r => r.json()).catch(() => ({})),
+          fetch('./core/raga-add.json').then(r => r.json()).catch(() => ({})),
+        ]);
+        const ragas = { ...base, ...add }; setRagas(ragas); setRagaExt(ext);
+        const names = Object.keys(ragas)
+          .filter(n => !/^mela_\d+$/i.test(n) && n.toLowerCase() !== 'c12')
+          .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+        const sel = $('raga-sel');
+        for (const n of names) {
+          const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o);
+        }
+        sel.addEventListener('change', () => setRaga(sel.value));
+      } catch (e) { console.warn('raga load failed', e); }
+    })();
+
+    // ---- Restore the last session on page load ------------------------------
+    (async () => {
+      try {
+        const s = await idbGet();
+        if (!s || !s.blob) return;
+        pitchDataPoints = s.raw || [];
+        audioDuration = s.duration || 0;
+        if (s.clarityThresh != null) { clarityThresh = s.clarityThresh; $('claritythr').value = clarityThresh; $('claritylbl').textContent = (+clarityThresh).toFixed(2); }
+        if (s.bridgeMs != null) { bridgeMs = s.bridgeMs; $('bridgems').value = bridgeMs; $('bridgelbl').textContent = bridgeMs + 'ms'; }
+        objectUrl = URL.createObjectURL(s.blob);
+        player.src = objectUrl;
+        resetMarkers();
+        recompute();
+        const voiced = cleanedPoints.filter(p => p.frequency !== null).length;
+        statusMsg.textContent = `Restored "${s.name}" — ${voiced} voiced frames (reload-persistent).`;
+        downloadBtn.disabled = pitchDataPoints.length === 0;
+        openBtn.disabled = voiced < 2;
+        playBtn.disabled = false; rewindBtn.disabled = false;
+        playBtn.textContent = '▶ Play';
+      } catch (e) { console.warn('session restore failed', e); }
+    })();
+  </script>
+</body>
+</html>
