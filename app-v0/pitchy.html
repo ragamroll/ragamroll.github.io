@@ -319,7 +319,7 @@
         statusMsg.textContent = `Analysis complete! ${pitchDataPoints.length} frames, ${voiced} voiced (clarity ≥ ${clarityThresh}).`;
         downloadBtn.disabled = false;
         openBtn.disabled = voiced < 2;
-        playBtn.disabled = false; rewindBtn.disabled = false; shareBtn.disabled = false;
+        playBtn.disabled = false; rewindBtn.disabled = false; shareBtn.disabled = false; hasAudio = true;
         playBtn.textContent = '▶ Play';
 
         // Persist so a reload restores this session (best-effort). Store the RAW
@@ -458,7 +458,7 @@
       if (selBox) { e.preventDefault(); selBox.y1 = e.offsetY; renderFrame(player.currentTime || 0); return; }
       if (paintNote) {
         e.preventDefault();
-        if (!previewing) { previewing = true; stopNotes(); try { player.currentTime = paintNote.t0; player.play(); } catch {} }  // preview the audio from the note's start
+        if (!previewing && hasAudio) { previewing = true; stopNotes(); try { player.currentTime = paintNote.t0; player.play(); } catch {} }  // preview the audio from the note's start (only if audio present)
         paintNote.t1 = snapTimeOnLine(paintNote.step, Math.max(0, Math.min(audioDuration, yToTime(e.offsetY))));
         renderFrame(player.currentTime || 0);
         return;
@@ -1242,6 +1242,10 @@
     // The <audio> plays through the element (its own volume); notes play through
     // notesGain — so the two are mixed and controlled independently.
     let actx = null, notesGain = null, liveOsc = [];
+    // Playback clock: with audio the <audio> element is the clock; without it
+    // (a shared session before the file is uploaded) a synthetic AudioContext
+    // clock drives the playhead so the notes still play.
+    let hasAudio = false, synthPlaying = false, synthCtxStart = 0, synthPosStart = 0, synthRaf = 0, pausedAtSynth = 0;
     function ensureCtx() {
       if (actx) return;
       actx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1279,6 +1283,31 @@
     }
     function stopNotes() { for (const o of liveOsc) { try { o.stop(); } catch {} try { o.disconnect(); } catch {} } liveOsc = []; }
 
+    // Synthetic-clock playback (no audio): drive the playhead from the
+    // AudioContext time and schedule the note voices; bound to [A,B].
+    function synthPlay() {
+      ensureCtx(); if (actx.state === 'suspended') actx.resume();
+      let start = pausedAtSynth;
+      if (markerB > markerA && (start < markerA - 0.01 || start >= markerB - 0.01)) start = markerA;
+      synthPosStart = start; synthCtxStart = actx.currentTime + 0.05;   // matches scheduleNotes' lead
+      synthPlaying = true; playBtn.textContent = '⏸ Pause';
+      stopNotes(); scheduleNotes(start);
+      synthTick();
+    }
+    function synthTick() {
+      if (!synthPlaying) return;
+      const pos = synthPosStart + (actx.currentTime - synthCtxStart);
+      if (markerB > markerA && pos >= markerB) { synthPlaying = false; synthRaf = 0; stopNotes(); pausedAtSynth = markerB; playBtn.textContent = '▶ Play'; renderFrame(markerB); return; }
+      renderFrame(Math.max(0, pos));
+      synthRaf = requestAnimationFrame(synthTick);
+    }
+    function synthStop() {
+      if (!synthPlaying) return;
+      pausedAtSynth = Math.max(0, synthPosStart + (actx.currentTime - synthCtxStart));
+      synthPlaying = false; if (synthRaf) cancelAnimationFrame(synthRaf); synthRaf = 0;
+      stopNotes(); playBtn.textContent = '▶ Play'; renderFrame(pausedAtSynth);
+    }
+
     // Independent volume + mute for the audio (element) and the notes (gain bus).
     $('audiovol').addEventListener('input', () => { if ($('audiomute').dataset.on === '1') player.volume = parseFloat($('audiovol').value); });
     $('audiomute').addEventListener('click', () => {
@@ -1306,14 +1335,22 @@
     });
 
     playBtn.addEventListener('click', () => {
-      if (player.paused) player.play(); else player.pause();
+      if (hasAudio) { if (player.paused) player.play(); else player.pause(); }
+      else { if (synthPlaying) synthStop(); else synthPlay(); }   // notes-only playback (no audio)
     });
     // Rewind to the segment start (marker A). If playing, restart from there.
     rewindBtn.addEventListener('click', () => {
-      const wasPlaying = !player.paused && !previewing;
-      player.currentTime = markerA;
-      if (wasPlaying) { stopNotes(); scheduleNotes(markerA); }
-      renderFrame(markerA);
+      if (hasAudio) {
+        const wasPlaying = !player.paused && !previewing;
+        player.currentTime = markerA;
+        if (wasPlaying) { stopNotes(); scheduleNotes(markerA); }
+        renderFrame(markerA);
+      } else {
+        const wasPlaying = synthPlaying;
+        if (synthPlaying) synthStop();
+        pausedAtSynth = markerA;
+        if (wasPlaying) synthPlay(); else renderFrame(markerA);
+      }
     });
     player.addEventListener('play',  () => {
       if (previewing) { stopPlayhead(); tick(); return; }   // paint preview: raw audio only, no bounds/synth
@@ -1365,6 +1402,9 @@
       get srgm() { return notesToSrgm(); },
       get liveNotes() { return liveOsc.length; },
       get paused() { return player.paused; },
+      get hasAudio() { return hasAudio; },
+      get synthPlaying() { return synthPlaying; },
+      get synthPos() { return synthPlaying ? synthPosStart + (actx.currentTime - synthCtxStart) : pausedAtSynth; },
       get previewing() { return previewing; },
       get voiced() { return cleanedPoints.filter((p) => p.frequency != null).length; },
       contour() { return cleanedPoints.map((p) => [p.time, p.frequency]); },
@@ -1407,7 +1447,7 @@
       m.appendChild(document.createTextNode('This shared session references audio at '));
       if (/^https?:\/\//i.test(url)) { const a = document.createElement('a'); a.href = url; a.textContent = url; a.target = '_blank'; a.rel = 'noopener'; a.style.color = '#ffd479'; m.appendChild(a); }
       else m.appendChild(document.createTextNode(url || '(no URL given)'));
-      m.appendChild(document.createTextNode(' — download it and upload it here (Choose File) to hear the original alongside the notes.'));
+      m.appendChild(document.createTextNode(' — the notes already play (▶); download it and upload it here (Choose File) to compare with the original audio.'));
       m.style.display = 'block';
     }
     // Rebuild a shared session from a #pako payload. Returns true if handled.
@@ -1429,8 +1469,8 @@
       fitAxisToNotes();
       markerA = 0; markerB = audioDuration;             // NB: not resetMarkers() — that clears the notes
       downloadBtn.disabled = false; openBtn.disabled = false; shareBtn.disabled = false;
-      playBtn.disabled = true; rewindBtn.disabled = true;   // no audio yet
-      sharedMode = true;
+      playBtn.disabled = false; rewindBtn.disabled = false; playBtn.textContent = '▶ Play';   // notes play via the synthetic clock
+      hasAudio = false; pausedAtSynth = 0; sharedMode = true;
       renderFrame(0);
       statusMsg.textContent = `Opened a shared session — ${notes.length} notes.`;
       showShareMsg(payload.url || '');
@@ -1453,10 +1493,11 @@
     });
     // A shared session's audio arrived: attach it for PLAYBACK, keep the notes.
     function attachAudioForPlayback(file) {
+      if (synthPlaying) synthStop();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       objectUrl = URL.createObjectURL(file); player.src = objectUrl;
       $('sharemsg').style.display = 'none';
-      playBtn.disabled = false; rewindBtn.disabled = false; playBtn.textContent = '▶ Play';
+      hasAudio = true; playBtn.disabled = false; rewindBtn.disabled = false; playBtn.textContent = '▶ Play';
       statusMsg.textContent = 'Audio loaded — play to hear it with the notes.';
     }
 
@@ -1497,7 +1538,7 @@
         statusMsg.textContent = `Restored "${s.name}" — ${voiced} voiced frames (reload-persistent).`;
         downloadBtn.disabled = pitchDataPoints.length === 0;
         openBtn.disabled = voiced < 2;
-        playBtn.disabled = false; rewindBtn.disabled = false; shareBtn.disabled = false;
+        playBtn.disabled = false; rewindBtn.disabled = false; shareBtn.disabled = false; hasAudio = true;
         playBtn.textContent = '▶ Play';
       } catch (e) { console.warn('session restore failed', e); }
     })();
