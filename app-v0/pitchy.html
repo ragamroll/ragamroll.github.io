@@ -105,10 +105,14 @@
     <input type="file" id="audio-input" accept="audio/*">
     <button id="download-btn" disabled>Download CSV (Time vs Pitch)</button>
     <button id="open-btn" disabled>Open in RagamRoll</button>
+    <input type="url" id="audiourl" placeholder="audio source URL (for Share)" style="flex:1;min-width:180px;background:#222;color:#ddd;border:1px solid #444;border-radius:4px;padding:6px">
+    <button id="share-btn" disabled>Share</button>
+    <button id="paste-btn">Paste link</button>
   </div>
 
   <div class="status" id="status-msg">Select an audio file to begin...</div>
   <div class="status" id="sa-info"></div>
+  <div class="status" id="sharemsg" style="display:none; color:#ffd479; max-width:900px"></div>
 
   <div class="controls" id="tools2">
     <span class="grp">Raga
@@ -122,8 +126,10 @@
     </span>
     <button class="z" id="zreset">Reset</button>
     <span class="grp">Notes <b id="notecount">0</b>
+      <button class="z" id="detectbtn">Detect notes</button>
       <button class="z" id="seedbtn">Seed markers</button>
       <button class="z" id="selfuse">Select ↕ to fuse</button>
+      <button class="z" id="tidymarkers" title="Delete markers not connected to a note">Tidy</button>
       <button class="z" id="undonote">Undo</button><button class="z" id="clearnotes">Clear</button>
     </span>
     <label class="grp"><input type="checkbox" id="snapcross" checked> snap to crossing</label>
@@ -161,6 +167,7 @@
         Notation
         <button class="z" id="regennotation" title="Regenerate text from the drawn notes">↻ from notes</button>
         <button class="z" id="applynotation" title="Parse the text into notes">notes ← text</button>
+        <label style="font-weight:normal"><input type="checkbox" id="showgamaka" checked> gamaka</label>
       </div>
       <textarea id="notation" placeholder="Draw notes (Seed / tap / gutter / drag a crossing to insert) — srgm appears here. Editable; ↻ resyncs."></textarea>
     </div>
@@ -170,7 +177,7 @@
     // ESM.sh resolves the package automatically and provides valid CORS headers
     import { PitchDetector } from 'https://esm.sh/pitchy@4.1.0';
     // Local, same-origin: pack the generated srgm into a #pako: link that draw.html opens.
-    import { encodeShareToken } from './core/share.js';
+    import { encodeShareToken, decodeShareToken } from './core/share.js';
     // The 22 shrutis (53-EDO steps in an octave) for the pitch-axis grid.
     import { BOXES, EDO, nameForSlot, defaultShrutiStep } from './core/shruti.js';
     // Parse pasted srgm back into notes (two-way notation).
@@ -186,6 +193,8 @@
     const fileInput = document.getElementById('audio-input');
     const playBtn = document.getElementById('play-btn');
     const rewindBtn = document.getElementById('rewind-btn');
+    const shareBtn = document.getElementById('share-btn');
+    let sharedMode = false;   // opened from a shared pako, awaiting the audio upload
     const downloadBtn = document.getElementById('download-btn');
     const openBtn = document.getElementById('open-btn');
     const statusMsg = document.getElementById('status-msg');
@@ -251,6 +260,10 @@
       const file = event.target.files[0];
       if (!file) return;
 
+      // In a shared session the notes/contour are already loaded — the upload is
+      // just the original audio for playback; don't re-analyse or clear the notes.
+      if (sharedMode) { attachAudioForPlayback(file); return; }
+
       statusMsg.textContent = 'Decoding audio file...';
       downloadBtn.disabled = true;
       openBtn.disabled = true;
@@ -306,7 +319,7 @@
         statusMsg.textContent = `Analysis complete! ${pitchDataPoints.length} frames, ${voiced} voiced (clarity ≥ ${clarityThresh}).`;
         downloadBtn.disabled = false;
         openBtn.disabled = voiced < 2;
-        playBtn.disabled = false; rewindBtn.disabled = false;
+        playBtn.disabled = false; rewindBtn.disabled = false; shareBtn.disabled = false;
         playBtn.textContent = '▶ Play';
 
         // Persist so a reload restores this session (best-effort). Store the RAW
@@ -360,7 +373,16 @@
     // Press handling: shift = delete a boundary; gutter = playhead/A-B; a boundary
     // line = drag it; otherwise a candidate TAP (also lets #scroll pan) that adds
     // a boundary if it doesn't move.
-    let tapXY = null, dragBoundary = null, selMode = false, selBox = null, paintNote = null, previewing = false;
+    let tapXY = null, dragBoundary = null, selMode = false, selBox = null, paintNote = null, previewing = false, dragNoteB = null;
+    // The note bar under (ox, oy) -> its start boundary (for pitch-dragging).
+    function noteBoundaryAtXY(ox, oy) {
+      for (const n of notes) {
+        const x = Xs(n.step), y0 = Yt(n.t0), y1 = Yt(n.t1);
+        if (Math.abs(x - ox) <= 8 && oy >= Math.min(y0, y1) - 2 && oy <= Math.max(y0, y1) + 2)
+          return boundaries.find((b) => Math.abs(b.t - n.t0) < 1e-6) || null;
+      }
+      return null;
+    }
     // Insert a note at `step` over [ta, tb], trimming the notes it overlaps: drop
     // interior boundaries, add a start boundary (the new swara) and an end
     // boundary resuming the note that was there (so R…M becomes R…G…M). Each
@@ -415,6 +437,9 @@
         else { addBoundaryAtTime(t); tapXY = null; e.preventDefault(); return; }
         tapXY = null; canvas.setPointerCapture(e.pointerId); e.preventDefault(); return;
       }
+      // Grab a note bar to drag its PITCH (snaps to shruti lines; time unchanged).
+      const nb = noteBoundaryAtXY(ox, oy);
+      if (nb) { pushUndo(); dragNoteB = nb; tapXY = null; canvas.setPointerCapture(e.pointerId); e.preventDefault(); return; }
       const bi = boundaryIdxAtY(oy);
       if (bi >= 0) { pushUndo(); dragBoundary = boundaries[bi]; tapXY = null; canvas.setPointerCapture(e.pointerId); e.preventDefault(); return; }
       // Paint on a swara line: press on/near a shruti line (or shift-press
@@ -445,6 +470,20 @@
         if (dragMk === 'A') markerA = Math.min(t, markerB - 0.05);
         else markerB = Math.max(t, markerA + 0.05);
         renderFrame(player.currentTime || 0);
+        return;
+      }
+      if (dragNoteB) {
+        e.preventDefault();
+        const newStep = snapStepAtX(e.offsetX);
+        if (newStep !== dragNoteB.step) {
+          const old = dragNoteB.step;
+          // Keep the SOUND: an explicit gamaka shifts by (old-new) so absolute
+          // pitch is unchanged; a curve-derived gamaka re-derives against the new
+          // step in rebuildNotes and lands on the same audio pitch automatically.
+          if (Array.isArray(dragNoteB.gamaka)) dragNoteB.gamaka = dragNoteB.gamaka.map(([u, d]) => [u, d + (old - newStep)]);
+          dragNoteB.step = newStep; dragNoteB.name = swaraNameForStep(newStep);
+          rebuildNotes(); renderFrame(player.currentTime || 0);
+        }
         return;
       }
       if (dragBoundary) {
@@ -478,11 +517,12 @@
         if (wasP && !player.paused) { stopNotes(); scheduleNotes(player.currentTime); } // resync notes after a scrub
         return;
       }
+      if (dragNoteB) { dragNoteB = null; try { canvas.releasePointerCapture(e.pointerId); } catch {} return; }
       if (dragBoundary) { dragBoundary = null; try { canvas.releasePointerCapture(e.pointerId); } catch {} return; }
       if (tapXY) { addBoundary(tapXY.x, tapXY.y); tapXY = null; }
     };
     canvas.addEventListener('pointerup', endPointer);
-    canvas.addEventListener('pointercancel', () => { if (previewing) { previewing = false; player.pause(); } dragMk = null; dragBoundary = null; tapXY = null; selBox = null; paintNote = null; });
+    canvas.addEventListener('pointercancel', () => { if (previewing) { previewing = false; player.pause(); } dragMk = null; dragBoundary = null; dragNoteB = null; tapXY = null; selBox = null; paintNote = null; });
 
     // Chosen raga's swaras (53-EDO steps mod octave) to emphasize; null = none.
     let ragaSteps = null;
@@ -622,6 +662,45 @@
       renderFrame(player.currentTime || 0);
       statusMsg.textContent = `Loaded ${notes.length} notes from the notation.`;
     }
+    // Auto-detect notes the way a listener hears them: a NOTE is where the pitch
+    // DWELLS near a raga swara (its gamaka wiggling around it), not each crossing.
+    // Assign every frame to the nearest raga swara, median-filter to drop
+    // transient crossings, then take runs of the same swara as notes (merging
+    // adjacent same-swara runs and dropping too-short ones). Replaces boundaries.
+    function detectNotes() {
+      if (!ragaSteps) { statusMsg.textContent = 'Pick a raga first to detect notes.'; return; }
+      const ragaLines = [];
+      const o0 = Math.floor(stepMin / EDO) - 1, o1 = Math.ceil(stepMax / EDO) + 1;
+      for (let o = o0; o <= o1; o++) for (const s of ragaSteps) ragaLines.push(o * EDO + s);
+      ragaLines.sort((a, b) => a - b);
+      const nearestRaga = (step) => { let best = ragaLines[0], bd = Infinity; for (const L of ragaLines) { const d = Math.abs(L - step); if (d < bd) { bd = d; best = L; } } return best; };
+      const asg = cleanedPoints.map((p) => p.frequency == null ? null : { t: p.time, abs: nearestRaga(stepOf(p.frequency)) });
+      const W = 11;   // ~0.25s median window (frames are ~11ms)
+      const sm = asg.map((a, i) => {
+        if (!a) return null;
+        const win = []; for (let j = Math.max(0, i - W); j <= Math.min(asg.length - 1, i + W); j++) if (asg[j]) win.push(asg[j].abs);
+        win.sort((x, y) => x - y); return { t: a.t, abs: win[Math.floor(win.length / 2)] };
+      });
+      let runs = [], cur = null;
+      for (const s of sm) { if (!s) { if (cur) { runs.push(cur); cur = null; } continue; } if (cur && cur.abs === s.abs) cur.t1 = s.t; else { if (cur) runs.push(cur); cur = { abs: s.abs, t0: s.t, t1: s.t }; } }
+      if (cur) runs.push(cur);
+      runs = runs.filter((r) => r.t1 - r.t0 >= 0.10);
+      const merged = [];
+      for (const r of runs) { const last = merged[merged.length - 1]; if (last && last.abs === r.abs && r.t0 - last.t1 < 0.35) last.t1 = r.t1; else merged.push({ ...r }); }
+      const dn = merged.filter((r) => r.t1 - r.t0 >= 0.13);
+      if (!dn.length) { statusMsg.textContent = 'No sustained notes detected.'; return; }
+      pushUndo();
+      boundaries = [];
+      for (let i = 0; i < dn.length; i++) {
+        const r = dn[i];
+        boundaries.push({ t: r.t0, step: r.abs, name: swaraNameForStep(r.abs) });
+        const next = dn[i + 1];
+        if (!next || next.t0 - r.t1 > 0.06) boundaries.push({ t: r.t1, step: null, name: null });   // rest / gap
+      }
+      $('gamakas').checked = true;   // dwell notes carry their vocal wiggle as gamaka
+      rebuildNotes(); fitAxisToNotes(); renderFrame(player.currentTime || 0);
+      statusMsg.textContent = `Detected ${notes.length} notes.`;
+    }
     // A tap adds a boundary (pitch snapped to a shruti, time optionally snapped).
     function addBoundary(ox, oy) {
       const step = snapStepAtX(ox), t = snapTimeOnLine(step, yToTime(oy));
@@ -683,6 +762,21 @@
       boundaries.splice(i, 1); rebuildNotes(); renderFrame(player.currentTime || 0);
       return true;
     }
+    // Remove boundaries not connected to any note: a boundary is connected if it
+    // STARTS a note (non-rest, has a next boundary) or ENDS one (the boundary
+    // right after a note-start). Prunes leading/trailing/double rest markers.
+    function pruneOrphanBoundaries() {
+      const connected = boundaries.map((b, i) =>
+        (b.step != null && i < boundaries.length - 1) ||
+        (i > 0 && boundaries[i - 1].step != null));
+      const kept = boundaries.filter((_, i) => connected[i]);
+      if (kept.length === boundaries.length) { statusMsg.textContent = 'No unconnected markers.'; return; }
+      pushUndo();
+      const removed = boundaries.length - kept.length;
+      boundaries = kept;
+      rebuildNotes(); renderFrame(player.currentTime || 0);
+      statusMsg.textContent = `Removed ${removed} unconnected marker${removed === 1 ? '' : 's'}.`;
+    }
     // Delete the whole note at time t: drop its START boundary so the previous
     // note extends over it (or, for the first note, its span becomes uncovered).
     function deleteNoteByTime(t) {
@@ -702,18 +796,21 @@
       deleteBoundaryAtY(e.offsetY);
     });
     $('seedbtn').addEventListener('click', seedFromCrossings);
+    $('detectbtn').addEventListener('click', detectNotes);
+    $('tidymarkers').addEventListener('click', pruneOrphanBoundaries);
     // Write the drawn notes as srgm. No rests — notes are emitted in time order,
     // each a swara token: octave marks (>/< from the octave relative to middle
     // Sa) + swara letter + length (T120: 1 unit = 0.25 s). With a raga chosen,
     // the letter is the raga swara and the pitch resolves from Raga=…; with none,
     // c12 chromatic tokens carry the nearest semitone. (Gamaka comes in P3.)
     const C12 = ['S', 'r', 'R', 'g', 'G', 'm', 'M', 'P', 'd', 'D', 'n', 'N'];
-    function notesToSrgm() {
+    function notesToSrgm(includeGamaka = true) {
       const ns = notes.slice().sort((a, b) => a.t0 - b.t0);
       if (!ns.length) return '';
       const ragaName = $('raga-sel').value || 'c12';
       const useRaga = !!$('raga-sel').value;
       let cursor = ns[0].t0;             // gaps between notes become `z` rests
+      let curOct = 5;                    // matches O=5; parser octave marks are RELATIVE + persistent
       const toks = ns.map((n) => {
         let pre = '';
         if (n.t0 > cursor + 0.03) pre = 'z' + Math.max(1, Math.round((n.t0 - cursor) * 4)) + ' ';
@@ -728,10 +825,14 @@
           if (semi >= 12) { semi -= 12; o += 1; }
           letter = C12[semi];
         }
-        const oct = o > 0 ? '>'.repeat(o) : (o < 0 ? '<'.repeat(-o) : '');
+        // Emit the DELTA from the previous note's octave (>/< accumulate in the
+        // parser); an absolute count per note piles up across notes.
+        const targetOct = 5 + o, dOct = targetOct - curOct;
+        const oct = dOct > 0 ? '>'.repeat(dOct) : (dOct < 0 ? '<'.repeat(-dOct) : '');
+        curOct = targetOct;
         const len = Math.max(1, Math.round((n.t1 - n.t0) * 4));
         let tok = pre + oct + letter + len;
-        if (n.gamaka && n.gamaka.length >= 2) tok += `{gamaka:[${n.gamaka.map(([u, d]) => `[${u},${d}]`).join(',')}]}`;
+        if (includeGamaka && n.gamaka && n.gamaka.length >= 2) tok += `{gamaka:[${n.gamaka.map(([u, d]) => `[${u},${d}]`).join(',')}]}`;
         return tok;
       });
       // Gamaka-bearing tokens go on their own line for readability; plain notes
@@ -749,10 +850,11 @@
     let notationDirty = false;
     function updateNoteUI() {
       $('notecount').textContent = notes.length;
-      if (!notationDirty) $('notation').value = notesToSrgm();
+      if (!notationDirty) $('notation').value = notesToSrgm($('showgamaka').checked);
     }
     $('notation').addEventListener('input', () => { notationDirty = true; });
-    $('regennotation').addEventListener('click', () => { notationDirty = false; $('notation').value = notesToSrgm(); });
+    $('regennotation').addEventListener('click', () => { notationDirty = false; $('notation').value = notesToSrgm($('showgamaka').checked); });
+    $('showgamaka').addEventListener('change', () => { if (!notationDirty) $('notation').value = notesToSrgm($('showgamaka').checked); });
     $('applynotation').addEventListener('click', applyNotation);
     $('gamakas').addEventListener('change', () => { rebuildNotes(); renderFrame(player.currentTime || 0); });
     $('undonote').addEventListener('click', () => {
@@ -772,9 +874,9 @@
     const Xs = (step) => PAD.l + (step - stepMin) / (stepMax - stepMin) * plotW();
     const Yt = (t) => PAD.t + (audioDuration > 0 ? t / audioDuration : 0) * plotH();
 
-    function computeAxis(data) {
+    function computeAxis(data, saOverride) {
       const v = data.filter(p => p.frequency !== null);
-      saRefHz = v.length ? v[0].frequency : 0;
+      saRefHz = (saOverride != null) ? saOverride : (v.length ? v[0].frequency : 0);
       LINES = [];
       if (!(saRefHz > 0)) { stepMin = -4; stepMax = 4; return; }
       const steps = v.map(p => stepOf(p.frequency));
@@ -1045,8 +1147,10 @@
     }
 
     openBtn.addEventListener('click', async () => {
-      // Use the notation textarea (honours hand-edits); fall back to the contour.
-      const srgm = $('notation').value.trim() || buildSrgm(cleanedPoints, audioDuration);
+      // Export the full notation (always with gamakas). Honour hand-edits when
+      // the user has typed; otherwise regenerate from the model so a hidden-gamaka
+      // display doesn't strip them from the export.
+      const srgm = (notationDirty ? $('notation').value.trim() : notesToSrgm(true)) || buildSrgm(cleanedPoints, audioDuration);
       if (!srgm) { statusMsg.textContent = 'Draw some notes (or load audio) first.'; return; }
       const token = await encodeShareToken(srgm);
       window.open('draw.html#' + token, '_blank');
@@ -1237,9 +1341,98 @@
       get paused() { return player.paused; },
       get previewing() { return previewing; },
       get voiced() { return cleanedPoints.filter((p) => p.frequency != null).length; },
+      contour() { return cleanedPoints.map((p) => [p.time, p.frequency]); },
+      get saHz() { return saRefHz; },
       get audioVol() { return player.volume; },
       get notesVol() { return notesGain ? notesGain.gain.value : null; },
     };
+
+    // ---- Share a pitchy session as a #pako link -----------------------------
+    // Packs {url, sa, dur, contour (downsampled backdrop), srgm}. The 532KB mp3
+    // never travels — only its URL reference. On open, the roll + notes rebuild;
+    // with no audio loaded, a prompt links the URL to download + upload it.
+    function downsampleContour(pts, N) {
+      if (pts.length <= N) return pts.map((p) => [p.time, p.frequency]);
+      const stride = (pts.length - 1) / (N - 1), out = [];
+      for (let i = 0; i < N; i++) { const p = pts[Math.round(i * stride)]; out.push([p.time, p.frequency]); }
+      return out;
+    }
+    shareBtn.addEventListener('click', async () => {
+      if (!cleanedPoints.length) { statusMsg.textContent = 'Load audio (or open a session) first.'; return; }
+      // Carry the exact model (boundaries with 53-EDO steps + each note's gamaka)
+      // so reconstruction needs no midi/octave round-trip — notes stay aligned to
+      // the contour, and the Sa + raga come through untouched.
+      const bnds = boundaries.map((b) => {
+        const o = { t: +b.t.toFixed(3), s: b.step };
+        if (b.step != null) { const n = notes.find((nn) => Math.abs(nn.t0 - b.t) < 1e-6); if (n && n.gamaka) o.g = n.gamaka; }
+        return o;
+      });
+      const payload = { v: 2, url: $('audiourl').value.trim(), sa: saRefHz, dur: audioDuration,
+                        raga: $('raga-sel').value || '', contour: downsampleContour(cleanedPoints, 450), bnds };
+      const token = await encodeShareToken(JSON.stringify(payload));
+      const link = location.origin + location.pathname + '#' + token;
+      window.__lastShare = link;
+      try { await navigator.clipboard.writeText(link); statusMsg.textContent = `Share link copied (${(link.length / 1024).toFixed(1)} KB).`; }
+      catch { statusMsg.textContent = 'Share link ready (copy from the address bar after it loads).'; location.hash = token; }
+    });
+    // Show the download+upload prompt for a shared session's audio URL (safely).
+    function showShareMsg(url) {
+      const m = $('sharemsg'); m.textContent = '';
+      m.appendChild(document.createTextNode('This shared session references audio at '));
+      if (/^https?:\/\//i.test(url)) { const a = document.createElement('a'); a.href = url; a.textContent = url; a.target = '_blank'; a.rel = 'noopener'; a.style.color = '#ffd479'; m.appendChild(a); }
+      else m.appendChild(document.createTextNode(url || '(no URL given)'));
+      m.appendChild(document.createTextNode(' — download it and upload it here (Choose File) to hear the original alongside the notes.'));
+      m.style.display = 'block';
+    }
+    // Rebuild a shared session from a #pako payload. Returns true if handled.
+    async function applySharedToken(token) {
+      let payload; try { payload = JSON.parse(await decodeShareToken(token)); } catch { return false; }
+      if (!payload || typeof payload !== 'object' || !(payload.bnds || payload.srgm)) return false;
+      audioDuration = payload.dur || 0;
+      cleanedPoints = (payload.contour || []).map(([t, f]) => ({ time: t, frequency: f }));
+      pitchDataPoints = cleanedPoints;
+      computeAxis(cleanedPoints, payload.sa);           // keep the shared Sa (downsampled contour's first frame may differ)
+      computeCrossings(cleanedPoints); refreshSaInfo();
+      // Restore the raga so swara names/tokens resolve.
+      if (payload.raga) { const sel = $('raga-sel'); const opt = [...sel.options].find((o) => o.value.toLowerCase() === payload.raga.toLowerCase()); if (opt) { sel.value = opt.value; setRaga(opt.value); } }
+      if (Array.isArray(payload.bnds)) {                // v2: exact model
+        boundaries = payload.bnds.map((o) => ({ t: o.t, step: o.s, name: o.s != null ? swaraNameForStep(o.s) : null, gamaka: o.g || undefined }));
+        rebuildNotes();
+      } else { $('notation').value = payload.srgm; notationDirty = false; applyNotation(); }   // v1 fallback
+      if (payload.dur > audioDuration) audioDuration = payload.dur;
+      fitAxisToNotes();
+      markerA = 0; markerB = audioDuration;             // NB: not resetMarkers() — that clears the notes
+      downloadBtn.disabled = false; openBtn.disabled = false; shareBtn.disabled = false;
+      playBtn.disabled = true; rewindBtn.disabled = true;   // no audio yet
+      sharedMode = true;
+      renderFrame(0);
+      statusMsg.textContent = `Opened a shared session — ${notes.length} notes.`;
+      showShareMsg(payload.url || '');
+      return true;
+    }
+    // On page load: rebuild from the URL hash if it carries a pako token.
+    async function loadSharedPako() {
+      const h = (location.hash || '').replace(/^#/, '');
+      if (!/^pako:/.test(h)) return false;
+      return applySharedToken(h);
+    }
+    // Paste a share link/token from ANOTHER instance (any host) and rebuild.
+    $('paste-btn').addEventListener('click', async () => {
+      const inp = window.prompt('Paste a pitchy share link or pako token:');
+      if (!inp) return;
+      const m = /pako:[A-Za-z0-9\-_]+/.exec(inp);
+      const tok = m ? m[0] : inp.trim().replace(/^#/, '');
+      try { if (await applySharedToken(tok)) return; } catch (e) { console.warn('paste share failed', e); }
+      statusMsg.textContent = 'That isn’t a valid pitchy share link.';
+    });
+    // A shared session's audio arrived: attach it for PLAYBACK, keep the notes.
+    function attachAudioForPlayback(file) {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      objectUrl = URL.createObjectURL(file); player.src = objectUrl;
+      $('sharemsg').style.display = 'none';
+      playBtn.disabled = false; rewindBtn.disabled = false; playBtn.textContent = '▶ Play';
+      statusMsg.textContent = 'Audio loaded — play to hear it with the notes.';
+    }
 
     // ---- Load raga data and populate the picker -----------------------------
     (async () => {
@@ -1259,10 +1452,10 @@
         }
         sel.addEventListener('change', () => setRaga(sel.value));
       } catch (e) { console.warn('raga load failed', e); }
-    })();
 
-    // ---- Restore the last session on page load ------------------------------
-    (async () => {
+      // Ragas are loaded now (parse() needs them) — restore a shared session or
+      // the last IDB session. Both run after the raga fetch to avoid a race.
+      try { if (await loadSharedPako()) return; } catch (e) { console.warn('shared pako load failed', e); }
       try {
         const s = await idbGet();
         if (!s || !s.blob) return;
@@ -1278,7 +1471,7 @@
         statusMsg.textContent = `Restored "${s.name}" — ${voiced} voiced frames (reload-persistent).`;
         downloadBtn.disabled = pitchDataPoints.length === 0;
         openBtn.disabled = voiced < 2;
-        playBtn.disabled = false; rewindBtn.disabled = false;
+        playBtn.disabled = false; rewindBtn.disabled = false; shareBtn.disabled = false;
         playBtn.textContent = '▶ Play';
       } catch (e) { console.warn('session restore failed', e); }
     })();
