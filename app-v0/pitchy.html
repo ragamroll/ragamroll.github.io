@@ -419,9 +419,14 @@
     canvas.addEventListener('pointerdown', (e) => {
       if (!(audioDuration > 0)) return;
       const ox = e.offsetX, oy = e.offsetY;
+      if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey)
+        console.log('[pitchy] pointerdown mods', { alt: e.altKey, ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey }, 'x', ox.toFixed(0), 't', yToTime(oy).toFixed(2));
       if (selMode) { selBox = { y0: oy, y1: oy }; canvas.setPointerCapture(e.pointerId); e.preventDefault(); renderFrame(player.currentTime || 0); return; }
-      if (e.ctrlKey || e.metaKey) { deleteNoteByTime(yToTime(oy)); tapXY = null; e.preventDefault(); return; }   // ctrl/cmd-click deletes the note
-      if (e.altKey) { splitNoteAt(yToTime(oy)); tapXY = null; e.preventDefault(); return; }                     // alt-click splits with a break
+      if (e.ctrlKey || e.metaKey) {
+        if (e.shiftKey) splitNoteAt(yToTime(oy)); else deleteNoteByTime(yToTime(oy));   // ctrl/cmd = delete; +shift = split
+        tapXY = null; e.preventDefault(); return;
+      }
+      if (e.altKey) { splitNoteAt(yToTime(oy)); tapXY = null; e.preventDefault(); return; }   // alt-click also splits (when the WM lets it through)
       // Two separate gutter columns. A/B column ([0,PH_X0)): press = A, drag =
       // B — marks the play segment, nothing else (no scroll, no roll change).
       // Playhead column ([PH_X0,PAD.l)): scrub the playhead.
@@ -776,7 +781,9 @@
     // and no longer merge / auto-fill on resize.
     function splitNoteAt(t) {
       const i = notes.findIndex((n) => t > n.t0 + 0.03 && t < n.t1 - 0.03);
-      if (i < 0) { statusMsg.textContent = 'Alt-click inside a note to split it.'; return; }
+      console.log('[pitchy] splitNoteAt t=%s -> note index %s of %s', t.toFixed(2), i, notes.length,
+                  i >= 0 ? `(${notes[i].name} ${notes[i].t0.toFixed(2)}-${notes[i].t1.toFixed(2)})` : '(no note here)');
+      if (i < 0) { statusMsg.textContent = 'Ctrl+Shift-click inside a note (not on its edge) to split it.'; return; }
       const n = notes[i];
       const gap = Math.min(0.1, (n.t1 - t) * 0.5, (t - n.t0) * 0.5);
       pushUndo();
