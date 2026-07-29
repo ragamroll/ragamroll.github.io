@@ -340,8 +340,8 @@
     // shruti lines drawn as a grid. Pitch is measured relative to the FIRST
     // voiced frame = Sa (step 0) — the same anchor buildSrgm uses — so the
     // contour reads against the shrutis exactly as it will in ragamroll.
-    const PAD = { l: 46, r: 14, t: 16, b: 16 };
-    const GUT_SPLIT = 26;   // gutter lanes: [0,GUT_SPLIT)=A/B markers, [GUT_SPLIT,l)=playhead scrub
+    const PAD = { l: 50, r: 14, t: 16, b: 16 };
+    const PH_X0 = 26;      // playhead gutter column starts here; [0,PH_X0)=A/B gutter
     let saRefHz = 0, stepMin = -4, stepMax = 4;
     let LINES = [];        // absolute shruti-line steps within [stepMin, stepMax]
     let crossings = [];    // {step, t} where the contour crosses a shruti line
@@ -373,7 +373,7 @@
     // Press handling: shift = delete a boundary; gutter = playhead/A-B; a boundary
     // line = drag it; otherwise a candidate TAP (also lets #scroll pan) that adds
     // a boundary if it doesn't move.
-    let tapXY = null, dragBoundary = null, selMode = false, selBox = null, paintNote = null, previewing = false, dragNoteB = null;
+    let tapXY = null, dragBoundary = null, selMode = false, selBox = null, paintNote = null, previewing = false, dragNoteB = null, abDrag = 0;
     // The note bar under (ox, oy) -> its start boundary (for pitch-dragging).
     function noteBoundaryAtXY(ox, oy) {
       for (const n of notes) {
@@ -421,21 +421,16 @@
       const ox = e.offsetX, oy = e.offsetY;
       if (selMode) { selBox = { y0: oy, y1: oy }; canvas.setPointerCapture(e.pointerId); e.preventDefault(); renderFrame(player.currentTime || 0); return; }
       if (e.ctrlKey || e.metaKey) { deleteNoteByTime(yToTime(oy)); tapXY = null; e.preventDefault(); return; }   // ctrl/cmd-click deletes the note
-      // Left gutter, split into two lanes: right lane (x>=GUT_SPLIT) scrubs the
-      // PLAYHEAD; left lane moves the nearer A/B marker. Click jumps, drag adjusts.
+      if (e.altKey) { splitNoteAt(yToTime(oy)); tapXY = null; e.preventDefault(); return; }                     // alt-click splits with a break
+      // Two separate gutter columns. A/B column ([0,PH_X0)): press = A, drag =
+      // B — marks the play segment, nothing else (no scroll, no roll change).
+      // Playhead column ([PH_X0,PAD.l)): scrub the playhead.
       if (ox < PAD.l) {
         const t = Math.max(0, Math.min(audioDuration, yToTime(oy)));
-        if (ox >= GUT_SPLIT) {                          // right lane: scrub playhead
-          dragMk = 'P'; player.currentTime = t;
-          tapXY = null; canvas.setPointerCapture(e.pointerId); e.preventDefault(); renderFrame(t); return;
-        }
-        // Left lane: grab an A/B tab to drag it; click empty space to ADD a
-        // boundary at that time (its swara read from the curve there).
-        const yTop = PAD.t, yBot = canvas.height - PAD.b, tabY = (m) => Math.max(yTop + 7, Math.min(yBot - 7, Yt(m)));
-        if (Math.abs(tabY(markerA) - oy) < 10) dragMk = 'A';
-        else if (Math.abs(tabY(markerB) - oy) < 10) dragMk = 'B';
-        else { addBoundaryAtTime(t); tapXY = null; e.preventDefault(); return; }
-        tapXY = null; canvas.setPointerCapture(e.pointerId); e.preventDefault(); return;
+        if (ox < PH_X0) { dragMk = 'AB'; abDrag = t; markerA = t; markerB = audioDuration; }
+        else { dragMk = 'P'; player.currentTime = t; }
+        tapXY = null; canvas.setPointerCapture(e.pointerId); e.preventDefault();
+        renderFrame(player.currentTime || 0); return;
       }
       // Grab a note bar to drag its PITCH (snaps to shruti lines; time unchanged).
       const nb = noteBoundaryAtXY(ox, oy);
@@ -467,8 +462,7 @@
         e.preventDefault();
         const t = Math.max(0, Math.min(audioDuration, yToTime(e.offsetY)));
         if (dragMk === 'P') { player.currentTime = t; renderFrame(t); return; }
-        if (dragMk === 'A') markerA = Math.min(t, markerB - 0.05);
-        else markerB = Math.max(t, markerA + 0.05);
+        if (dragMk === 'AB') { markerA = Math.min(abDrag, t); markerB = Math.max(abDrag, t); }
         renderFrame(player.currentTime || 0);
         return;
       }
@@ -777,6 +771,20 @@
       rebuildNotes(); renderFrame(player.currentTime || 0);
       statusMsg.textContent = `Removed ${removed} unconnected marker${removed === 1 ? '' : 's'}.`;
     }
+    // Split the note at time t into two notes with a small REST break between
+    // them, so two same-pitch notes (e.g. the two upper Sa) become independent
+    // and no longer merge / auto-fill on resize.
+    function splitNoteAt(t) {
+      const i = notes.findIndex((n) => t > n.t0 + 0.03 && t < n.t1 - 0.03);
+      if (i < 0) { statusMsg.textContent = 'Alt-click inside a note to split it.'; return; }
+      const n = notes[i];
+      const gap = Math.min(0.1, (n.t1 - t) * 0.5, (t - n.t0) * 0.5);
+      pushUndo();
+      boundaries.push({ t, step: null, name: null });          // rest starts
+      boundaries.push({ t: t + gap, step: n.step, name: n.name }); // second note resumes
+      rebuildNotes(); renderFrame(player.currentTime || 0);
+      statusMsg.textContent = 'Split into two notes with a break.';
+    }
     // Delete the whole note at time t: drop its START boundary so the previous
     // note extends over it (or, for the first note, its span becomes uncovered).
     function deleteNoteByTime(t) {
@@ -809,12 +817,18 @@
       if (!ns.length) return '';
       const ragaName = $('raga-sel').value || 'c12';
       const useRaga = !!$('raga-sel').value;
-      let cursor = ns[0].t0;             // gaps between notes become `z` rests
+      // Fine grid (RES units/sec) so quantization is small, and quantize the
+      // ABSOLUTE positions — each length is the gap between rounded absolute
+      // times, so rounding errors never accumulate. A leading `z` rest preserves
+      // the silence before the first note, so the timeline stays audio-aligned.
+      const RES = 16;                    // units per second
+      const tempo = 30 * RES;            // 1 length-unit = 1/RES seconds (parser: unit = 30/tempo s)
+      let qCursor = 0;                   // quantized cursor position, in units
       let curOct = 5;                    // matches O=5; parser octave marks are RELATIVE + persistent
-      const toks = ns.map((n) => {
-        let pre = '';
-        if (n.t0 > cursor + 0.03) pre = 'z' + Math.max(1, Math.round((n.t0 - cursor) * 4)) + ' ';
-        cursor = n.t1;
+      const toks = [];
+      for (const n of ns) {
+        const qStart = Math.round(n.t0 * RES);
+        if (qStart > qCursor) { toks.push('z' + (qStart - qCursor)); qCursor = qStart; }   // leading rest + gaps
         let o = Math.floor(n.step / EDO);
         const mod = n.step - o * EDO;
         let letter;
@@ -830,11 +844,12 @@
         const targetOct = 5 + o, dOct = targetOct - curOct;
         const oct = dOct > 0 ? '>'.repeat(dOct) : (dOct < 0 ? '<'.repeat(-dOct) : '');
         curOct = targetOct;
-        const len = Math.max(1, Math.round((n.t1 - n.t0) * 4));
-        let tok = pre + oct + letter + len;
+        const len = Math.max(1, Math.round(n.t1 * RES) - qCursor);
+        qCursor += len;
+        let tok = oct + letter + len;
         if (includeGamaka && n.gamaka && n.gamaka.length >= 2) tok += `{gamaka:[${n.gamaka.map(([u, d]) => `[${u},${d}]`).join(',')}]}`;
-        return tok;
-      });
+        toks.push(tok);
+      }
       // Gamaka-bearing tokens go on their own line for readability; plain notes
       // stay grouped on shared lines.
       const lines = []; let cur = [];
@@ -843,7 +858,7 @@
         else cur.push(tok);
       }
       if (cur.length) lines.push(cur.join(' '));
-      return `T120\nRaga=${ragaName},0\nTala=adi,1\nO=5 L=1\n${lines.join('\n')}\n`;
+      return `T${tempo}\nRaga=${ragaName},0\nTala=adi,1\nO=5 L=1\n${lines.join('\n')}\n`;
     }
     // The notation textarea is editable. While the user has hand-edited it
     // (dirty), stop auto-overwriting so edits survive; "↻ from notes" resyncs.
@@ -984,10 +999,14 @@
         ctx.strokeRect(PAD.l, y0, plotW(), y1 - y0); ctx.setLineDash([]);
       }
 
-      // Left gutter strip — a clickable lane for the markers (click to move the
-      // nearer marker to that time; no need to find and grab the line).
-      ctx.fillStyle = 'rgba(255,180,84,0.05)'; ctx.fillRect(0, yTop, PAD.l, yBot - yTop);
-      // A/B play markers — dim outside [A, B], dashed amber lines, gutter grab-tabs.
+      // Two SEPARATE gutter columns: A/B start-stop markers (left) and the
+      // playhead scrub (right), split by a divider. Drag the A/B column to mark
+      // the segment; drag the playhead column to scrub.
+      ctx.fillStyle = 'rgba(255,180,84,0.07)'; ctx.fillRect(0, yTop, PH_X0, yBot - yTop);
+      ctx.fillStyle = 'rgba(255,92,92,0.06)';  ctx.fillRect(PH_X0, yTop, PAD.l - PH_X0, yBot - yTop);
+      ctx.strokeStyle = '#3a3a42'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(PH_X0 + 0.5, yTop); ctx.lineTo(PH_X0 + 0.5, yBot); ctx.stroke();
+      // A/B play markers — dim outside [A, B], dashed amber lines, tabs in the A/B column.
       if (markerB > markerA) {
         const yA = Yt(markerA), yB = Yt(markerB), x0 = PAD.l, w = plotW();
         ctx.fillStyle = 'rgba(12,14,18,0.55)';
@@ -1001,8 +1020,8 @@
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         for (const [y, lab] of [[yA, 'A'], [yB, 'B']]) {
           const ty = Math.max(yTop + 7, Math.min(yBot - 7, y));
-          ctx.fillStyle = '#ffb454'; ctx.fillRect(0, ty - 7, GUT_SPLIT - 2, 14);
-          ctx.fillStyle = '#1a1a1e'; ctx.fillText(lab, (GUT_SPLIT - 2) / 2, ty);
+          ctx.fillStyle = '#ffb454'; ctx.fillRect(0, ty - 7, PH_X0 - 2, 14);
+          ctx.fillStyle = '#1a1a1e'; ctx.fillText(lab, (PH_X0 - 2) / 2, ty);
         }
       }
     }
@@ -1171,7 +1190,7 @@
       // Playhead scrub handle in the gutter's right lane (clamped to viewport).
       const yTop = PAD.t, yBot = canvas.height - PAD.b, ty = Math.max(yTop + 6, Math.min(yBot - 6, y));
       ctx.fillStyle = '#ff5c5c';
-      ctx.fillRect(GUT_SPLIT, ty - 6, PAD.l - GUT_SPLIT - 1, 12);
+      ctx.fillRect(PH_X0, ty - 6, PAD.l - PH_X0 - 1, 12);
     }
     // Sticky header: swara names aligned to the same pitch columns as the roll.
     // Same width as the main canvas so it scrolls horizontally in step and pins
