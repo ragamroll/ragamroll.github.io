@@ -127,6 +127,7 @@
     <button class="z" id="zreset">Reset</button>
     <span class="grp">Notes <b id="notecount">0</b>
       <button class="z" id="detectbtn">Detect notes</button>
+      <button class="z" id="alignsa" title="Retune Sa so a held Sa sits on the Sa grid line">Align Sa</button>
       <button class="z" id="seedbtn">Seed markers</button>
       <button class="z" id="selfuse">Select ↕ to fuse</button>
       <button class="z" id="tidymarkers" title="Delete markers not connected to a note">Tidy</button>
@@ -134,6 +135,7 @@
     </span>
     <label class="grp"><input type="checkbox" id="snapcross" checked> snap to crossing</label>
     <label class="grp"><input type="checkbox" id="gamakas"> gamaka from curve</label>
+    <label class="grp"><input type="checkbox" id="snaponsets" checked> snap onsets</label>
   </div>
 
   <div class="controls" id="tools3">
@@ -170,6 +172,11 @@
         <label style="font-weight:normal"><input type="checkbox" id="showgamaka" checked> gamaka</label>
       </div>
       <textarea id="notation" placeholder="Draw notes (Seed / tap / gutter / drag a crossing to insert) — srgm appears here. Editable; ↻ resyncs."></textarea>
+      <div class="status" style="margin:8px 0 4px; display:flex; gap:8px; align-items:center">
+        Heard syllables
+        <button class="z" id="snapsyl" title="Align the detected notes to these syllables">Snap to syllables</button>
+      </div>
+      <textarea id="syllables" placeholder="Sa Ga Ri Ga Ma Pa Dha Pa Sa Sa Ni Dha Pa Ma Ga Ri Sa  Z  Sa Ga Ri …  (Z = rest)" style="width:100%; box-sizing:border-box; height:70px; resize:vertical; background:#16161a; color:#d8d8d8; border:1px solid #333; border-radius:6px; font-family:ui-monospace,monospace; font-size:0.82rem; padding:8px"></textarea>
     </div>
   </div>
 
@@ -304,10 +311,12 @@
           // clarity gate is applied later (recompute) so the slider can
           // re-threshold without re-analysing.
           const inRange = frequency >= 50 && frequency <= 1200;
+          let e = 0; for (let k = 0; k < inputBuffer.length; k++) e += inputBuffer[k] * inputBuffer[k];
           pitchDataPoints.push({
             time: parseFloat(timeInSeconds.toFixed(3)),
             frequency: inRange ? parseFloat(frequency.toFixed(2)) : null,
-            clarity: parseFloat(clarity.toFixed(2))
+            clarity: parseFloat(clarity.toFixed(2)),
+            rms: parseFloat(Math.sqrt(e / inputBuffer.length).toFixed(4))   // frame energy, for onset detection
           });
         }
 
@@ -666,6 +675,99 @@
     // Assign every frame to the nearest raga swara, median-filter to drop
     // transient crossings, then take runs of the same swara as notes (merging
     // adjacent same-swara runs and dropping too-short ones). Replaces boundaries.
+    // Consonant/attack onsets from the energy envelope: a syllable onset is a
+    // sharp rise in RMS (half-wave-rectified energy flux); peak-pick above an
+    // adaptive threshold with a minimum spacing. Voiced or unvoiced, the vowel's
+    // energy attack right after the consonant lands here.
+    function computeOnsets() {
+      const f = pitchDataPoints;
+      if (f.length < 4 || f[0].rms == null) return [];
+      const rms = f.map((p) => p.rms || 0);
+      const nov = rms.map((v, i) => (i > 0 ? Math.max(0, v - rms[i - 1]) : 0));
+      const mean = nov.reduce((a, b) => a + b, 0) / nov.length;
+      const std = Math.sqrt(nov.reduce((a, b) => a + (b - mean) * (b - mean), 0) / nov.length);
+      const thr = mean + 1.3 * std;
+      const minGap = 5;   // frames (~0.06s)
+      const onsets = []; let last = -1e9;
+      for (let i = 1; i < nov.length - 1; i++) {
+        if (nov[i] > thr && nov[i] >= nov[i - 1] && nov[i] > nov[i + 1] && (i - last) >= minGap) { onsets.push(f[i].time); last = i; }
+      }
+      return onsets;
+    }
+    // ---- Snap detection to a heard-syllable sequence ------------------------
+    // Global-align the detected swara letters to the user's syllables, then:
+    // relabel matched notes to the target swara, INSERT a note where a target
+    // swara has no detected match (a glossed vakra/touch), and drop detected
+    // notes with no target. Times come from detection; inserts steal a slice.
+    function alignSeq(a, b) {
+      const n = a.length, m = b.length, GAP = -1;
+      const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+      for (let i = 0; i <= n; i++) dp[i][0] = i * GAP;
+      for (let j = 0; j <= m; j++) dp[0][j] = j * GAP;
+      for (let i = 1; i <= n; i++) for (let j = 1; j <= m; j++) {
+        const diag = dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 1 : -1);
+        dp[i][j] = Math.max(diag, dp[i - 1][j] + GAP, dp[i][j - 1] + GAP);
+      }
+      let i = n, j = m; const cols = [];
+      while (i > 0 || j > 0) {
+        if (i > 0 && j > 0 && dp[i][j] === dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 1 : -1)) { cols.unshift({ a: i - 1, b: j - 1 }); i--; j--; }
+        else if (i > 0 && dp[i][j] === dp[i - 1][j] + GAP) { cols.unshift({ a: i - 1, b: null }); i--; }
+        else { cols.unshift({ a: null, b: j - 1 }); j--; }
+      }
+      return cols;
+    }
+    function letterToModStep(L) {
+      if (ragaSwaraName.size) for (const [mod, name] of ragaSwaraName) if ((name[0] || '').toUpperCase() === L) return mod;
+      return L === 'S' ? 0 : L === 'P' ? 31 : null;
+    }
+    function stepForLetter(L, ref) {
+      const mod = letterToModStep(L);
+      if (mod == null) return Math.round(ref);
+      const k = Math.round((ref - mod) / EDO);
+      let best = mod + k * EDO;
+      for (const kk of [k - 1, k + 1]) if (Math.abs(mod + kk * EDO - ref) < Math.abs(best - ref)) best = mod + kk * EDO;
+      return best;
+    }
+    function snapToSyllables() {
+      if (!notes.length) { statusMsg.textContent = 'Detect (or draw) notes first.'; return; }
+      const B = ($('syllables').value.trim().split(/\s+/)).map((t) => (t[0] || '').toUpperCase()).filter((c) => 'SRGMPDN'.includes(c));
+      if (!B.length) { statusMsg.textContent = 'No swaras recognised in the syllables.'; return; }
+      const det = notes.slice().sort((a, b) => a.t0 - b.t0);
+      const A = det.map((n) => (n.name[0] || '').toUpperCase());
+      const cols = alignSeq(A, B);
+      const out = []; let pending = [];
+      const flush = (nextT0) => {
+        if (!pending.length) return;
+        const prev = out[out.length - 1], k = pending.length;
+        const lo = prev ? prev.t0 + 0.05 : Math.max(0, nextT0 - 0.16 * k);
+        const w = Math.min(0.08, (nextT0 - lo) / k);
+        if (w > 0.005) {
+          let t = nextT0 - w * k;
+          if (prev && prev.t1 > t) prev.t1 = t;
+          const ref = prev ? prev.step : 0;
+          for (const L of pending) { out.push({ step: stepForLetter(L, ref), t0: t, t1: t + w }); t += w; }
+        }
+        pending = [];
+      };
+      for (const col of cols) {
+        if (col.a != null && col.b != null) { const n = det[col.a]; flush(n.t0); out.push({ step: stepForLetter(B[col.b], n.step), t0: n.t0, t1: n.t1 }); }
+        else if (col.a != null) { if (out.length) out[out.length - 1].t1 = det[col.a].t1; }   // extra detected note -> absorb
+        else pending.push(B[col.b]);                                                          // missed target note -> insert
+      }
+      if (pending.length && out.length) flush(out[out.length - 1].t1 + 0.16 * pending.length);
+      pushUndo();
+      out.sort((a, b) => a.t0 - b.t0);
+      boundaries = [];
+      for (let i = 0; i < out.length; i++) {
+        const o = out[i];
+        boundaries.push({ t: o.t0, step: o.step, name: swaraNameForStep(o.step) });
+        const next = out[i + 1];
+        if (!next || next.t0 - o.t1 > 0.06) boundaries.push({ t: o.t1, step: null, name: null });
+      }
+      $('gamakas').checked = true;
+      rebuildNotes(); fitAxisToNotes(); renderFrame(player.currentTime || 0);
+      statusMsg.textContent = `Snapped to ${out.length} notes from the syllables.`;
+    }
     function detectNotes() {
       if (!ragaSteps) { statusMsg.textContent = 'Pick a raga first to detect notes.'; return; }
       const ragaLines = [];
@@ -688,6 +790,19 @@
       for (const r of runs) { const last = merged[merged.length - 1]; if (last && last.abs === r.abs && r.t0 - last.t1 < 0.35) last.t1 = r.t1; else merged.push({ ...r }); }
       const dn = merged.filter((r) => r.t1 - r.t0 >= 0.13);
       if (!dn.length) { statusMsg.textContent = 'No sustained notes detected.'; return; }
+      // Snap each note's START back to the nearest consonant/attack onset just
+      // before it (the vowel dwell begins after the consonant), clamped so it
+      // can't cross into the previous note.
+      let snapped = 0;
+      if ($('snaponsets').checked) {
+        const onsets = computeOnsets();
+        for (let i = 0; i < dn.length; i++) {
+          const lo = Math.max(dn[i].t0 - 0.18, i > 0 ? dn[i - 1].t0 + 0.06 : 0), hi = dn[i].t0 + 0.03;
+          let best = null, bd = Infinity;
+          for (const ot of onsets) { if (ot < lo || ot > hi) continue; const d = Math.abs(ot - dn[i].t0); if (d < bd) { bd = d; best = ot; } }
+          if (best != null && Math.abs(best - dn[i].t0) > 0.005) { dn[i].t0 = best; if (i > 0 && dn[i - 1].t1 > best) dn[i - 1].t1 = best; snapped++; }
+        }
+      }
       pushUndo();
       boundaries = [];
       for (let i = 0; i < dn.length; i++) {
@@ -698,7 +813,39 @@
       }
       $('gamakas').checked = true;   // dwell notes carry their vocal wiggle as gamaka
       rebuildNotes(); fitAxisToNotes(); renderFrame(player.currentTime || 0);
-      statusMsg.textContent = `Detected ${notes.length} notes.`;
+      statusMsg.textContent = `Detected ${notes.length} notes${snapped ? ` (${snapped} snapped to onsets)` : ''}.`;
+    }
+    // Retune the Sa anchor so a steadily-held Sa sits on the Sa grid line. Uses
+    // only the SETTLED frames of each Sa note (curve within ~3 steps of a Sa
+    // line) and the median, so a Pa->Sa slide (which starts far from Sa) doesn't
+    // mislead. Shifts saRefHz; the curve + crossings + gamakas realign, notes
+    // keep their grid steps.
+    function alignSa() {
+      const saNotes = notes.filter((n) => (((n.step % EDO) + EDO) % EDO) === 0 && (n.t1 - n.t0) >= 0.25);
+      if (!saNotes.length) { statusMsg.textContent = 'Mark a sustained Sa note first, then Align Sa.'; return; }
+      const devs = [];
+      for (const n of saNotes) {
+        const saLine = n.step;   // a Sa line (multiple of EDO)
+        for (const p of cleanedPoints) {
+          if (p.frequency == null || p.time < n.t0 || p.time > n.t1) continue;
+          const d = stepOf(p.frequency) - saLine;
+          if (Math.abs(d) < 20) devs.push(d);   // drop gross outliers/Pa-slides; the median rejects the rest
+        }
+      }
+      if (devs.length < 5) { statusMsg.textContent = 'No steady Sa found to align to.'; return; }
+      devs.sort((a, b) => a - b);
+      // Median rejects the transient slide (a minority) and lands on the settled
+      // Sa pitch even when it is several steps off the grid.
+      const med = devs[Math.floor(devs.length / 2)];
+      if (Math.abs(med) < 0.05) { statusMsg.textContent = 'Sa already aligned.'; return; }
+      saRefHz = saRefHz * Math.pow(2, med / EDO);
+      refreshSaInfo();
+      computeAxis(cleanedPoints, saRefHz);   // keep the tuned Sa (don't re-derive from the first frame)
+      computeCrossings(cleanedPoints);
+      rebuildNotes();                        // realign curve-derived gamakas to the new Sa
+      fitAxisToNotes();
+      renderFrame(player.currentTime || 0);
+      statusMsg.textContent = `Aligned Sa by ${(med / EDO * 1200).toFixed(0)} cents (now ${saRefHz.toFixed(1)} Hz).`;
     }
     // A tap adds a boundary (pitch snapped to a shruti, time optionally snapped).
     function addBoundary(ox, oy) {
@@ -812,6 +959,8 @@
     });
     $('seedbtn').addEventListener('click', seedFromCrossings);
     $('detectbtn').addEventListener('click', detectNotes);
+    $('alignsa').addEventListener('click', alignSa);
+    $('snapsyl').addEventListener('click', snapToSyllables);
     $('tidymarkers').addEventListener('click', pruneOrphanBoundaries);
     // Write the drawn notes as srgm. No rests — notes are emitted in time order,
     // each a swara token: octave marks (>/< from the octave relative to middle
@@ -978,6 +1127,14 @@
         ctx.fill();
       }
 
+      // A/B out-of-segment shade — drawn BEHIND the notes so notes stay at full
+      // brightness (dimming them made them look removed when A/B moved).
+      if (markerB > markerA) {
+        const yA = Yt(markerA), yB = Yt(markerB), x0 = PAD.l, w = plotW();
+        ctx.fillStyle = 'rgba(12,14,18,0.45)';
+        ctx.fillRect(x0, yTop, w, Math.max(0, yA - yTop));
+        ctx.fillRect(x0, yB, w, Math.max(0, yBot - yB));
+      }
       // Derived note segments — a teal bar on the swara line over [t0, t1].
       ctx.textBaseline = 'middle';
       for (const n of notes) {
@@ -1013,12 +1170,10 @@
       ctx.fillStyle = 'rgba(255,92,92,0.06)';  ctx.fillRect(PH_X0, yTop, PAD.l - PH_X0, yBot - yTop);
       ctx.strokeStyle = '#3a3a42'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(PH_X0 + 0.5, yTop); ctx.lineTo(PH_X0 + 0.5, yBot); ctx.stroke();
-      // A/B play markers — dim outside [A, B], dashed amber lines, tabs in the A/B column.
+      // A/B play markers — dashed amber lines + tabs in the A/B column (the
+      // out-of-segment shade is drawn earlier, behind the notes).
       if (markerB > markerA) {
-        const yA = Yt(markerA), yB = Yt(markerB), x0 = PAD.l, w = plotW();
-        ctx.fillStyle = 'rgba(12,14,18,0.55)';
-        ctx.fillRect(x0, yTop, w, Math.max(0, yA - yTop));
-        ctx.fillRect(x0, yB, w, Math.max(0, yBot - yB));
+        const yA = Yt(markerA), yB = Yt(markerB), x0 = PAD.l;
         ctx.strokeStyle = '#ffb454'; ctx.lineWidth = 1.6; ctx.setLineDash([6, 4]);
         for (const y of [yA, yB]) { ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(canvas.width - PAD.r, y); ctx.stroke(); }
         ctx.setLineDash([]);
@@ -1408,6 +1563,7 @@
       get previewing() { return previewing; },
       get voiced() { return cleanedPoints.filter((p) => p.frequency != null).length; },
       contour() { return cleanedPoints.map((p) => [p.time, p.frequency]); },
+      onsets() { return computeOnsets(); },
       get saHz() { return saRefHz; },
       get audioVol() { return player.volume; },
       get notesVol() { return notesGain ? notesGain.gain.value : null; },
