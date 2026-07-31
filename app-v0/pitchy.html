@@ -95,17 +95,33 @@
       #notewrap { width: 440px; max-width: 100%; position: static; }
       #notation { height: 120px; }
     }
+    /* Viewer mode (opened from /ragas/): a compact transport+mixer bar above the
+       grid, raga name in the heading, everything .adv hidden until "Edit" toggled. */
+    #viewerbar { flex-wrap: wrap; gap: 10px 14px; align-items: center; margin: 0 0 10px;
+      padding: 8px 12px; border: 1px solid #333; border-radius: 8px; background: #17171b; }
+    #viewerbar .controls { margin: 0; }
+    body.viewer h1 { font-size: 1.35rem; text-transform: capitalize; margin-bottom: .1rem; }
+    body.viewer:not(.editing) .adv { display: none !important; }
+    #verline { font-size: .8rem; color: #888; margin: -.2rem 0 .7rem; }
+    #headrow { display: flex; align-items: center; gap: 10px; }
+    #headrow h1 { flex: 1; margin: 0; }
+    #helpq, #advtoggle { flex: 0 0 auto; border-radius: 50%; width: 1.9em; height: 1.9em; padding: 0;
+      line-height: 1; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+    .chlabel { cursor: pointer; }
+    .chlabel.muted { text-decoration: line-through; opacity: .5; }
+    #audioq { color: #e0a53a; }
   </style>
 </head>
 <body>
 
-  <h1>Audio Pitch Curve & Data Extractor</h1>
-  <div style="font-size:.8rem;color:#888;margin:-.5rem 0 .7rem">
-    pitchy · RagaM-Roll <span id="appver">dev</span> · share-format v2 ·
-    <a href="help.html#pitch-gaps" target="_blank" rel="noopener" style="color:#9cf">Help: pitch gaps &amp; clarity/bridge</a>
+  <div id="headrow">
+    <button id="advtoggle" class="z" style="display:none" title="Menu — full editor">☰</button>
+    <h1>Audio Pitch Curve & Data Extractor</h1>
+    <a id="helpq" class="z" href="help.html#pitch-gaps" target="_blank" rel="noopener" title="Help — pitch-curve gaps, clarity/bridge">?</a>
   </div>
+  <div id="verline" class="adv">pitchy · RagaM-Roll <span id="appver">dev</span> · share-format v2</div>
 
-  <div class="controls">
+  <div class="controls adv">
     <input type="file" id="audio-input" accept="audio/*">
     <button id="download-btn" disabled>Download CSV (Time vs Pitch)</button>
     <button id="open-btn" disabled>Open in RagamRoll</button>
@@ -114,11 +130,11 @@
     <button id="paste-btn">Paste link</button>
   </div>
 
-  <div class="status" id="status-msg">Select an audio file to begin...</div>
-  <div class="status" id="sa-info"></div>
+  <div class="status adv" id="status-msg">Select an audio file to begin...</div>
+  <div class="status adv" id="sa-info"></div>
   <div class="status" id="sharemsg" style="display:none; color:#ffd479; max-width:900px"></div>
 
-  <div class="controls" id="tools2">
+  <div class="controls adv" id="tools2">
     <span class="grp">Raga
       <select id="raga-sel"><option value="">— none —</option></select>
     </span>
@@ -143,17 +159,15 @@
   </div>
 
   <div class="controls" id="tools3">
-    <span class="grp">🎙 Audio
-      <input type="range" id="audiovol" min="0" max="1" step="0.01" value="1">
-      <button class="z" id="audiomute" data-on="1">🔊</button>
-    </span>
-    <span class="grp">🎵 Notes
-      <input type="range" id="notevol" min="0" max="1" step="0.01" value="0.5">
-      <button class="z" id="notemute" data-on="1">🔊</button>
-    </span>
+    <span class="grp"><button id="dronemute" class="chlabel" data-on="1" title="Mute/unmute the tanpura drone (Sa · Pa · upper Sa)">🕉 Drone</button>
+      <input type="range" id="dronevol" min="0" max="1" step="0.01" value="0.15"></span>
+    <span class="grp"><button id="notemute" class="chlabel" data-on="1" title="Mute/unmute the notes">🎵 Notes</button>
+      <input type="range" id="notevol" min="0" max="1" step="0.01" value="0.5"></span>
+    <span class="grp"><button id="audiomute" class="chlabel" data-on="1" title="Mute/unmute the audio">🎙 Audio</button>
+      <input type="range" id="audiovol" min="0" max="1" step="0.01" value="1"></span>
   </div>
 
-  <div class="controls" id="tools4">
+  <div class="controls adv" id="tools4">
     <span class="grp">Clarity ≥
       <input type="range" id="claritythr" min="0.5" max="0.95" step="0.01" value="0.85">
       <b id="claritylbl">0.85</b>
@@ -164,10 +178,14 @@
     </span>
   </div>
 
+  <!-- Compact transport+mixer bar; in viewer mode the essential controls are
+       moved here (above the grid) and everything .adv is hidden. -->
+  <div id="viewerbar" style="display:none"></div>
+
   <div id="stage">
     <div id="scroll"><canvas id="hdr" width="440" height="24"></canvas><canvas id="pitch-canvas" width="440" height="760"></canvas></div>
     <div id="notewrap">
-      <div class="status" style="margin:0 0 6px; display:flex; gap:8px; align-items:center">
+      <div class="status" style="margin:0 0 6px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
         <button id="rewind-btn" disabled title="Rewind to start">⏮</button>
         <button id="play-btn" disabled>▶ Play</button>
         <select id="speed" title="Playback speed — slows audio + notes together, keeping pitch (hear gamaka detail while editing)">
@@ -177,17 +195,18 @@
           <option value="0.35">0.35×</option>
           <option value="0.25">0.25×</option>
         </select>
-        Notation
-        <button class="z" id="regennotation" title="Regenerate text from the drawn notes">↻ from notes</button>
-        <button class="z" id="applynotation" title="Parse the text into notes">notes ← text</button>
-        <label style="font-weight:normal"><input type="checkbox" id="showgamaka" checked> gamaka</label>
+        <span class="adv" style="display:inline-flex; gap:8px; align-items:center">Notation
+          <button class="z" id="regennotation" title="Regenerate text from the drawn notes">↻ from notes</button>
+          <button class="z" id="applynotation" title="Parse the text into notes">notes ← text</button>
+          <label style="font-weight:normal"><input type="checkbox" id="showgamaka" checked> gamaka</label>
+        </span>
       </div>
-      <textarea id="notation" placeholder="Draw notes (Seed / tap / gutter / drag a crossing to insert) — srgm appears here. Editable; ↻ resyncs."></textarea>
-      <div class="status" style="margin:8px 0 4px; display:flex; gap:8px; align-items:center">
+      <textarea id="notation" class="adv" placeholder="Draw notes (Seed / tap / gutter / drag a crossing to insert) — srgm appears here. Editable; ↻ resyncs."></textarea>
+      <div class="status adv" style="margin:8px 0 4px; display:flex; gap:8px; align-items:center">
         Heard syllables
         <button class="z" id="snapsyl" title="Align the detected notes to these syllables">Snap to syllables</button>
       </div>
-      <textarea id="syllables" placeholder="Sa Ga Ri Ga Ma Pa Dha Pa Sa Sa Ni Dha Pa Ma Ga Ri Sa  Z  Sa Ga Ri …  (Z = rest)" style="width:100%; box-sizing:border-box; height:70px; resize:vertical; background:#16161a; color:#d8d8d8; border:1px solid #333; border-radius:6px; font-family:ui-monospace,monospace; font-size:0.82rem; padding:8px"></textarea>
+      <textarea id="syllables" class="adv" placeholder="Sa Ga Ri Ga Ma Pa Dha Pa Sa Sa Ni Dha Pa Ma Ga Ri Sa  Z  Sa Ga Ri …  (Z = rest)" style="width:100%; box-sizing:border-box; height:70px; resize:vertical; background:#16161a; color:#d8d8d8; border:1px solid #333; border-radius:6px; font-family:ui-monospace,monospace; font-size:0.82rem; padding:8px"></textarea>
     </div>
   </div>
 
@@ -197,7 +216,7 @@
     // Local, same-origin: pack the generated srgm into a #pako: link that draw.html opens.
     import { encodeShareToken, decodeShareToken } from './core/share.js';
     // The 22 shrutis (53-EDO steps in an octave) for the pitch-axis grid.
-    import { BOXES, EDO, nameForSlot, defaultShrutiStep } from './core/shruti.js';
+    import { BOXES, EDO, nameForSlot, defaultShrutiStep, stepFreq, P_STEP } from './core/shruti.js';
     // Parse pasted srgm back into notes (two-way notation).
     import { parse } from './core/parser.js';
     // Raga data — to emphasize a chosen raga's swaras among the 22 lines and
@@ -879,6 +898,7 @@
       if (Math.abs(med) < 0.05) { statusMsg.textContent = 'Sa already aligned.'; return; }
       saRefHz = saRefHz * Math.pow(2, med / EDO);
       refreshSaInfo();
+      retuneDrone();   // keep the drone on the newly-tuned Sa
       computeAxis(cleanedPoints, saRefHz);   // keep the tuned Sa (don't re-derive from the first frame)
       computeCrossings(cleanedPoints);
       rebuildNotes();                        // realign curve-derived gamakas to the new Sa
@@ -1436,6 +1456,7 @@
     // The <audio> plays through the element (its own volume); notes play through
     // notesGain — so the two are mixed and controlled independently.
     let actx = null, notesGain = null, liveOsc = [];
+    let droneGain = null, droneOsc = [];   // sustained tanpura drone (Sa · Pa · >S) at saRefHz
     // Playback clock: with audio the <audio> element is the clock; without it
     // (a shared session before the file is uploaded) a synthetic AudioContext
     // clock drives the playhead so the notes still play.
@@ -1475,6 +1496,7 @@
         osc.start(start); osc.stop(end + 0.02);
         liveOsc.push(osc);
       }
+      startDrone();   // drone plays alongside the notes/audio
     }
     function stopNotes() { for (const o of liveOsc) { try { o.stop(); } catch {} try { o.disconnect(); } catch {} } liveOsc = []; }
 
@@ -1507,14 +1529,36 @@
     $('audiovol').addEventListener('input', () => { if ($('audiomute').dataset.on === '1') player.volume = parseFloat($('audiovol').value); });
     $('audiomute').addEventListener('click', () => {
       const btn = $('audiomute'), on = btn.dataset.on === '1';
-      btn.dataset.on = on ? '0' : '1'; btn.textContent = on ? '🔇' : '🔊';
+      btn.dataset.on = on ? '0' : '1'; btn.classList.toggle('muted', on);
       player.volume = on ? 0 : parseFloat($('audiovol').value);
     });
     $('notevol').addEventListener('input', () => { if (notesGain && $('notemute').dataset.on === '1') notesGain.gain.value = parseFloat($('notevol').value); });
     $('notemute').addEventListener('click', () => {
       const btn = $('notemute'), on = btn.dataset.on === '1';
-      btn.dataset.on = on ? '0' : '1'; btn.textContent = on ? '🔇' : '🔊';
+      btn.dataset.on = on ? '0' : '1'; btn.classList.toggle('muted', on);
       if (notesGain) notesGain.gain.value = on ? 0 : parseFloat($('notevol').value);
+    });
+
+    // Drone: sustained sine voices Sa · Pa · >S at the detected Sa. Starts lazily
+    // (needs a user gesture for the AudioContext) and retunes when Sa changes.
+    const droneVolVal = () => ($('dronemute').dataset.on === '1' ? parseFloat($('dronevol').value) : 0);
+    function startDrone() {
+      if (!actx || !(saRefHz > 0) || droneOsc.length) return;
+      if (!droneGain) { droneGain = actx.createGain(); droneGain.connect(actx.destination); }
+      droneGain.gain.value = droneVolVal();
+      for (const f of [saRefHz, stepFreq(saRefHz, P_STEP), saRefHz * 2]) {   // S · P · >S
+        const o = actx.createOscillator(); o.type = 'sine'; o.frequency.value = f; o.connect(droneGain); o.start(); droneOsc.push(o);
+      }
+    }
+    function stopDrone() { for (const o of droneOsc) { try { o.stop(); } catch {} try { o.disconnect(); } catch {} } droneOsc = []; }
+    function retuneDrone() { if (droneOsc.length) { stopDrone(); startDrone(); } }
+    function kickDrone() { ensureCtx(); if (actx.state === 'suspended') actx.resume(); startDrone(); }
+    $('dronevol').addEventListener('input', () => { if (droneGain) droneGain.gain.value = droneVolVal(); if (droneVolVal() > 0) kickDrone(); });
+    $('dronemute').addEventListener('click', () => {
+      const btn = $('dronemute'), on = btn.dataset.on === '1';
+      btn.dataset.on = on ? '0' : '1'; btn.classList.toggle('muted', on);
+      if (droneGain) droneGain.gain.value = droneVolVal();
+      if (!on) kickDrone();   // unmuting starts it
     });
 
     // Clarity gate + bridge-gap sliders — re-derive the curve live.
@@ -1660,7 +1704,7 @@
       m.appendChild(document.createTextNode('This shared session references audio at '));
       if (/^https?:\/\//i.test(url)) { const a = document.createElement('a'); a.href = url; a.textContent = url; a.target = '_blank'; a.rel = 'noopener'; a.style.color = '#ffd479'; m.appendChild(a); }
       else m.appendChild(document.createTextNode(url || '(no URL given)'));
-      m.appendChild(document.createTextNode(' — the notes already play (▶); download it and upload it here (Choose File) to compare with the original audio.'));
+      m.appendChild(document.createTextNode(' — the notes already play (▶). To hear the original recording: download it, then open ⋯ Edit / Advanced and upload it (Choose File).'));
       m.style.display = 'block';
     }
     // Rebuild a shared session from a #pako payload. Returns true if handled.
@@ -1687,6 +1731,7 @@
       renderFrame(0);
       statusMsg.textContent = `Opened a shared session — ${notes.length} notes.`;
       if (!(await tryLoadLocalAudio(payload.url))) showShareMsg(payload.url || '');
+      if (payload.view) enterViewer(payload.raga);   // compact viewer (opened from /ragas/)
       return true;
     }
     // If the shared audio URL is SAME-ORIGIN (a local curation server serving the
@@ -1706,6 +1751,33 @@
         return true;
       } catch { return false; }
     }
+    // Compact VIEWER mode (payload.view, set by /ragas/ links): show the raga name
+    // in the heading, move the essential transport + mixer above the grid (moving
+    // the nodes keeps their listeners), and hide everything .adv until "Edit" is
+    // toggled. Additive to the share-open path — carries into pitchy2 at the swap.
+    function enterViewer(raga) {
+      document.body.classList.add('viewer');
+      const h1 = document.querySelector('h1');
+      if (h1) h1.textContent = raga ? `Rāga ${raga}` : 'RagaM-Roll';
+      const vb = $('viewerbar');
+      vb.append($('rewind-btn'), $('play-btn'), $('speed'), $('tools3'));   // reparent essentials above the grid
+      vb.style.display = 'flex';
+      $('advtoggle').style.display = '';
+      // No audio in a shared/viewer session: gray the audio control and fold the
+      // long "download the source recording" message behind a "?" next to it (more
+      // room for the grid). Uploading the file (via Edit / Advanced) restores both.
+      if (!hasAudio) {
+        $('audiovol').disabled = true; $('audiomute').disabled = true;
+        $('sharemsg').style.display = 'none';
+        if (!$('audioq')) {
+          const q = document.createElement('button');
+          q.id = 'audioq'; q.className = 'z'; q.textContent = '⚠'; q.title = 'Audio not loaded — how to get it';
+          q.addEventListener('click', () => { const m = $('sharemsg'); m.style.display = m.style.display === 'none' ? 'block' : 'none'; });
+          $('audiovol').after(q);
+        }
+      }
+    }
+    $('advtoggle').addEventListener('click', () => document.body.classList.toggle('editing'));
     // On page load: rebuild from the URL hash if it carries a pako token.
     async function loadSharedPako() {
       const h = (location.hash || '').replace(/^#/, '');
@@ -1727,6 +1799,8 @@
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       objectUrl = URL.createObjectURL(file); player.src = objectUrl;
       $('sharemsg').style.display = 'none';
+      $('audiovol').disabled = false; $('audiomute').disabled = false;   // audio now present — ungray
+      { const q = $('audioq'); if (q) q.remove(); }
       hasAudio = true; playBtn.disabled = false; rewindBtn.disabled = false; playBtn.textContent = '▶ Play';
       statusMsg.textContent = 'Audio loaded — play to hear it with the notes.';
     }
