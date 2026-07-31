@@ -81,7 +81,7 @@ const HALF = Math.SQRT2;           // half-octave ratio (octave-nearest test)
 const CLAMP = 60;          // draw's max gamaka span (± steps); EDO imported from shruti.js
 const TARGET = 120;        // downsample the ~86 fps contour to this many points
 
-export const C12 = ['S', 'r', 'R', 'g', 'G', 'm', 'M', 'P', 'd', 'D', 'n', 'N'];
+const C12 = ['S', 'r', 'R', 'g', 'G', 'm', 'M', 'P', 'd', 'D', 'n', 'N'];   // internal to notesToSrgm (no-raga chromatic tokens); not exported
 
 export function cleanContour(points, bridgeMs) {
   const pts = points.map(p => ({ time: p.time, frequency: p.frequency }));
@@ -273,6 +273,8 @@ export function notesFromBoundaries(boundaries, { gamakas, cleanedPoints, saRefH
 // Detect note boundaries from the cleaned pitch contour, snapped onto the
 // raga's shruti lines. Pure extraction of detectNotes' body (pitchy.html
 // 797-837), minus the DOM guard/pushUndo/statusMsg/render side effects.
+// REQUIRES a non-null `ragaSteps` Set (it's iterated below) — callers must
+// pick a raga first; the no-raga path goes through buildSrgm, not here.
 export function segmentNotes(cleanedPoints, ragaSteps, { stepMin, stepMax, saRefHz, snapOnsets, onsets, ragaSwaraName }) {
   const ragaLines = [];
   const o0 = Math.floor(stepMin / EDO) - 1, o1 = Math.ceil(stepMax / EDO) + 1;

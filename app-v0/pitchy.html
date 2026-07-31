@@ -219,8 +219,10 @@
   </div>
 
   <script type="module">
-    // ESM.sh resolves the package automatically and provides valid CORS headers
-    import { PitchDetector } from 'https://esm.sh/pitchy@4.1.0';
+    // Vendored locally (web/vendor/pitchy.mjs -> ./fft.mjs) so the PWA works fully
+    // offline and the shippable raga bundle needs no network. Update: re-fetch from
+    // https://esm.sh/pitchy@4.1.0/es2022/pitchy.mjs + its fft.js dep, rewrite the import.
+    import { PitchDetector } from './vendor/pitchy.mjs';
     // Local, same-origin: pack the generated srgm into a #pako: link that draw.html opens.
     import { encodeShareToken, decodeShareToken } from './core/share.js';
     // The 22 shrutis (53-EDO steps in an octave) for the pitch-axis grid.
@@ -234,6 +236,9 @@
     import { setRagaExt } from './core/raga-ext.js';
     import { ragaVarieties, presentLetters, defaultAb } from './core/raga-shruti.js';
     import { stepForVariety } from './core/melakarta.js';
+    // Pure detection/notation core (extracted) + the raga step-set helper it needs.
+    import * as D from './core/detect.js';
+    import { buildRagaSteps } from './core/detect-raga-helper.js';
     // Show the single RagaM-Roll version tag (same source as the app Footer):
     // 'dev' in the working tree; build-app-v0.sh stamps VERSION/BUILD_DATE from git.
     import { VERSION, BUILD_DATE } from './version.js';
@@ -244,6 +249,8 @@
     const rewindBtn = document.getElementById('rewind-btn');
     const shareBtn = document.getElementById('share-btn');
     let sharedMode = false;   // opened from a shared pako, awaiting the audio upload
+    let audioHash = null;         // SHA-256 (16 hex) of THIS session's analyzed audio bytes
+    let sharedAudioHash = null;   // the opened token's audioHash (to match a re-chosen file)
     const downloadBtn = document.getElementById('download-btn');
     const openBtn = document.getElementById('open-btn');
     const statusMsg = document.getElementById('status-msg');
@@ -264,13 +271,7 @@
     // Sa reference pitch -> MIDI note name. Ragamroll convention: MIDI 60 = C5
     // (the O=5 middle octave), so octave = floor(midi/12).
     const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-    function noteName(hz) {
-      if (!(hz > 0)) return '';
-      const midi = 69 + 12 * Math.log2(hz / 440);
-      const r = Math.round(midi), cents = Math.round((midi - r) * 100);
-      const name = NOTE_NAMES[((r % 12) + 12) % 12] + Math.floor(r / 12);
-      return name + (cents ? (cents > 0 ? ` +${cents}¢` : ` ${cents}¢`) : '');
-    }
+    const noteName = D.noteName;
     function refreshSaInfo() {
       saInfo.textContent = saRefHz > 0
         ? `Sa (step 0) = ${saRefHz.toFixed(1)} Hz ≈ ${noteName(saRefHz)}  — first voiced frame`
@@ -332,9 +333,10 @@
       const file = event.target.files[0];
       if (!file) return;
 
-      // In a shared session the notes/contour are already loaded — the upload is
-      // just the original audio for playback; don't re-analyse or clear the notes.
-      if (sharedMode) { attachAudioForPlayback(file); return; }
+      // In a shared session the notes/contour are already loaded. Choose File loads
+      // the audio for playback and — if it's the shared SOURCE — upgrades the coarse
+      // contour to full res while keeping the notes; a different file is playback-only.
+      if (sharedMode) { await handleSharedAudioChoice(file); return; }
 
       statusMsg.textContent = 'Decoding audio file...';
       downloadBtn.disabled = true;
@@ -352,6 +354,7 @@
 
       try {
         const arrayBuffer = await file.arrayBuffer();
+        audioHash = await audioFingerprint(arrayBuffer);   // BEFORE decodeAudioData detaches the buffer
 
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
@@ -366,24 +369,11 @@
         
         const detector = PitchDetector.forFloat32Array(frameSize);
 
-        for (let offset = 0; offset < channelData.length - frameSize; offset += hopSize) {
-          const inputBuffer = channelData.subarray(offset, offset + frameSize);
-          const [frequency, clarity] = detector.findPitch(inputBuffer, sampleRate);
-
-          const timeInSeconds = offset / sampleRate;
-
-          // Store the range-valid frequency + clarity for EVERY frame; the
-          // clarity gate is applied later (recompute) so the slider can
-          // re-threshold without re-analysing.
-          const inRange = frequency >= 50 && frequency <= 1200;
-          let e = 0; for (let k = 0; k < inputBuffer.length; k++) e += inputBuffer[k] * inputBuffer[k];
-          pitchDataPoints.push({
-            time: parseFloat(timeInSeconds.toFixed(3)),
-            frequency: inRange ? parseFloat(frequency.toFixed(2)) : null,
-            clarity: parseFloat(clarity.toFixed(2)),
-            rms: parseFloat(Math.sqrt(e / inputBuffer.length).toFixed(4))   // frame energy, for onset detection
-          });
-        }
+        // Frame the PCM into the raw pitch contour via the extracted core. The
+        // clarity gate is applied later (recompute) so the slider can re-threshold
+        // without re-analysing. Output is identical to the old inline loop that
+        // core/detect.js's contourFromPCM was extracted from.
+        pitchDataPoints = D.contourFromPCM(channelData, sampleRate, detector, { frameSize, hopSize });
 
         audioDuration = audioBuffer.duration;
         resetMarkers();
@@ -599,23 +589,10 @@
 
     // Chosen raga's swaras (53-EDO steps mod octave) to emphasize; null = none.
     let ragaSteps = null;
-    const ragaSwaraName = new Map();  // step -> short swara name for the label
+    let ragaSwaraName = new Map();  // step -> short swara name for the label
     function setRaga(name) {
-      ragaSwaraName.clear();
-      if (!name) { ragaSteps = null; renderFrame(player.currentTime || 0); return; }
-      ragaSteps = new Set();
-      const ragas = getRagas();
-      const { varieties } = ragaVarieties(ragas, name);
-      const present = presentLetters(ragas, name);
-      const ab = defaultAb(varieties);
-      const add = (step, nm) => { ragaSteps.add(step); ragaSwaraName.set(step, nm); };
-      if (present.has('S')) add(0, 'S');       // S_STEP
-      if (present.has('P')) add(31, 'P');      // P_STEP
-      for (const L of ['R', 'G', 'M', 'D', 'N']) {
-        if (!present.has(L) || varieties[L] == null) continue;
-        const st = stepForVariety(L, varieties[L], ab[L]);
-        if (st != null) add(st, nameForSlot(st, L));
-      }
+      ({ ragaSteps, ragaSwaraName } = buildRagaSteps(name));
+      if (!name) { renderFrame(player.currentTime || 0); return; }
       updateNoteUI();                    // raga affects the swara tokens
       renderFrame(player.currentTime || 0);
     }
@@ -628,12 +605,7 @@
     let notes = [];          // derived {step, t0, t1, name}
     let undoStack = [];      // snapshots of `boundaries` taken before each edit
     function pushUndo() { undoStack.push(boundaries.map((b) => ({ ...b }))); if (undoStack.length > 60) undoStack.shift(); }
-    function swaraNameForStep(absStep) {
-      const mod = ((absStep % EDO) + EDO) % EDO;
-      if (ragaSteps && ragaSwaraName.has(mod)) return ragaSwaraName.get(mod);
-      const b = BOXES.find((x) => x.step === mod);
-      return b ? b.names[0] : '?';
-    }
+    const swaraNameForStep = (s) => D.swaraNameForStep(s, ragaSteps, ragaSwaraName);
     // Pitch ALWAYS snaps to the nearest shruti line (a note sits on a shruti).
     function snapStepAtX(ox) {
       const raw = stepMin + (ox - PAD.l) / plotW() * (stepMax - stepMin);
@@ -653,42 +625,12 @@
     }
     // Sample a note's curve slice as a NOTE-RELATIVE gamaka: [u (0..1 across the
     // note), delta (53-EDO steps from the note's swara)]. null if flat/too short.
-    function gamakaForNote(n) {
-      const dur = n.t1 - n.t0;
-      if (!(dur > 0) || !(saRefHz > 0)) return null;
-      let pts = [];
-      for (const p of cleanedPoints) {
-        if (p.frequency == null || p.time < n.t0 - 1e-6 || p.time > n.t1 + 1e-6) continue;
-        pts.push([(p.time - n.t0) / dur, Math.round(stepOf(p.frequency) - n.step)]);
-      }
-      if (pts.length < 2) return null;
-      const N = 24;
-      if (pts.length > N) { const stride = (pts.length - 1) / (N - 1); const out = []; for (let i = 0; i < N; i++) out.push(pts[Math.round(i * stride)]); pts = out; }
-      pts[0][0] = 0; pts[pts.length - 1][0] = 1;
-      const clean = [];
-      for (let [u, d] of pts) {
-        u = Math.min(1, Math.max(0, Math.round(u * 100) / 100)); d = Math.max(-60, Math.min(60, d));
-        const pv = clean[clean.length - 1];
-        if (pv) { if (u <= pv[0]) continue; if (d === pv[1]) { clean[clean.length - 1] = [pv[0], d]; continue; } }
-        clean.push([u, d]);
-      }
-      if (clean.length < 2) return null;
-      clean[clean.length - 1][0] = 1;
-      if (clean.every((p) => p[1] === 0)) return null;   // steady swara -> no gamaka
-      return clean;
-    }
+    const gamakaForNote = (n) => D.gamakaForNote(n, cleanedPoints, saRefHz);
     // Derive the monophonic note segments from the sorted boundaries. When the
     // gamaka toggle is on, each note also carries its curve slice as a gamaka.
     function rebuildNotes() {
-      boundaries.sort((a, b) => a.t - b.t);
-      notes = [];
-      for (let i = 0; i < boundaries.length - 1; i++) {
-        if (boundaries[i].step == null) continue;   // rest segment -> no note
-        const n = { step: boundaries[i].step, t0: boundaries[i].t, t1: boundaries[i + 1].t, name: boundaries[i].name };
-        if (boundaries[i].gamaka) n.gamaka = boundaries[i].gamaka;   // explicit (pasted) gamaka survives rebuilds
-        notes.push(n);
-      }
-      if ($('gamakas').checked) for (const n of notes) if (!n.gamaka) n.gamaka = gamakaForNote(n);
+      boundaries.sort((a, b) => a.t - b.t);   // in place — D.notesFromBoundaries sorts a copy, so keep the original's in-place order
+      notes = D.notesFromBoundaries(boundaries, { gamakas: $('gamakas').checked, cleanedPoints, saRefHz });
       updateNoteUI();
       persistModelSoon();   // every model mutation flows through here -> save the tuned notes
     }
@@ -745,55 +687,15 @@
     // sharp rise in RMS (half-wave-rectified energy flux); peak-pick above an
     // adaptive threshold with a minimum spacing. Voiced or unvoiced, the vowel's
     // energy attack right after the consonant lands here.
-    function computeOnsets() {
-      const f = pitchDataPoints;
-      if (f.length < 4 || f[0].rms == null) return [];
-      const rms = f.map((p) => p.rms || 0);
-      const nov = rms.map((v, i) => (i > 0 ? Math.max(0, v - rms[i - 1]) : 0));
-      const mean = nov.reduce((a, b) => a + b, 0) / nov.length;
-      const std = Math.sqrt(nov.reduce((a, b) => a + (b - mean) * (b - mean), 0) / nov.length);
-      const thr = mean + 1.3 * std;
-      const minGap = 5;   // frames (~0.06s)
-      const onsets = []; let last = -1e9;
-      for (let i = 1; i < nov.length - 1; i++) {
-        if (nov[i] > thr && nov[i] >= nov[i - 1] && nov[i] > nov[i + 1] && (i - last) >= minGap) { onsets.push(f[i].time); last = i; }
-      }
-      return onsets;
-    }
+    const computeOnsets = () => D.computeOnsets(pitchDataPoints);
     // ---- Snap detection to a heard-syllable sequence ------------------------
     // Global-align the detected swara letters to the user's syllables, then:
     // relabel matched notes to the target swara, INSERT a note where a target
     // swara has no detected match (a glossed vakra/touch), and drop detected
     // notes with no target. Times come from detection; inserts steal a slice.
-    function alignSeq(a, b) {
-      const n = a.length, m = b.length, GAP = -1;
-      const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
-      for (let i = 0; i <= n; i++) dp[i][0] = i * GAP;
-      for (let j = 0; j <= m; j++) dp[0][j] = j * GAP;
-      for (let i = 1; i <= n; i++) for (let j = 1; j <= m; j++) {
-        const diag = dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 1 : -1);
-        dp[i][j] = Math.max(diag, dp[i - 1][j] + GAP, dp[i][j - 1] + GAP);
-      }
-      let i = n, j = m; const cols = [];
-      while (i > 0 || j > 0) {
-        if (i > 0 && j > 0 && dp[i][j] === dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 1 : -1)) { cols.unshift({ a: i - 1, b: j - 1 }); i--; j--; }
-        else if (i > 0 && dp[i][j] === dp[i - 1][j] + GAP) { cols.unshift({ a: i - 1, b: null }); i--; }
-        else { cols.unshift({ a: null, b: j - 1 }); j--; }
-      }
-      return cols;
-    }
-    function letterToModStep(L) {
-      if (ragaSwaraName.size) for (const [mod, name] of ragaSwaraName) if ((name[0] || '').toUpperCase() === L) return mod;
-      return L === 'S' ? 0 : L === 'P' ? 31 : null;
-    }
-    function stepForLetter(L, ref) {
-      const mod = letterToModStep(L);
-      if (mod == null) return Math.round(ref);
-      const k = Math.round((ref - mod) / EDO);
-      let best = mod + k * EDO;
-      for (const kk of [k - 1, k + 1]) if (Math.abs(mod + kk * EDO - ref) < Math.abs(best - ref)) best = mod + kk * EDO;
-      return best;
-    }
+    const alignSeq = D.alignSeq;
+    const letterToModStep = (L) => D.letterToModStep(L, ragaSwaraName);
+    const stepForLetter = (L, ref) => D.stepForLetter(L, ref, ragaSwaraName);
     function snapToSyllables() {
       if (!notes.length) { statusMsg.textContent = 'Detect (or draw) notes first.'; return; }
       const B = ($('syllables').value.trim().split(/\s+/)).map((t) => (t[0] || '').toUpperCase()).filter((c) => 'SRGMPDN'.includes(c));
@@ -836,50 +738,15 @@
     }
     function detectNotes() {
       if (!ragaSteps) { statusMsg.textContent = 'Pick a raga first to detect notes.'; return; }
-      const ragaLines = [];
-      const o0 = Math.floor(stepMin / EDO) - 1, o1 = Math.ceil(stepMax / EDO) + 1;
-      for (let o = o0; o <= o1; o++) for (const s of ragaSteps) ragaLines.push(o * EDO + s);
-      ragaLines.sort((a, b) => a - b);
-      const nearestRaga = (step) => { let best = ragaLines[0], bd = Infinity; for (const L of ragaLines) { const d = Math.abs(L - step); if (d < bd) { bd = d; best = L; } } return best; };
-      const asg = cleanedPoints.map((p) => p.frequency == null ? null : { t: p.time, abs: nearestRaga(stepOf(p.frequency)) });
-      const W = 11;   // ~0.25s median window (frames are ~11ms)
-      const sm = asg.map((a, i) => {
-        if (!a) return null;
-        const win = []; for (let j = Math.max(0, i - W); j <= Math.min(asg.length - 1, i + W); j++) if (asg[j]) win.push(asg[j].abs);
-        win.sort((x, y) => x - y); return { t: a.t, abs: win[Math.floor(win.length / 2)] };
-      });
-      let runs = [], cur = null;
-      for (const s of sm) { if (!s) { if (cur) { runs.push(cur); cur = null; } continue; } if (cur && cur.abs === s.abs) cur.t1 = s.t; else { if (cur) runs.push(cur); cur = { abs: s.abs, t0: s.t, t1: s.t }; } }
-      if (cur) runs.push(cur);
-      runs = runs.filter((r) => r.t1 - r.t0 >= 0.10);
-      const merged = [];
-      for (const r of runs) { const last = merged[merged.length - 1]; if (last && last.abs === r.abs && r.t0 - last.t1 < 0.35) last.t1 = r.t1; else merged.push({ ...r }); }
-      const dn = merged.filter((r) => r.t1 - r.t0 >= 0.13);
-      if (!dn.length) { statusMsg.textContent = 'No sustained notes detected.'; return; }
-      // Snap each note's START back to the nearest consonant/attack onset just
-      // before it (the vowel dwell begins after the consonant), clamped so it
-      // can't cross into the previous note.
-      let snapped = 0;
-      if ($('snaponsets').checked) {
-        const onsets = computeOnsets();
-        for (let i = 0; i < dn.length; i++) {
-          const lo = Math.max(dn[i].t0 - 0.18, i > 0 ? dn[i - 1].t0 + 0.06 : 0), hi = dn[i].t0 + 0.03;
-          let best = null, bd = Infinity;
-          for (const ot of onsets) { if (ot < lo || ot > hi) continue; const d = Math.abs(ot - dn[i].t0); if (d < bd) { bd = d; best = ot; } }
-          if (best != null && Math.abs(best - dn[i].t0) > 0.005) { dn[i].t0 = best; if (i > 0 && dn[i - 1].t1 > best) dn[i - 1].t1 = best; snapped++; }
-        }
-      }
+      // Gating + note-segmentation (and onset-snapping) now live in D.segmentNotes.
+      const onsets = $('snaponsets').checked ? D.computeOnsets(pitchDataPoints) : [];
+      const boundaries0 = D.segmentNotes(cleanedPoints, ragaSteps, { stepMin, stepMax, saRefHz, snapOnsets: $('snaponsets').checked, onsets, ragaSwaraName });
+      if (!boundaries0.length) { statusMsg.textContent = 'No sustained notes detected.'; return; }
       pushUndo();
-      boundaries = [];
-      for (let i = 0; i < dn.length; i++) {
-        const r = dn[i];
-        boundaries.push({ t: r.t0, step: r.abs, name: swaraNameForStep(r.abs) });
-        const next = dn[i + 1];
-        if (!next || next.t0 - r.t1 > 0.06) boundaries.push({ t: r.t1, step: null, name: null });   // rest / gap
-      }
+      boundaries = boundaries0;
       $('gamakas').checked = true;   // dwell notes carry their vocal wiggle as gamaka
       rebuildNotes(); fitAxisToNotes(); renderFrame(player.currentTime || 0);
-      statusMsg.textContent = `Detected ${notes.length} notes${snapped ? ` (${snapped} snapped to onsets)` : ''}.`;
+      statusMsg.textContent = `Detected ${notes.length} notes.`;
     }
     // Retune the Sa anchor so a steadily-held Sa sits on the Sa grid line. Uses
     // only the SETTLED frames of each Sa note (curve within ~3 steps of a Sa
@@ -1034,54 +901,9 @@
     // Sa) + swara letter + length (T120: 1 unit = 0.25 s). With a raga chosen,
     // the letter is the raga swara and the pitch resolves from Raga=…; with none,
     // c12 chromatic tokens carry the nearest semitone. (Gamaka comes in P3.)
-    const C12 = ['S', 'r', 'R', 'g', 'G', 'm', 'M', 'P', 'd', 'D', 'n', 'N'];
+    // (The C12 token table now lives once in core/detect.js, used by D.notesToSrgm.)
     function notesToSrgm(includeGamaka = true) {
-      const ns = notes.slice().sort((a, b) => a.t0 - b.t0);
-      if (!ns.length) return '';
-      const ragaName = $('raga-sel').value || 'c12';
-      const useRaga = !!$('raga-sel').value;
-      // Fine grid (RES units/sec) so quantization is small, and quantize the
-      // ABSOLUTE positions — each length is the gap between rounded absolute
-      // times, so rounding errors never accumulate. A leading `z` rest preserves
-      // the silence before the first note, so the timeline stays audio-aligned.
-      const RES = 16;                    // units per second
-      const tempo = 30 * RES;            // 1 length-unit = 1/RES seconds (parser: unit = 30/tempo s)
-      let qCursor = 0;                   // quantized cursor position, in units
-      let curOct = 5;                    // matches O=5; parser octave marks are RELATIVE + persistent
-      const toks = [];
-      for (const n of ns) {
-        const qStart = Math.round(n.t0 * RES);
-        if (qStart > qCursor) { toks.push('z' + (qStart - qCursor)); qCursor = qStart; }   // leading rest + gaps
-        let o = Math.floor(n.step / EDO);
-        const mod = n.step - o * EDO;
-        let letter;
-        if (useRaga) {
-          letter = swaraNameForStep(n.step)[0].toUpperCase();
-        } else {
-          let semi = Math.round(12 * mod / EDO);
-          if (semi >= 12) { semi -= 12; o += 1; }
-          letter = C12[semi];
-        }
-        // Emit the DELTA from the previous note's octave (>/< accumulate in the
-        // parser); an absolute count per note piles up across notes.
-        const targetOct = 5 + o, dOct = targetOct - curOct;
-        const oct = dOct > 0 ? '>'.repeat(dOct) : (dOct < 0 ? '<'.repeat(-dOct) : '');
-        curOct = targetOct;
-        const len = Math.max(1, Math.round(n.t1 * RES) - qCursor);
-        qCursor += len;
-        let tok = oct + letter + len;
-        if (includeGamaka && n.gamaka && n.gamaka.length >= 2) tok += `{gamaka:[${n.gamaka.map(([u, d]) => `[${u},${d}]`).join(',')}]}`;
-        toks.push(tok);
-      }
-      // Gamaka-bearing tokens go on their own line for readability; plain notes
-      // stay grouped on shared lines.
-      const lines = []; let cur = [];
-      for (const tok of toks) {
-        if (/\{gamaka:/.test(tok)) { if (cur.length) { lines.push(cur.join(' ')); cur = []; } lines.push(tok); }
-        else cur.push(tok);
-      }
-      if (cur.length) lines.push(cur.join(' '));
-      return `T${tempo}\nRaga=${ragaName},0\nTala=adi,1\nO=5 L=1\n${lines.join('\n')}\n`;
+      return D.notesToSrgm(notes, { includeGamaka, ragaName: $('raga-sel').value || 'c12', useRaga: !!$('raga-sel').value, ragaSteps, ragaSwaraName });
     }
     // The notation textarea is editable. While the user has hand-edited it
     // (dirty), stop auto-overwriting so edits survive; "↻ from notes" resyncs.
@@ -1105,52 +927,20 @@
     });
     const plotW = () => canvas.width - PAD.l - PAD.r;
     const plotH = () => canvas.height - PAD.t - PAD.b;
-    const stepOf = (freq) => EDO * Math.log2(freq / saRefHz);
+    const stepOf = (freq) => D.stepOf(freq, saRefHz);
     // 12-EDO semitone (relative to Sa) -> 53-EDO step, via each pitch-class's
     // default shruti (mirrors draw.js). Used when parsing pasted notation.
-    const stepOfSemitone = (semi) => { const oct = Math.floor(semi / 12), pc = semi - oct * 12; return oct * EDO + defaultShrutiStep(pc); };
+    const stepOfSemitone = D.stepOfSemitone;
     const Xs = (step) => PAD.l + (step - stepMin) / (stepMax - stepMin) * plotW();
     const Yt = (t) => PAD.t + (audioDuration > 0 ? t / audioDuration : 0) * plotH();
 
-    function computeAxis(data, saOverride) {
-      const v = data.filter(p => p.frequency !== null);
-      saRefHz = (saOverride != null) ? saOverride : (v.length ? v[0].frequency : 0);
-      LINES = [];
-      if (!(saRefHz > 0)) { stepMin = -4; stepMax = 4; return; }
-      const steps = v.map(p => stepOf(p.frequency));
-      stepMin = Math.floor(Math.min(...steps)) - 4;
-      stepMax = Math.ceil(Math.max(...steps)) + 4;
-      if (!(stepMax > stepMin)) { stepMin = -4; stepMax = 4; }
-      const o0 = Math.floor(stepMin / EDO), o1 = Math.ceil(stepMax / EDO);
-      for (let o = o0; o <= o1; o++) for (const b of BOXES) {
-        const s = o * EDO + b.step;
-        if (s >= stepMin && s <= stepMax) LINES.push(s);
-      }
-      LINES.sort((a, b) => a - b);
-    }
+    function computeAxis(data, saOverride) { ({ saRefHz, stepMin, stepMax, LINES } = D.computeAxis(data, saOverride)); }
 
     // Points where the pitch contour crosses a shruti line — candidate note
     // anchors. Between two chosen crossings the curve becomes that note's gamaka.
     // Linear-interpolate the crossing time for each line strictly between two
     // adjacent voiced samples' steps.
-    function computeCrossings(data) {
-      crossings = [];
-      let prev = null;
-      for (const p of data) {
-        if (p.frequency === null) { prev = null; continue; }
-        const s = stepOf(p.frequency), t = p.time;
-        if (prev) {
-          const lo = Math.min(prev.s, s), hi = Math.max(prev.s, s);
-          for (const L of LINES) {
-            if (L > lo && L < hi) {
-              const f = (L - prev.s) / (s - prev.s);
-              crossings.push({ step: L, t: prev.t + f * (t - prev.t) });
-            }
-          }
-        }
-        prev = { s, t };
-      }
-    }
+    function computeCrossings(data) { crossings = D.computeCrossings(data, LINES, saRefHz); }
 
     function drawRoll(data) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -1276,12 +1066,7 @@
 
     // Apply the clarity gate to the stored raw frames -> {time, frequency}.
     // (Frames whose clarity is missing — old saved sessions — pass through.)
-    function gatePoints() {
-      return pitchDataPoints.map((p) => ({
-        time: p.time,
-        frequency: (p.frequency != null && (p.clarity == null || p.clarity >= clarityThresh)) ? p.frequency : null,
-      }));
-    }
+    const gatePoints = () => D.gateContour(pitchDataPoints, clarityThresh);
     // Re-derive everything downstream of the raw frames (gate -> clean -> axis ->
     // crossings) and repaint. Cheap enough to run live on a slider drag.
     function recompute() {
@@ -1293,51 +1078,7 @@
       renderFrame(player.currentTime || 0);
     }
 
-    function cleanContour(points) {
-      const pts = points.map(p => ({ time: p.time, frequency: p.frequency }));
-      const vi = pts.filter(p => p.frequency !== null);
-      if (vi.length < 2) return pts;
-      const sorted = vi.map(p => p.frequency).slice().sort((a, b) => a - b);
-      const gmed = sorted[Math.floor(sorted.length / 2)];
-
-      // 1. octave continuity — each frame to the octave nearest the previous.
-      let prev = null;
-      for (const p of vi) {
-        let f = p.frequency;
-        const ref = prev == null ? gmed : prev;
-        for (let k = 0; k < 5; k++) {
-          if (f / ref > HALF) f /= 2;
-          else if (ref / f > HALF) f *= 2;
-          else break;
-        }
-        p.frequency = f; prev = f;
-      }
-
-      // 2. median-3 despike.
-      const src = vi.map(p => p.frequency);
-      for (let i = 1; i < vi.length - 1; i++) {
-        const a = src[i - 1], b = src[i], c = src[i + 1];
-        vi[i].frequency = a <= b ? (b <= c ? b : (a <= c ? c : a)) : (a <= c ? a : (b <= c ? c : b));
-      }
-
-      // 3. bridge only short, close-pitch gaps.
-      let i = 0;
-      while (i < pts.length) {
-        if (pts[i].frequency === null) {
-          let j = i; while (j < pts.length && pts[j].frequency === null) j++;
-          const a = pts[i - 1], b = pts[j];
-          if (a && b && a.frequency && b.frequency && (b.time - a.time) * 1000 <= bridgeMs
-              && Math.abs(EDO * Math.log2(b.frequency / a.frequency)) <= BRIDGE_STEPS) {
-            for (let k = i; k < j; k++) {
-              const r = (pts[k].time - a.time) / (b.time - a.time);
-              pts[k].frequency = a.frequency * Math.pow(b.frequency / a.frequency, r);
-            }
-          }
-          i = j;
-        } else i++;
-      }
-      return pts;
-    }
+    const cleanContour = (points) => D.cleanContour(points, bridgeMs);
 
     // ---- Audio pitch contour -> single-Sa srgm with an inline gamaka --------
     // The whole clip becomes ONE Sa note. Its gamaka is the detected pitch,
@@ -1347,52 +1088,7 @@
     const CLAMP = 60;          // draw's max gamaka span (± steps); EDO imported from shruti.js
     const TARGET = 120;        // downsample the ~86 fps contour to this many points
 
-    function buildSrgm(points, duration) {
-      const voiced = points.filter(p => p.frequency !== null);
-      if (voiced.length < 2 || !(duration > 0)) return null;
-      const saRef = voiced[0].frequency;
-
-      let pts = voiced.map(p => {
-        const u = p.time / duration;
-        let step = Math.round(EDO * Math.log2(p.frequency / saRef));
-        step = Math.max(-CLAMP, Math.min(CLAMP, step));
-        return [u, step];
-      });
-
-      // Decimate to TARGET, always keeping the first and last frame.
-      if (pts.length > TARGET) {
-        const stride = (pts.length - 1) / (TARGET - 1);
-        const out = [];
-        for (let i = 0; i < TARGET; i++) out.push(pts[Math.round(i * stride)]);
-        pts = out;
-      }
-      pts[0][0] = 0;
-      pts[pts.length - 1][0] = 1;
-
-      // Round u to 2dp, force strictly-increasing u, drop consecutive same-step.
-      const clean = [];
-      for (let [u, s] of pts) {
-        u = Math.min(1, Math.max(0, Math.round(u * 100) / 100));
-        const prev = clean[clean.length - 1];
-        if (prev) {
-          if (u <= prev[0]) continue;            // keep u strictly increasing
-          if (s === prev[1]) { clean[clean.length - 1] = [prev[0], s]; continue; } // collapse flat runs
-        }
-        clean.push([u, s]);
-      }
-      if (clean.length < 2) return null;
-      clean[clean.length - 1][0] = 1;
-
-      const vec = clean.map(([u, s]) => `[${u},${s}]`).join(',');
-      const len = Math.max(1, Math.round(duration * 4)); // T120: 1 unit = 0.25s
-      return (
-        `% Generated from an audio pitch contour by pitchy.html\n` +
-        `% One Sa note; gamaka = detected pitch relative to the first voiced ` +
-        `frame (Sa = ${saRef.toFixed(1)} Hz), ${clean.length} points.\n` +
-        `T120\nRaga=c12,0\nTala=adi,1\nO=5 L=1\n` +
-        `S${len}{gamaka:[${vec}]}\n`
-      );
-    }
+    const buildSrgm = D.buildSrgm;
 
     openBtn.addEventListener('click', async () => {
       // Export the full notation (always with gamakas). Honour hand-edits when
@@ -1653,6 +1349,7 @@
       get a() { return markerA; }, get b() { return markerB; },
       get zoomX() { return zoomX; }, get zoomY() { return zoomY; },
       get raga() { return ragaSteps ? [...ragaSteps] : null; },
+      get raw() { return pitchDataPoints; },   // raw detector frames — for the parity/capture harness (additive, read-only)
       setAB(a, b) { markerA = a; markerB = b; renderFrame(player.currentTime || 0); },
       get t() { return player.currentTime; },
       get notes() { return notes; },
@@ -1699,7 +1396,8 @@
         return o;
       });
       const payload = { v: 2, url: $('audiourl').value.trim(), sa: saRefHz, dur: audioDuration,
-                        raga: $('raga-sel').value || '', contour: downsampleContour(cleanedPoints, 450), bnds };
+                        raga: $('raga-sel').value || '', contour: downsampleContour(cleanedPoints, 450), bnds,
+                        audioHash: audioHash || undefined };   // lets a re-chosen file be matched to this source
       const token = await encodeShareToken(JSON.stringify(payload));
       const link = location.origin + location.pathname + '#' + token;
       window.__lastShare = link;
@@ -1736,6 +1434,7 @@
       downloadBtn.disabled = false; openBtn.disabled = false; shareBtn.disabled = false;
       playBtn.disabled = false; rewindBtn.disabled = false; playBtn.textContent = '▶ Play';   // notes play via the synthetic clock
       hasAudio = false; pausedAtSynth = 0; sharedMode = true;
+      sharedAudioHash = payload.audioHash || null;   // to match a later Choose File to this source (hashless -> duration fallback)
       renderFrame(0);
       statusMsg.textContent = `Opened a shared session — ${notes.length} notes.`;
       if (!(await tryLoadLocalAudio(payload.url))) showShareMsg(payload.url || '');
@@ -1762,7 +1461,7 @@
     // Compact VIEWER mode (payload.view, set by /ragas/ links): show the raga name
     // in the heading, move the essential transport + mixer above the grid (moving
     // the nodes keeps their listeners), and hide everything .adv until "Edit" is
-    // toggled. Additive to the share-open path — carries into pitchy2 at the swap.
+    // toggled. Additive to the share-open path.
     function enterViewer(raga) {
       document.body.classList.add('viewer');
       const h1 = document.querySelector('h1');
@@ -1812,6 +1511,60 @@
       { const q = $('audioq'); if (q) q.remove(); }
       hasAudio = true; playBtn.disabled = false; rewindBtn.disabled = false; playBtn.textContent = '▶ Play';
       statusMsg.textContent = 'Audio loaded — play to hear it with the notes.';
+    }
+
+    // SHA-256 (first 16 hex) of audio bytes — the identity we stamp into a share so
+    // a later Choose File can tell if it's THE source. crypto.subtle needs a SECURE
+    // CONTEXT (https or localhost); over plain http to a LAN IP it's undefined, so
+    // return null and let callers fall back to the duration heuristic.
+    async function audioFingerprint(buf) {
+      try {
+        if (!(self.crypto && crypto.subtle)) return null;
+        const d = await crypto.subtle.digest('SHA-256', buf);
+        return [...new Uint8Array(d)].slice(0, 8).map((b) => b.toString(16).padStart(2, '0')).join('');
+      } catch { return null; }
+    }
+    // In a shared session, Choose File loads the audio for playback AND — if it is
+    // the shared SOURCE — upgrades the coarse (≤450-pt, clarity-less) shared contour
+    // to a full-resolution one WITHOUT touching the notes (their boundaries are
+    // time-based; the Sa is preserved so their steps stay valid). A DIFFERENT file
+    // is playback-only + a warning, so it can never corrupt the curated notes.
+    async function handleSharedAudioChoice(file) {
+      attachAudioForPlayback(file);
+      const hash = await audioFingerprint(await file.arrayBuffer());
+      let isSource;
+      if (sharedAudioHash && hash) isSource = (hash === sharedAudioHash);   // authoritative
+      else isSource = await durationMatchesShared(file);                    // legacy token / no crypto
+      if (!isSource) {
+        statusMsg.textContent = 'Loaded for playback — this audio differs from the shared source, so the notes and their gamakas are unchanged.';
+        return;
+      }
+      await upgradeContourFromSource(file, hash);
+    }
+    async function durationMatchesShared(file) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const b = await ctx.decodeAudioData(await file.arrayBuffer());
+        return audioDuration > 0 && Math.abs(b.duration - audioDuration) <= Math.max(0.5, audioDuration * 0.02);
+      } catch { return false; }
+    }
+    async function upgradeContourFromSource(file, hash) {
+      try {
+        statusMsg.textContent = 'Matched the shared source — upgrading to full-resolution contour…';
+        const audioBuffer = await new (window.AudioContext || window.webkitAudioContext)().decodeAudioData(await file.arrayBuffer());
+        const detector = PitchDetector.forFloat32Array(2048);
+        pitchDataPoints = D.contourFromPCM(audioBuffer.getChannelData(0), audioBuffer.sampleRate, detector, { frameSize: 2048, hopSize: 512 });
+        audioDuration = audioBuffer.duration;
+        audioHash = hash || audioHash;
+        // Re-derive the contour at full res but PRESERVE the shared Sa — the notes'
+        // steps are relative to it (recompute() would re-estimate Sa and shift them).
+        cleanedPoints = cleanContour(gatePoints());
+        computeAxis(cleanedPoints, saRefHz);
+        computeCrossings(cleanedPoints);
+        refreshSaInfo(); updateNoteUI(); renderFrame(player.currentTime || 0);
+        idbPut({ name: file.name, blob: file, raw: pitchDataPoints, duration: audioDuration, clarityThresh, bridgeMs }).catch(() => {});
+        statusMsg.textContent = `Upgraded to full-resolution contour — ${notes.length} notes kept; the clarity slider and new gamakas now use full detail.`;
+      } catch (e) { console.error(e); statusMsg.textContent = 'Loaded for playback; could not upgrade the contour.'; }
     }
 
     // ---- Load raga data and populate the picker -----------------------------

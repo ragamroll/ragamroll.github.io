@@ -1,5 +1,5 @@
 // Builds the raga step-set + swara-name map that detect.js needs, mirroring
-// pitchy.html's setRaga (561-583) exactly. Kept separate so pitchy2.html's
+// pitchy.html's setRaga exactly. Kept separate so pitchy.html's
 // setRaga and the golden-chain test share one implementation. Pure — no DOM.
 import { getRagas, setRagas } from './raga-base.js';
 import { ragaVarieties, presentLetters, defaultAb } from './raga-shruti.js';

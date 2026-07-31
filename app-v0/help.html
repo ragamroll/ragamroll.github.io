@@ -130,8 +130,10 @@ G2 G2 P4 P4  D2 P2 &gt;S4 S4</code></pre>
   </ul>
   <h3>Tuning it</h3>
   <p>Clarity and bridge-ms are <b>live sliders</b> in pitchy — but they only take effect when you load the audio
-  <em>fresh</em> (Choose File), because that is when the per-frame clarity data exists. A <b>shared link</b> carries
-  only a downsampled contour with no clarity data, so the sliders can't re-gate there; re-upload the mp3 to tune.
+  <em>fresh</em> (Choose File), because that is when the per-frame clarity data exists. A <b>shared link</b> opens
+  with only a downsampled contour and no clarity data, so the sliders can't re-gate there — <em>until</em> you
+  re-choose the original mp3 (Choose File): if it matches the shared source, pitchy upgrades to the full-resolution
+  contour (keeping your notes) and the sliders work again. A different file loads for playback only.
   Lower the clarity threshold (~0.7–0.8) for fewer gaps (but noisier frames); raise bridge-ms (~400–500) to bridge
   longer gaps. Trade-off: some gaps are <em>real</em> (breaths and silences between phrases) — over-bridging invents
   pitch across them.</p>
@@ -146,9 +148,10 @@ G2 G2 P4 P4  D2 P2 &gt;S4 S4</code></pre>
   has one, the toggle does nothing to them, and turning it <em>off</em> does not strip the existing gamakas.</p>
   <p>It matters only when you <b>add or redraw</b> a note while editing: that new note has no gamaka, so with the
   toggle on it gets one sampled from the curve. <b>Caveat:</b> a shared link carries a <em>downsampled</em> contour
-  (≤ 450 points), so a gamaka newly derived in a link session is coarser than the originals. To redraw notes with
-  full-detail gamaka, <b>load the mp3 fresh</b> (Choose File) — the notes that came from the link already have the
-  full-resolution gamakas.</p>
+  (≤ 450 points), so a gamaka newly derived in a link session is coarser than the originals. To derive new
+  full-detail gamakas, re-choose the <em>original</em> mp3 (Choose File): if it matches the shared source, pitchy
+  upgrades to the full-resolution contour and keeps your notes; a different file loads for playback only. Either way
+  the notes that came from the link already carry their full-resolution gamakas.</p>
 
   <div class="back" style="border-top:1px solid #333; border-bottom:0; margin-top:2rem;">
     <a href="./index.html">&larr; Back to RagaM-Roll</a>
