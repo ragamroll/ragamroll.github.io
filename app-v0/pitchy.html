@@ -105,8 +105,16 @@
     #verline { font-size: .8rem; color: #888; margin: -.2rem 0 .7rem; }
     #headrow { display: flex; align-items: center; gap: 10px; }
     #headrow h1 { flex: 1; margin: 0; }
-    #helpq, #advtoggle { flex: 0 0 auto; border-radius: 50%; width: 1.9em; height: 1.9em; padding: 0;
-      line-height: 1; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+    #advtoggle, #helpq { flex: 0 0 auto; font-size: 1.15rem; padding: .3em .6em; line-height: 1; }
+    #rewind-btn { font-size: 1.2rem; line-height: 1; }   /* match the Play icon weight */
+    /* Viewer: the heading becomes a card (same look/width as the bar + canvas) —
+       burger left, raga name centred, help right. */
+    body.viewer #headrow { margin: 0 0 10px; padding: 8px 12px; border: 1px solid #333;
+      border-radius: 8px; background: #17171b; }
+    body.viewer #headrow h1 { text-align: center; font-size: 1.35rem; }
+    /* All viewer cards match the canvas card's outer width (440 canvas + 2px border). */
+    body.viewer #headrow, body.viewer #viewerbar { width: 442px; max-width: 100%; box-sizing: border-box; }
+    body.viewer:not(.editing) #notewrap { display: none; }   /* empty editor pane -> drop it so the grid centres */
     .chlabel { cursor: pointer; }
     .chlabel.muted { text-decoration: line-through; opacity: .5; }
     #audioq { color: #e0a53a; }
@@ -117,7 +125,7 @@
   <div id="headrow">
     <button id="advtoggle" class="z" style="display:none" title="Menu — full editor">☰</button>
     <h1>Audio Pitch Curve & Data Extractor</h1>
-    <a id="helpq" class="z" href="help.html#pitch-gaps" target="_blank" rel="noopener" title="Help — pitch-curve gaps, clarity/bridge">?</a>
+    <button id="helpq" class="z" title="Help — pitch-curve gaps, clarity/bridge">?</button>
   </div>
   <div id="verline" class="adv">pitchy · RagaM-Roll <span id="appver">dev</span> · share-format v2</div>
 
@@ -1778,6 +1786,7 @@
       }
     }
     $('advtoggle').addEventListener('click', () => document.body.classList.toggle('editing'));
+    $('helpq').addEventListener('click', () => window.open('help.html#pitch-gaps', '_blank', 'noopener'));
     // On page load: rebuild from the URL hash if it carries a pako token.
     async function loadSharedPako() {
       const h = (location.hash || '').replace(/^#/, '');
