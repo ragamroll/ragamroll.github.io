@@ -100,6 +100,10 @@
 <body>
 
   <h1>Audio Pitch Curve & Data Extractor</h1>
+  <div style="font-size:.8rem;color:#888;margin:-.5rem 0 .7rem">
+    pitchy · RagaM-Roll <span id="appver">dev</span> · share-format v2 ·
+    <a href="help.html#pitch-gaps" target="_blank" rel="noopener" style="color:#9cf">Help: pitch gaps &amp; clarity/bridge</a>
+  </div>
 
   <div class="controls">
     <input type="file" id="audio-input" accept="audio/*">
@@ -166,6 +170,13 @@
       <div class="status" style="margin:0 0 6px; display:flex; gap:8px; align-items:center">
         <button id="rewind-btn" disabled title="Rewind to start">⏮</button>
         <button id="play-btn" disabled>▶ Play</button>
+        <select id="speed" title="Playback speed — slows audio + notes together, keeping pitch (hear gamaka detail while editing)">
+          <option value="1">1×</option>
+          <option value="0.75">0.75×</option>
+          <option value="0.5">0.5×</option>
+          <option value="0.35">0.35×</option>
+          <option value="0.25">0.25×</option>
+        </select>
         Notation
         <button class="z" id="regennotation" title="Regenerate text from the drawn notes">↻ from notes</button>
         <button class="z" id="applynotation" title="Parse the text into notes">notes ← text</button>
@@ -196,6 +207,10 @@
     import { setRagaExt } from './core/raga-ext.js';
     import { ragaVarieties, presentLetters, defaultAb } from './core/raga-shruti.js';
     import { stepForVariety } from './core/melakarta.js';
+    // Show the single RagaM-Roll version tag (same source as the app Footer):
+    // 'dev' in the working tree; build-app-v0.sh stamps VERSION/BUILD_DATE from git.
+    import { VERSION, BUILD_DATE } from './version.js';
+    document.getElementById('appver').textContent = VERSION + (BUILD_DATE ? ` · ${BUILD_DATE}` : '');
 
     const fileInput = document.getElementById('audio-input');
     const playBtn = document.getElementById('play-btn');
@@ -261,6 +276,29 @@
         const rq = tx.objectStore(IDB_STORE).get(IDB_KEY);
         rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error);
       });
+    }
+    // Persist the hand-tuned model (boundaries + Sa + raga + markers) into the
+    // saved session so a reload restores the NOTES, not just the audio. The
+    // boundaries are the tedious-to-redo part; the analysis-time idbPut only
+    // stores the raw frames. Merge into the existing record (keep the blob);
+    // skip shared sessions (they have no blob and persist via the share link).
+    let _persistTimer = null;
+    function persistModelSoon() {
+      if (sharedMode) return;
+      clearTimeout(_persistTimer);
+      _persistTimer = setTimeout(persistModel, 800);   // coalesce drag storms
+    }
+    async function persistModel() {
+      if (sharedMode) return;
+      try {
+        const s = await idbGet();
+        if (!s || !s.blob) return;                     // nothing to attach the model to yet
+        s.bnds = boundaries.map((b) => { const o = { t: +b.t.toFixed(3), s: b.step }; if (b.gamaka) o.g = b.gamaka; return o; });
+        s.sa = saRefHz;
+        s.raga = $('raga-sel').value || '';
+        s.markerA = markerA; s.markerB = markerB;
+        await idbPut(s);
+      } catch (e) { console.warn('model persist failed', e); }
     }
 
     fileInput.addEventListener('change', async (event) => {
@@ -625,6 +663,7 @@
       }
       if ($('gamakas').checked) for (const n of notes) if (!n.gamaka) n.gamaka = gamakaForNote(n);
       updateNoteUI();
+      persistModelSoon();   // every model mutation flows through here -> save the tuned notes
     }
     // Expand the pitch axis to include every note's step (pasted notes may sit
     // outside the audio-derived range).
@@ -1401,6 +1440,7 @@
     // (a shared session before the file is uploaded) a synthetic AudioContext
     // clock drives the playhead so the notes still play.
     let hasAudio = false, synthPlaying = false, synthCtxStart = 0, synthPosStart = 0, synthRaf = 0, pausedAtSynth = 0;
+    let playbackSpeed = 1;   // 1× .. 0.25×; slows audio (time-stretched) + the synth notes together
     function ensureCtx() {
       if (actx) return;
       actx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1415,7 +1455,7 @@
       const base = actx.currentTime + 0.05;   // small lead so the first note isn't clipped
       for (const n of notes) {
         if (n.t1 <= fromT || !(saRefHz > 0)) continue;
-        const start = base + Math.max(0, n.t0 - fromT), end = base + (n.t1 - fromT);
+        const start = base + Math.max(0, n.t0 - fromT) / playbackSpeed, end = base + (n.t1 - fromT) / playbackSpeed;
         if (end <= start) continue;
         const osc = actx.createOscillator(); osc.type = 'triangle';
         const f0 = noteFreq(n.step);
@@ -1451,14 +1491,14 @@
     }
     function synthTick() {
       if (!synthPlaying) return;
-      const pos = synthPosStart + (actx.currentTime - synthCtxStart);
+      const pos = synthPosStart + (actx.currentTime - synthCtxStart) * playbackSpeed;
       if (markerB > markerA && pos >= markerB) { synthPlaying = false; synthRaf = 0; stopNotes(); pausedAtSynth = markerB; playBtn.textContent = '▶ Play'; renderFrame(markerB); return; }
       renderFrame(Math.max(0, pos));
       synthRaf = requestAnimationFrame(synthTick);
     }
     function synthStop() {
       if (!synthPlaying) return;
-      pausedAtSynth = Math.max(0, synthPosStart + (actx.currentTime - synthCtxStart));
+      pausedAtSynth = Math.max(0, synthPosStart + (actx.currentTime - synthCtxStart) * playbackSpeed);
       synthPlaying = false; if (synthRaf) cancelAnimationFrame(synthRaf); synthRaf = 0;
       stopNotes(); playBtn.textContent = '▶ Play'; renderFrame(pausedAtSynth);
     }
@@ -1489,6 +1529,22 @@
       if (pitchDataPoints.length) recompute();
     });
 
+    // Playback speed — slow the audio (time-stretched, pitch preserved) AND the
+    // synth notes together, so gamaka detail is audible while adjusting notation.
+    $('speed').addEventListener('change', () => {
+      const prev = playbackSpeed;
+      playbackSpeed = parseFloat($('speed').value) || 1;
+      player.playbackRate = playbackSpeed;
+      try { player.preservesPitch = true; } catch { /* older browsers */ }
+      if (hasAudio) {
+        if (!player.paused && !previewing) { stopNotes(); scheduleNotes(player.currentTime); }   // reschedule at new rate
+      } else if (synthPlaying) {
+        synthPosStart = synthPosStart + (actx.currentTime - synthCtxStart) * prev;   // freeze pos at old rate
+        synthCtxStart = actx.currentTime;                                            // rebase to new rate
+        stopNotes(); scheduleNotes(synthPosStart);
+      }
+    });
+
     playBtn.addEventListener('click', () => {
       if (hasAudio) { if (player.paused) player.play(); else player.pause(); }
       else { if (synthPlaying) synthStop(); else synthPlay(); }   // notes-only playback (no audio)
@@ -1510,6 +1566,7 @@
     player.addEventListener('play',  () => {
       if (previewing) { stopPlayhead(); tick(); return; }   // paint preview: raw audio only, no bounds/synth
       playBtn.textContent = '⏸ Pause';
+      player.playbackRate = playbackSpeed; try { player.preservesPitch = true; } catch { /* older browsers */ }
       // Bound playback to [A, B]: (re)start at A when outside the segment.
       if (markerB > markerA && (player.currentTime < markerA - 0.01 || player.currentTime >= markerB - 0.01)) {
         player.currentTime = markerA;
@@ -1629,8 +1686,25 @@
       hasAudio = false; pausedAtSynth = 0; sharedMode = true;
       renderFrame(0);
       statusMsg.textContent = `Opened a shared session — ${notes.length} notes.`;
-      showShareMsg(payload.url || '');
+      if (!(await tryLoadLocalAudio(payload.url))) showShareMsg(payload.url || '');
       return true;
+    }
+    // If the shared audio URL is SAME-ORIGIN (a local curation server serving the
+    // repo, so the mp3 sits at e.g. /downloads/…), fetch it and auto-load it for
+    // playback — no manual download+upload step. Returns false (caller then shows
+    // the manual message) for cross-origin/published URLs or any fetch failure, so
+    // published (gh-pages) links stay safe. Local first, message only as fallback.
+    async function tryLoadLocalAudio(url) {
+      if (!url) return false;
+      let sameOrigin = false;
+      try { sameOrigin = url.startsWith('/') || new URL(url, location.href).origin === location.origin; } catch { return false; }
+      if (!sameOrigin) return false;
+      try {
+        const r = await fetch(url);
+        if (!r.ok) return false;
+        attachAudioForPlayback(await r.blob());
+        return true;
+      } catch { return false; }
     }
     // On page load: rebuild from the URL hash if it carries a pako token.
     async function loadSharedPako() {
@@ -1696,8 +1770,45 @@
         openBtn.disabled = voiced < 2;
         playBtn.disabled = false; rewindBtn.disabled = false; shareBtn.disabled = false; hasAudio = true;
         playBtn.textContent = '▶ Play';
+
+        // Rehydrate the hand-tuned model, if this session carried one, so the
+        // tedious note edits come back — not just the audio. Mirrors the shared
+        // -session rebuild: restore the tuned Sa + raga first so boundary steps
+        // (absolute 53-EDO relative to Sa) and swara names resolve correctly.
+        if (s.raga) { const opt = [...$('raga-sel').options].find((o) => o.value.toLowerCase() === s.raga.toLowerCase()); if (opt) { $('raga-sel').value = opt.value; setRaga(opt.value); } }
+        if (Array.isArray(s.bnds) && s.bnds.length) {
+          if (s.sa > 0) { computeAxis(cleanedPoints, s.sa); computeCrossings(cleanedPoints); refreshSaInfo(); }
+          if (s.markerA != null) markerA = s.markerA;
+          if (s.markerB != null) markerB = s.markerB;
+          boundaries = s.bnds.map((o) => ({ t: o.t, step: o.s, name: o.s != null ? swaraNameForStep(o.s) : null, gamaka: o.g || undefined }));
+          rebuildNotes();
+          fitAxisToNotes();
+          renderFrame(player.currentTime || 0);
+          statusMsg.textContent = `Restored "${s.name}" — ${notes.length} tuned notes + ${voiced} voiced frames (reload-persistent).`;
+        }
       } catch (e) { console.warn('session restore failed', e); }
     })();
+
+    // ---- Guard against accidental navigation away (lost edits) --------------
+    // A stray trackpad back-swipe or mouse back-button can navigate off the
+    // page and drop unsaved note/boundary/notation edits (IDB restore only
+    // carries the audio + thresholds, not the hand-tuned model). Two layers:
+    //   1. beforeunload -> native prompt on reload / close / URL change.
+    //   2. a pushState trap + popstate -> swallow the same-document back
+    //      gesture, keep the page, and flash a warning instead of leaving.
+    const hasWork = () => notes.length > 0 || notationDirty;
+    window.addEventListener('beforeunload', (e) => {
+      if (!hasWork()) return;
+      e.preventDefault();
+      e.returnValue = '';        // Chrome shows its generic unsaved-changes prompt
+      return '';
+    });
+    history.pushState(null, '', location.href);   // trap entry to absorb one back
+    window.addEventListener('popstate', () => {
+      if (!hasWork()) return;    // no edits -> let the back navigation proceed
+      history.pushState(null, '', location.href);   // re-arm: stay on the page
+      statusMsg.textContent = 'Back navigation blocked — you have unsaved edits. Use Share or Download to save first.';
+    });
   </script>
 </body>
 </html>

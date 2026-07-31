@@ -310,6 +310,18 @@
    "N": "B"
   }
  },
+ "ganamoorthi": {
+  "C12_SWARAS": {
+   "S": "C",
+   "P": "G",
+   "Z": "R",
+   "R": "C#",
+   "G": "D",
+   "M": "F",
+   "D": "G#",
+   "N": "B"
+  }
+ },
  "gowlai": {
   "C12_SWARAS": {
    "S": "C",
