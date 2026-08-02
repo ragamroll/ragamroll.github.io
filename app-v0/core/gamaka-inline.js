@@ -20,6 +20,51 @@ export function stringifyAttrs(obj) {
   return Object.entries(obj).map(([k, v]) => `${k}:${JSON.stringify(v)}`).join(', ');
 }
 
+// Capturing head: (octave marks)(swara/rest letter)(length digits)
+const NOTE_HEAD_G = /^(>*|<*)([sSrRgGmMpPdDnNzZ])(\d*)$/;
+
+// Walk srgm token-by-token. Emits inter-token whitespace, newlines, and whole-line
+// `%` comments verbatim (never counted). For each token, calls visit(t); if visit
+// returns a string it replaces the token, else the token is emitted verbatim.
+// `ordinal` counts NOTE tokens (rests + out-of-raga swaras included) so it matches
+// parse()'s note events 1:1 and the draw model's `tok`.
+export function walkTokens(srcText, visit) {
+  let out = '', i = 0, ordinal = -1, atLineStart = true;
+  while (i < srcText.length) {
+    const c = srcText[i];
+    if (c === '\n') { out += c; i++; atLineStart = true; continue; }
+    if (isWs(c)) { out += c; i++; continue; }
+    if (atLineStart && c === '%') {                    // whole-line comment: verbatim, uncounted
+      let e = i; while (e < srcText.length && srcText[e] !== '\n') e++;
+      out += srcText.slice(i, e); i = e; atLineStart = false; continue;
+    }
+    atLineStart = false;
+    let j = i;
+    while (j < srcText.length && !isWs(srcText[j]) && srcText[j] !== '{') j++;
+    const head = srcText.slice(i, j);
+    let k = j, hadBrace = false, body = '';
+    if (srcText[j] === '{') {                           // brace-balanced block
+      hadBrace = true; let d = 0;
+      for (k = j; k < srcText.length; k++) {
+        if (srcText[k] === '{') d++;
+        else if (srcText[k] === '}') { d--; if (d === 0) { k++; break; } }
+      }
+      body = srcText.slice(j + 1, k - 1);
+    }
+    const raw = srcText.slice(i, k);
+    const hm = NOTE_HEAD_G.exec(head);
+    const isNote = !!hm;
+    if (isNote) ordinal++;
+    const t = isNote
+      ? { isNote: true, ordinal, octMarks: hm[1], letter: hm[2], len: hm[3], head, hadBrace, body, raw }
+      : { isNote: false, ordinal: -1, octMarks: '', letter: '', len: '', head, hadBrace, body, raw };
+    const rep = visit(t);
+    out += (rep === undefined ? raw : rep);
+    i = k;
+  }
+  return out;
+}
+
 // Sample a curve [[u,val]…] (increasing u in [0,1]) at position u, smoothstep
 // between points. Shared by the draw roll and the audio path so they sound alike.
 export function sampleCurve(c, u) {
@@ -30,7 +75,6 @@ export function sampleCurve(c, u) {
   return c[c.length - 1][1];
 }
 
-const NOTE_HEAD = /^(>*|<*)([sSrRgGmMpPdDnNzZ])(\d*)$/;
 const isWs = (c) => c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === '\f' || c === '\v';
 
 // Re-emit inline attributes into the srgm text. `curves` is keyed by the note
@@ -41,43 +85,14 @@ const isWs = (c) => c === ' ' || c === '\t' || c === '\n' || c === '\r' || c ===
 // counted token's {…} is rewritten to carry the given gamaka (dropped when
 // absent), preserving other attributes (e.g. sahitya) and all surrounding text.
 export function serializeInline(srcText, curves) {
-  let out = '', i = 0, noteIdx = -1, atLineStart = true;
-  while (i < srcText.length) {
-    const c = srcText[i];
-    if (c === '\n') { out += c; i++; atLineStart = true; continue; }
-    if (isWs(c)) { out += c; i++; continue; }        // leading/inner whitespace (keeps line-start status)
-    // A whole comment line (first non-blank char is '%') is ignored by the parser
-    // — emit it verbatim and do NOT count its tokens, so ordinals stay aligned.
-    if (atLineStart && c === '%') {
-      let e = i; while (e < srcText.length && srcText[e] !== '\n') e++;
-      out += srcText.slice(i, e); i = e; atLineStart = false; continue;
-    }
-    atLineStart = false;
-    let j = i;
-    while (j < srcText.length && !isWs(srcText[j]) && srcText[j] !== '{') j++;
-    const head = srcText.slice(i, j);
-    let k = j, hadBrace = false, body = '';
-    if (srcText[j] === '{') {                        // consume a brace-balanced block
-      hadBrace = true; let d = 0;
-      for (k = j; k < srcText.length; k++) {
-        if (srcText[k] === '{') d++;
-        else if (srcText[k] === '}') { d--; if (d === 0) { k++; break; } }
-      }
-      body = srcText.slice(j + 1, k - 1);
-    }
-    if (NOTE_HEAD.test(head)) {                       // any note token (plain, rest, or out-of-raga)
-      noteIdx++;
-      let attrs = {};
-      if (hadBrace) { try { attrs = parseAttrs(body); } catch { attrs = {}; } }
-      const cur = curves[noteIdx];
-      const rest = { ...attrs }; delete rest.gamaka;                  // other attrs (e.g. sahitya)
-      attrs = (cur && cur.length) ? { gamaka: cur, ...rest } : rest;  // gamaka first
-      const s = stringifyAttrs(attrs);
-      out += head + (s ? '{' + s + '}' : '');
-    } else {
-      out += srcText.slice(i, k);                    // directive / non-note token
-    }
-    i = k;
-  }
-  return out;
+  return walkTokens(srcText, (t) => {
+    if (!t.isNote) return undefined;
+    let attrs = {};
+    if (t.hadBrace) { try { attrs = parseAttrs(t.body); } catch { attrs = {}; } }
+    const cur = curves[t.ordinal];
+    const rest = { ...attrs }; delete rest.gamaka;
+    const merged = (cur && cur.length) ? { gamaka: cur, ...rest } : rest;
+    const s = stringifyAttrs(merged);
+    return t.head + (s ? '{' + s + '}' : '');
+  });
 }

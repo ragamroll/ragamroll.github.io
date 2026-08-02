@@ -317,6 +317,23 @@ export function segmentNotes(cleanedPoints, ragaSteps, { stepMin, stepMax, saRef
   return boundaries;
 }
 
+// Map an absolute 53-EDO step to its srgm swara letter + ABSOLUTE octave register
+// (5 = the O=5 baseline). Pure extraction of notesToSrgm's per-note letter/octave
+// logic so the draw editor and pitchy's serializer agree byte-for-byte.
+export function stepToSwara(step, { useRaga, ragaSteps, ragaSwaraName } = {}) {
+  let o = Math.floor(step / EDO);
+  const mod = step - o * EDO;
+  let letter;
+  if (useRaga) {
+    letter = swaraNameForStep(step, ragaSteps, ragaSwaraName)[0].toUpperCase();
+  } else {
+    let semi = Math.round(12 * mod / EDO);
+    if (semi >= 12) { semi -= 12; o += 1; }
+    letter = C12[semi];
+  }
+  return { letter, octave: 5 + o };
+}
+
 // Serialize `notes` (as produced by notesFromBoundaries) into srgm notation,
 // pure extraction of notesToSrgm (pitchy.html 995-1042).
 export function notesToSrgm(notes, { includeGamaka = true, ragaName, useRaga, ragaSteps, ragaSwaraName } = {}) {
@@ -334,19 +351,9 @@ export function notesToSrgm(notes, { includeGamaka = true, ragaName, useRaga, ra
   for (const n of ns) {
     const qStart = Math.round(n.t0 * RES);
     if (qStart > qCursor) { toks.push('z' + (qStart - qCursor)); qCursor = qStart; }   // leading rest + gaps
-    let o = Math.floor(n.step / EDO);
-    const mod = n.step - o * EDO;
-    let letter;
-    if (useRaga) {
-      letter = swaraNameForStep(n.step, ragaSteps, ragaSwaraName)[0].toUpperCase();
-    } else {
-      let semi = Math.round(12 * mod / EDO);
-      if (semi >= 12) { semi -= 12; o += 1; }
-      letter = C12[semi];
-    }
-    // Emit the DELTA from the previous note's octave (>/< accumulate in the
-    // parser); an absolute count per note piles up across notes.
-    const targetOct = 5 + o, dOct = targetOct - curOct;
+    const { letter, octave: targetOct } = stepToSwara(n.step, { useRaga, ragaSteps, ragaSwaraName });
+    // Emit the DELTA from the previous note's octave (>/< accumulate in the parser).
+    const dOct = targetOct - curOct;
     const oct = dOct > 0 ? '>'.repeat(dOct) : (dOct < 0 ? '<'.repeat(-dOct) : '');
     curOct = targetOct;
     const len = Math.max(1, Math.round(n.t1 * RES) - qCursor);

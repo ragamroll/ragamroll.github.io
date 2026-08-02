@@ -1,0 +1,56 @@
+// Pure operations on a gamaka curve: an array of [u, step] anchors — u in [0,1]
+// ascending, endpoints normally pinned at u=0 and u=1, step = absolute 53-EDO
+// pitch. Shared by the full-screen editor and in-roll gamaka drawing so both
+// produce identical curves. No DOM, no snap (callers apply snapStep).
+
+// Reduce a raw freehand point list to direction-change anchors. Verbatim from
+// draw.js's original extractAnchors (moved here so both editors share one copy).
+export function extractAnchors(raw) {
+  if (raw.length <= 2) return raw.slice();
+  const A = [raw[0]]; let dir = 0;
+  for (let i = 1; i < raw.length; i++) {
+    const d = raw[i][1] - raw[i - 1][1]; const sd = d > 0.3 ? 1 : (d < -0.3 ? -1 : 0);
+    if (sd !== 0) { if (dir !== 0 && sd !== dir && Math.abs(raw[i - 1][1] - A[A.length - 1][1]) >= 2) A.push(raw[i - 1]); dir = sd; }
+  }
+  A.push(raw[raw.length - 1]); return A;
+}
+
+// Freehand finalize: raw points -> anchors with endpoints pinned at u=0/1.
+// null if fewer than 2 points (curve cleared).
+export function pointsToAnchors(raw) {
+  if (!raw || raw.length < 2) return null;
+  const sorted = raw.map(p => p.slice()).sort((a, b) => a[0] - b[0]);
+  let c = extractAnchors(sorted);
+  if (c[0][0] > 0.001) c = [[0, c[0][1]], ...c];
+  if (c[c.length - 1][0] < 0.999) c = [...c, [1, c[c.length - 1][1]]];
+  return c;
+}
+
+// Insert an anchor at (u,step), keeping u ascending; u clamped to [0,1].
+export function addAnchor(curve, u, step) {
+  const c = curve.map(p => p.slice());
+  u = Math.max(0, Math.min(1, u));
+  let k = c.findIndex(p => p[0] > u); if (k < 0) k = c.length;
+  c.splice(k, 0, [u, step]);
+  return c;
+}
+
+// Remove anchor idx. Fewer than 2 remain -> null (curve cleared). Otherwise
+// re-pin the new first/last to u=0/1 so the curve still spans the note.
+export function removeAnchor(curve, idx) {
+  const c = curve.map(p => p.slice());
+  c.splice(idx, 1);
+  if (c.length < 2) return null;
+  c[0][0] = 0; c[c.length - 1][0] = 1;
+  return c;
+}
+
+// Move anchor idx to (u,step), u clamped between neighbours (endpoints to
+// [0,next) / (prev,1]) — matches the editor's dragHandle.
+export function moveAnchor(curve, idx, u, step) {
+  const c = curve.map(p => p.slice());
+  const lo = idx === 0 ? 0 : c[idx - 1][0] + 0.006, hi = idx === c.length - 1 ? 1 : c[idx + 1][0] - 0.006;
+  c[idx][0] = Math.max(lo, Math.min(hi, u));
+  c[idx][1] = step;
+  return c;
+}

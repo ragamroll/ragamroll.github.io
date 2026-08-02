@@ -12,8 +12,12 @@ import { encodeShareToken, decodeShareToken } from './core/share.js';
 import { VERSION, BUILD_DATE } from './version.js';
 import { midiToName } from './core/tuning.js';
 import { serializeInline } from './core/gamaka-inline.js';
+import { extractAnchors, pointsToAnchors, addAnchor, removeAnchor, moveAnchor } from './core/gamaka-curve.js';
 import { buildSequence } from './core/midi/sequence.js';
 import { writeSMF } from './core/midi/smf.js';
+import { serializeModel, snapToRagaRow, snapToAkshara, placePaint, splitSpans, ragaRowsInRange, octMarks } from './core/note-edit.js';
+import { buildRagaSteps } from './core/detect-raga-helper.js';
+import { stepToSwara } from './core/detect.js';
 
 const LS_KEY = 'ragamroll.srgm';
 const SHRUTI = [...new Set(BOXES.map(b => b.step))].sort((a, b) => a - b);   // 22 steps in an octave
@@ -24,6 +28,8 @@ let saRef = 60, saFreq = midiToFreq(60), tempoBpm = 120, TOTAL = 0;
 let saPlay = null;     // Sa reference-pitch override (midi); null = auto (= saRef, the layout anchor)
 let compTempo = 120;   // the composition's own tempo; the tempo slider is a multiplier of this
 let starts = [], gridPitches = [], stepMin = -26, stepMax = 66, srcText = '';
+let contentEnd = 0;   // true content end from buildModel's starts-loop cursor `t` (rests included; 0 for a blank piece)
+let userGridMin = null, userGridMax = null, userGridBottom = null;  // handle-stretched roll bounds (view-state, NOT saved)
 let talaMeasure = 0, talaAccents = [], talaBeat = 0;   // cycle length + 1-based accent slots + akshara length (length-units)
 let docName = 'ragamroll';               // base filename for Save / Export MIDI
 let curRaga = '', curTala = '', curTalaName = 'adi';   // readout + current tala name (for the picker)
@@ -60,8 +66,7 @@ function buildModel(src){
     if (ki < keep.length && keep[ki] === o){ starts.push(t); ki++; }
     if (allNotes[o].absLen > 0) t += allNotes[o].absLen;
   }
-  TOTAL = t || 1;
-  markerA = 0; markerB = TOTAL;   // segment bounds default to the whole piece; draggable in the gutter
+  contentEnd = t;   // true content end (rests included) — see recomputeGridBounds()
   const tp = [...model.events].reverse().find(e => e.type === 'tala');   // accent strums (veena) at tala accents
   talaMeasure = (tp && tp.props && tp.props.measure > 0) ? tp.props.measure : 0;
   talaAccents = (tp && tp.props && Array.isArray(tp.props.accents)) ? tp.props.accents : [];
@@ -70,12 +75,40 @@ function buildModel(src){
   curRaga = rk ? String(rk.key[0]) : '';
   curTala = tp ? `beat ${tp.props.beat}` : '';
   curTalaName = (srcText.match(/(?:^|\s)Tala=([A-Za-z0-9]+)/) || [])[1] || 'adi';
-  const seen = new Map();
-  for (const n of NOTES){ if (!seen.has(n.step)) seen.set(n.step, { step: n.step, label: n.swara + n.octave }); }
-  gridPitches = [...seen.values()].sort((a, b) => a.step - b.step);
+  recomputeGridBounds();
+  markerA = 0; markerB = TOTAL;   // segment bounds default to the whole piece; draggable in the gutter
+}
+// Recompute TOTAL/stepMin/stepMax/gridPitches from the current NOTES/starts/
+// talaMeasure/curRaga/userGrid* module state. Pulled out of buildModel's tail so a
+// live handle-stretch (userGrid* changed, nothing re-parsed) can re-derive the grid
+// bounds without re-running the parser. Does NOT touch userGrid* itself — only
+// loadSrc/applyShared reset those (new composition), same invariant as before.
+function recomputeGridBounds(){
+  const notesEnd = contentEnd;   // real content end, rests included (0 for a blank piece) — set in buildModel from the starts-loop cursor
+  let autoTotal = notesEnd || 1;
+  // Blank piece: seed ~2 tala cycles of empty time grid (or 8 units with no tala),
+  // instead of a single unit of grid that renders as no usable canvas.
+  if (NOTES.length === 0) autoTotal = talaMeasure > 0 ? talaMeasure * 2 : 8;
+  TOTAL = userGridBottom != null ? Math.max(userGridBottom, notesEnd, 1) : autoTotal;
   const ps = NOTES.map(n => n.step);
-  stepMin = Math.min(...ps) - 9; stepMax = Math.max(...ps) + 9;
+  let notesMin, notesMax, autoMin, autoMax;
+  if (ps.length){ notesMin = Math.min(...ps); notesMax = Math.max(...ps); autoMin = notesMin - 9; autoMax = notesMax + 9; }
+  else { notesMin = 0; notesMax = EDO; autoMin = -9; autoMax = EDO + 9; }   // blank piece: seed a sensible one-octave-ish pitch range
+  stepMin = userGridMin != null ? Math.min(userGridMin, notesMin) : autoMin;
+  stepMax = userGridMax != null ? Math.max(userGridMax, notesMax) : autoMax;
   if (!(stepMax > stepMin)) { stepMin = -26; stepMax = 66; }
+  gridPitches = buildGridPitches();
+}
+// Pitch-header rows: the raga's swara rows spanning the current [stepMin,stepMax], plus any
+// out-of-raga note pitches. So the full scale shows across the visible range (blank or not) and
+// stretching the pitch handles reveals new rows to paint on. No raga (c12) -> note pitches only.
+function buildGridPitches(){
+  const { ragaSteps, ragaSwaraName } = ragaCtx();
+  const rows=new Map();
+  if (ragaSteps) for (const s of ragaRowsInRange(ragaSteps, stepMin, stepMax))
+    rows.set(s, { step:s, label:(ragaSwaraName.get(((s%EDO)+EDO)%EDO)||'') + (Math.floor(s/EDO)+5) });
+  for (const n of NOTES) if (!rows.has(n.step)) rows.set(n.step, { step:n.step, label:n.swara+n.octave });
+  return [...rows.values()].sort((a,b)=>a.step-b.step);
 }
 const freqOf = step => stepFreq(saFreq, step);
 // Is a swara (53-EDO step from Sa) nearest a black piano key, given the chosen Sa?
@@ -90,6 +123,19 @@ function snapStep(s){ const oct = Math.floor(s / EDO), base = s - oct * EDO; let
 // ---------- canvas ----------
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
 let CSSW=0, CSSH=0, dpr=1, mode='roll', sel=-1, drawing=false, drawSpan=22, dragIdx=-1;
+// Roll-mode long-press grab (move/resize a note). paintMode is wired to the
+// `+ note` toolbar toggle below; grab and paint gestures are mutually exclusive.
+let grab=null, pressTimer=0, pressXY=null, justGrabbed=false, paintMode=false, gamakaMode=false;   // grab: {idx, kind:'move'|'resize', oldStep, oldDur, pid}
+let paint=null;   // paint={ts, step?, rest?, dur, pid} — in-progress paint-a-note/rest drag (roll mode, paintMode on)
+let gamaStroke=null;   // in-roll gamaka gesture: {gi, pid, dragIdx, downX, downY, buffer, mode:'anchor'|'free'|'pending'}
+const HANDLE_PX=18;
+const REST_LANE_PX=22;   // width of the rest-paint gutter at the left edge of the plot area (roll, paint mode)
+const ROLL_TOUCH_ACTION='pan-y';   // touchAction roll mode uses when idle (matches resizeCanvas below)
+// Grid stretch-handles (pitch-low/pitch-high/time-bottom) — shared sizing between
+// the render() draw and hitGridHandle()'s hit-test so they stay in lockstep.
+const GRIP_THICK=14, GRIP_LEN=HANDLE_PX*2.6;
+let handleDrag=null;   // {which:'pmin'|'pmax'|'tbottom', pid}
+// TEMP DEBUG (grid-handle grab diagnosis) — remove after diagnosing.
 // Roll is always fully expanded: scale time so the SHORTEST note cell is at least
 // CELL_PX tall — enough to render its swara glyph, mobile portrait included.
 const CELL_PX = 24;
@@ -126,7 +172,7 @@ function resizeCanvas(){ const hd=document.getElementById('holder'); const baseH
   if (mode==='roll'){ content.style.height=virtH()+'px'; }   // a tall empty div gives the scrollbar its range
   else { content.style.height=baseH+'px'; hd.scrollTop=0; }   // draw mode: one note fills the viewport, no scroll
   cv.width=CSSW*dpr; cv.height=CSSH*dpr; cv.style.width=CSSW+'px'; cv.style.height=CSSH+'px';
-  cv.style.touchAction = mode==='draw' ? 'none' : 'pan-y';   // draw: no scroll; roll: allow vertical scroll
+  cv.style.touchAction = mode==='draw' ? 'none' : ROLL_TOUCH_ACTION;   // draw: no scroll; roll: allow vertical scroll
   ctx.setTransform(dpr,0,0,dpr,0,0); render(); }
 
 function render(){
@@ -144,6 +190,13 @@ function render(){
   // Left gutter (holds the draggable A/B segment handles).
   ctx.fillStyle=cssvar('--panel2'); ctx.globalAlpha=.55; ctx.fillRect(0,0,PAD.l,CSSH); ctx.globalAlpha=1;
   ctx.strokeStyle=hair; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(PAD.l,0); ctx.lineTo(PAD.l,CSSH); ctx.stroke();
+  // Rest gutter: a faint band at the left edge of the plot area, paint mode only —
+  // pressing inside it paints a rest (silent gap) instead of a note (see the paint
+  // pointerdown listener's `restLane` check, same REST_LANE_PX).
+  if (mode==='roll' && paintMode){ ctx.fillStyle='rgba(216,161,63,.09)'; ctx.fillRect(p.x,p.y,REST_LANE_PX,p.h);
+    ctx.strokeStyle=hair; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(p.x+REST_LANE_PX,p.y); ctx.lineTo(p.x+REST_LANE_PX,p.y+p.h); ctx.stroke();
+    ctx.fillStyle=muted; ctx.globalAlpha=.8; ctx.textAlign='center'; ctx.font='bold 11px '+cssvar('--mono');
+    ctx.fillText('z', p.x+REST_LANE_PX/2, p.y+13); ctx.globalAlpha=1; ctx.font='11px '+cssvar('--mono'); }
   if (mode==='draw'){ for (let oct=Math.floor(sa/EDO)-1; oct<=Math.floor(sb/EDO)+1; oct++) for (const sh of SHRUTI){ const s=oct*EDO+sh;
     if (s<sa||s>sb) continue; const x=X(s); ctx.strokeStyle=hair; ctx.globalAlpha=.5; ctx.beginPath(); ctx.moveTo(x,p.y); ctx.lineTo(x,p.y+p.h); ctx.stroke(); ctx.globalAlpha=1; } }
   for (const g of gridPitches){ if (g.step<sa-1||g.step>sb+1) continue; const x=X(g.step);
@@ -196,7 +249,18 @@ function render(){
     ctx.strokeStyle = selNow?amber:amberS; ctx.lineWidth=selNow?2:1.3; ctx.setLineDash(mode==='draw'?[5,4]:[]);
     roundRect(x-w/2, y0+1, w, Math.max(3,y1-y0-2), 5); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
     if (nn.curve) drawCurve(nn, starts[i], starts[i]+nn.dur, teal, mode==='draw'?3:2);
-    if (mode!=='draw'){ ctx.fillStyle = black?'#efe6d0':'#20242b'; ctx.textAlign='center'; ctx.fillText(nn.swara, x, y0+13); } }
+    if (mode!=='draw'){ ctx.fillStyle = black?'#efe6d0':'#20242b'; ctx.textAlign='center'; ctx.fillText(nn.swara, x, y0+13); }
+    if (grab && grab.idx===i){ ctx.fillStyle='#9fc'; ctx.globalAlpha=0.9; ctx.fillRect(x-10, y1-4, 20, 8); ctx.globalAlpha=1; } }
+  if (mode==='roll' && gamakaMode) for (let i=0;i<NOTES.length;i++){ const c=NOTES[i].curve; if (!c) continue;
+    const t0=starts[i], t1=t0+NOTES[i].dur;
+    for (const [u,st] of c){ const cx=X(st), cy=Y(t0+(t1-t0)*u);
+      ctx.fillStyle=teal; ctx.globalAlpha=.9; ctx.beginPath(); ctx.arc(cx,cy,4,0,6.283); ctx.fill(); ctx.globalAlpha=1;
+      ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.lineWidth=.7; ctx.stroke(); } }
+  if (paint){ const y0=Y(paint.ts), y1=Y(paint.ts+paint.dur);
+    if (paint.rest){ const xc=p.x+REST_LANE_PX/2;
+      ctx.fillStyle='#999'; ctx.globalAlpha=0.4; roundRect(xc-8,y0,16,Math.max(4,y1-y0),4); ctx.fill(); ctx.globalAlpha=1; }
+    else { const xc=X(paint.step);
+      ctx.fillStyle='#9fc'; ctx.globalAlpha=0.35; roundRect(xc-8,y0,16,Math.max(4,y1-y0),4); ctx.fill(); ctx.globalAlpha=1; } }
   if (mode==='draw'&&!NOTES[sel].curve){ ctx.fillStyle=muted; ctx.textAlign='center'; ctx.font='13px '+cssvar('--sans');
     ctx.fillText('drag top→bottom to draw the pitch', p.x+p.w/2, p.y+p.h/2); }
   if (mode==='draw'&&NOTES[sel].curve&&!drawing){ const c=NOTES[sel].curve,[t0,t1]=yStartEnd();
@@ -211,8 +275,57 @@ function render(){
   if (mode==='roll'&&playPos!=null){ const y=Y(playPos);   // playhead sweeps down as the roll plays
     ctx.strokeStyle=teal; ctx.globalAlpha=.95; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(p.x,y); ctx.lineTo(p.x+p.w,y); ctx.stroke(); ctx.globalAlpha=1;
     ctx.fillStyle=teal; ctx.beginPath(); ctx.moveTo(p.x,y-4); ctx.lineTo(p.x+7,y); ctx.lineTo(p.x,y+4); ctx.closePath(); ctx.fill(); }
+  if (mode==='roll') drawGridHandles(teal);
   positionHandles();
 }
+// Grip dots inside a handle tab, perpendicular to its drag axis (a row of dots
+// along the axis you CAN'T drag hints "grab and slide the other way").
+function gripDots(cx,cy,axis){ ctx.fillStyle='#08110d';
+  for (let i=-1;i<=1;i++){ if (axis==='h') ctx.fillRect(cx-1, cy+i*4-1, 2, 2); else ctx.fillRect(cx+i*4-1, cy-1, 2, 2); } }
+// The 3 grid stretch-handles: pitch-low/pitch-high (drag horizontally — resize the
+// pitch axis) and time-bottom (drag vertically — resize the time axis; the top of
+// the time axis stays pinned at t=0). Positions here MUST match hitGridHandle()'s
+// hit-test math exactly (shared GRIP_THICK/GRIP_LEN constants).
+function drawGridHandles(teal){ const p=plot();
+  const drawTab=(cx,cy,w,h,axis)=>{ ctx.fillStyle=teal; ctx.globalAlpha=.85; roundRect(cx-w/2,cy-h/2,w,h,4); ctx.fill(); ctx.globalAlpha=1;
+    ctx.strokeStyle='rgba(0,0,0,.3)'; ctx.lineWidth=.6; ctx.stroke(); gripDots(cx,cy,axis); };
+  const yMid=p.y+p.h/2;
+  // pitch-low: nudged a few px right of the plot edge so it clears the A/B gutter border.
+  drawTab(Math.max(p.x+GRIP_THICK/2+3, X(stepMin)), yMid, GRIP_THICK, GRIP_LEN, 'h');
+  // pitch-high.
+  drawTab(X(stepMax), yMid, GRIP_THICK, GRIP_LEN, 'h');
+  // time-bottom: a STICKY '+ time' button pinned to the bottom of the viewport (always
+  // visible; click-to-extend — no scrolling to find it). Drawn last so it sits on top.
+  const yBot=CSSH-GRIP_THICK/2-6;
+  drawTab(p.x+p.w/2, yBot, GRIP_LEN, GRIP_THICK, 'v');
+  ctx.fillStyle='#031'; ctx.font='bold 12px '+cssvar('--mono'); ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('+ time', p.x+p.w/2, yBot); ctx.textBaseline='alphabetic'; ctx.font='11px '+cssvar('--mono');
+}
+// Hit-test the 3 grid handles (roll mode only); returns 'pmin'|'pmax'|'tbottom'|null.
+// Mirrors drawGridHandles()'s positions with a generous (HANDLE_PX) touch radius.
+function hitGridHandle(x,y){ if (mode!=='roll') return null; const p=plot();
+  const yMid=p.y+p.h/2, halfLen=GRIP_LEN/2+HANDLE_PX*0.4, halfThick=GRIP_THICK/2+HANDLE_PX;
+  const xLo=Math.max(p.x+GRIP_THICK/2+3, X(stepMin));
+  const xHi=X(stepMax);
+  const yBot=CSSH-GRIP_THICK/2-6;   // STICKY: pinned to the viewport bottom, always present
+  if (Math.abs(x-xLo)<=halfThick && Math.abs(y-yMid)<=halfLen) return 'pmin';
+  if (Math.abs(x-xHi)<=halfThick && Math.abs(y-yMid)<=halfLen) return 'pmax';
+  if (Math.abs(y-yBot)<=halfThick && Math.abs(x-(p.x+p.w/2))<=halfLen) return 'tbottom';
+  return null;
+}
+// Time-bottom handle is CLICK-to-extend (not drag): each click adds one avartana
+// (or 8 units with no tala) of empty grid and scrolls the roll so the new bottom —
+// with the handle on it — sits near the viewport bottom, ready for the next click.
+function extendTime(){ const inc=talaMeasure>0?talaMeasure:8;
+  userGridBottom=(userGridBottom!=null?userGridBottom:TOTAL)+inc;
+  recomputeGridBounds(); resizeCanvas();
+  const hd=document.getElementById('holder');
+  hd.scrollTop=Math.max(0, Math.min(Math.max(0,virtH()-hd.clientHeight), PAD.t + TOTAL*pxU() - (hd.clientHeight-40)));
+  render(); }
+function startHandleDrag(which,e){ const {x}=evtPos(e);
+  handleDrag={ which, pid:e.pointerId, startX:x, startStepMin:stepMin, startStepMax:stepMax,
+    pxPerStep: plot().w/Math.max(1,(stepMax-stepMin)) };   // FROZEN px-per-step at grab start
+  cv.style.touchAction='none'; try{ cv.setPointerCapture(e.pointerId); }catch(_){}; render(); }
 // Position the draggable A/B gutter handles at their marker times. The gutter is
 // absolute-in-content (scrolls with the roll), so handles sit at VIRTUAL y and stay
 // aligned with their marker lines as you scroll.
@@ -231,17 +344,281 @@ function drawCurve(nn,t0,t1,color,wd){ const c=nn.curve; if (!c||!c.length) retu
 // ---------- interaction ----------
 function evtPos(e){ const r=cv.getBoundingClientRect(); return { x:e.clientX-r.left, y:e.clientY-r.top }; }
 // roll: selection is a click/tap (so a drag can scroll the tall roll)
-cv.addEventListener('click', e=>{ if (mode!=='roll') return; ensureAudio(); const {x,y}=evtPos(e); const i=hitNote(x,y); if (i>=0) enterDraw(i); });
-cv.addEventListener('pointerdown', e=>{ if (mode!=='draw') return; cv.setPointerCapture(e.pointerId); ensureAudio(); const {x,y}=evtPos(e);
-  if (NOTES[sel].curve){ const hi=hitHandle(x,y); if (hi>=0){ dragIdx=hi; liveOn(); liveSet(NOTES[sel].curve[hi][1]); return; } }
-  drawing=true; NOTES[sel].curve=[]; liveOn(); addPoint(x,y); render(); });
-cv.addEventListener('pointermove', e=>{ if (mode!=='draw') return; const {x,y}=evtPos(e);
-  if (dragIdx>=0){ dragHandle(x,y); render(); return; }
-  if (!drawing) return; addPoint(x,y); render(); });
-cv.addEventListener('pointerup', ()=>{
-  if (dragIdx>=0){ if (document.getElementById('snap').checked) NOTES[sel].curve[dragIdx][1]=snapStep(NOTES[sel].curve[dragIdx][1]); dragIdx=-1; liveOff(); render(); autoPlay(); scheduleShare(); return; }
-  if (drawing){ drawing=false; liveOff(); finalizeCurve(); render(); autoPlay(); scheduleShare(); } });
-cv.addEventListener('pointercancel', ()=>{ if (drawing){ drawing=false; liveOff(); } dragIdx=-1; });
+cv.addEventListener('click', e=>{ if (mode!=='roll') return;
+  if (justGrabbed){ justGrabbed=false; return; }   // suppress the click that follows a long-press grab/drag/release
+  ensureAudio(); const {x,y}=evtPos(e); const i=hitNote(x,y); if (i>=0) enterDraw(i); });
+let dEdit=null;   // draw-mode curve gesture: {downX,downY,hi,origCurve,mode:'pending'|'drag'|'free'}
+const DEDIT_EPS=6;
+// Is (x,y) on the selected note's curve LINE (draw-mode coords), for tap-to-add?
+function onCurveLineDraw(x,y){ const c=NOTES[sel].curve; if (!c) return false; const [t0,t1]=yStartEnd();
+  const u=Math.max(0,Math.min(1,(tAtY(y)-t0)/Math.max(1e-6,t1-t0))); const st=sampleCurve(c,u); return Math.abs(X(st)-x)<=14; }
+cv.addEventListener('pointerdown', e=>{ if (mode!=='draw') return; try{ cv.setPointerCapture(e.pointerId); }catch(_){} ; ensureAudio(); const {x,y}=evtPos(e);
+  dEdit={ downX:x, downY:y, hi:(NOTES[sel].curve?hitHandle(x,y):-1), origCurve:(NOTES[sel].curve?NOTES[sel].curve.map(p=>p.slice()):null), mode:'pending' }; });
+cv.addEventListener('pointermove', e=>{ if (mode!=='draw' || !dEdit) return; const {x,y}=evtPos(e);
+  if (dEdit.mode==='pending' && (Math.abs(x-dEdit.downX)>DEDIT_EPS || Math.abs(y-dEdit.downY)>DEDIT_EPS)){
+    if (dEdit.hi>=0){ pushUndo(); dEdit.mode='drag'; dragIdx=dEdit.hi; liveOn(); liveSet(NOTES[sel].curve[dEdit.hi][1]); }
+    else { pushUndo(); dEdit.mode='free'; drawing=true; NOTES[sel].curve=[]; liveOn(); addPoint(x,y); render(); return; } }
+  if (dEdit.mode==='drag'){ dragHandle(x,y); render(); return; }
+  if (dEdit.mode==='free'){ addPoint(x,y); render(); return; } });
+cv.addEventListener('pointerup', e=>{ if (mode!=='draw' || !dEdit) return; const {x,y}=evtPos(e); const g=dEdit; dEdit=null;
+  if (g.mode==='drag'){ if (document.getElementById('snap').checked) NOTES[sel].curve[dragIdx][1]=snapStep(NOTES[sel].curve[dragIdx][1]); dragIdx=-1; liveOff(); render(); autoPlay(); scheduleShare(); return; }
+  if (g.mode==='free'){ drawing=false; liveOff(); finalizeCurve(); render(); autoPlay(); scheduleShare(); return; }
+  // tap (no drag): on a handle -> remove; on the curve line -> add
+  if (g.hi>=0){ pushUndo(); NOTES[sel].curve=removeAnchor(NOTES[sel].curve, g.hi);
+    const has=!!(NOTES[sel].curve&&NOTES[sel].curve.length); document.getElementById('clear').disabled=!has; document.getElementById('copy').disabled=!has;
+    liveOff(); render(); autoPlay(); scheduleShare(); return; }
+  if (NOTES[sel].curve && onCurveLineDraw(x,y)){ pushUndo(); const [t0,t1]=yStartEnd();
+    const u=Math.max(0,Math.min(1,(tAtY(y)-t0)/Math.max(1e-6,t1-t0))); const st=document.getElementById('snap').checked ? snapStep(Math.round(stepAtX(x))) : Math.round(stepAtX(x));
+    NOTES[sel].curve=addAnchor(NOTES[sel].curve, u, st); render(); autoPlay(); scheduleShare(); return; }
+  liveOff(); });
+cv.addEventListener('pointercancel', ()=>{ if (dEdit){ if (dEdit.mode!=='pending') NOTES[sel].curve=dEdit.origCurve; dEdit=null; } drawing=false; dragIdx=-1; liveOff(); render(); });
+// roll: on desktop (mouse), grabbing a note is immediate on press-drag; touch/pen
+// still long-press (300ms) to disambiguate from scroll. body-drag MOVEs (pitch,
+// snapped to the raga's rows), end-cap-handle-drag RESIZEs (duration, snapped to
+// the tala akshara).
+function startGrab(i, y, pid){ ensureAudio();
+  const y1=Y(starts[i]+NOTES[i].dur);                  // far-time edge
+  const kind=(Math.abs(y - y1)<=HANDLE_PX*1.4)?'resize':'move';
+  grab={ idx:i, kind, oldStep:NOTES[i].step, oldDur:NOTES[i].dur, pid };
+  cv.style.touchAction='none';   // own the gesture: a RESIZE is a vertical drag, exactly the
+  // axis 'pan-y' permits, so without this the native touch-scroll fights the grab.
+  try{ cv.setPointerCapture(pid); }catch(_){}
+  render(); }
+cv.addEventListener('pointerdown', e=>{ if (mode!=='roll' || paintMode || gamakaMode) return;
+  { const {x,y}=evtPos(e); const gh=hitGridHandle(x,y); if (gh){ if (gh==='tbottom') extendTime(); else startHandleDrag(gh,e); return; } }
+  // Defensive: a missed pointerup/pointercancel (OS interruption) can leave a stale
+  // grab/press from a previous touch. Reset it before starting the new press so an
+  // early pointermove on THIS touch can't mutate the wrong (previously grabbed) note.
+  if (grab || pressXY){ clearTimeout(pressTimer); pressXY=null;
+    if (grab){ NOTES[grab.idx].step=grab.oldStep; NOTES[grab.idx].dur=grab.oldDur; }   // revert the in-flight mutation before dropping the stale grab
+    grab=null; cv.style.touchAction=ROLL_TOUCH_ACTION; }
+  const {x,y}=evtPos(e);
+  const i=hitNote(x,y); if (i<0) return;                 // empty grid -> let it scroll
+  pressXY={x,y,id:e.pointerId}; clearTimeout(pressTimer);
+  if (e.pointerType==='mouse'){ startGrab(i, y, e.pointerId); return; }   // desktop: no long-press needed
+  pressTimer=setTimeout(()=>{ if (!pressXY) return; startGrab(i, y, e.pointerId); }, 300); });
+cv.addEventListener('pointermove', e=>{ if (mode!=='roll') return; const {x,y}=evtPos(e);
+  if (!grab){ if (pressXY && (Math.abs(x-pressXY.x)>8||Math.abs(y-pressXY.y)>8)){ clearTimeout(pressTimer); pressXY=null; } return; }
+  if (e.pointerId!==grab.pid) return;   // ignore a second concurrent touch while grabbing
+  if (grab.kind==='move'){ const raw=stepAtX(Math.max(plot().x,Math.min(plot().x+plot().w,x)));
+    NOTES[grab.idx].step=snapToRagaRow(Math.round(raw), ragaRowSteps());
+  } else { const t=tAtY(y); const beat=talaBeat||1; let d=snapToAkshara(t-starts[grab.idx], beat);
+    NOTES[grab.idx].dur=Math.max(beat, d); }
+  render(); });
+cv.addEventListener('pointerup', async e=>{ if (mode!=='roll') return;
+  if (grab && e.pointerId!==grab.pid) return;   // ignore a second concurrent touch's release; the owning grab stays live
+  clearTimeout(pressTimer);
+  const g=grab; pressXY=null; grab=null; if (!g){ return; }   // no grab (plain tap) -> let the click handler select
+  cv.style.touchAction=ROLL_TOUCH_ACTION;   // grab over (committed or no-op) — give the scroll gesture back
+  if (g.kind==='move'){ const changed=NOTES[g.idx].step!==g.oldStep;
+    if (!changed){ render(); return; }   // no actual move (e.g. plain mouse click) — let the click handler select
+    justGrabbed=true;   // a real edit happened — suppress the click-select that may follow this release
+    pushUndo(); await onMoveDrop(g.idx, g.oldStep); }
+  else { const changed=NOTES[g.idx].dur!==g.oldDur; if (!changed){ render(); return; }
+    justGrabbed=true;
+    pushUndo(); await commitEdit({ changed:new Set([NOTES[g.idx].tok]), deriveOctave:false }); }
+});
+cv.addEventListener('pointercancel', e=>{ if (mode!=='roll') return;
+  if (grab && e.pointerId!==grab.pid) return;   // ignore a second concurrent touch's cancel; the owning grab stays live
+  clearTimeout(pressTimer); pressXY=null;
+  if (grab){ NOTES[grab.idx].step=grab.oldStep; NOTES[grab.idx].dur=grab.oldDur; grab=null; cv.style.touchAction=ROLL_TOUCH_ACTION; render(); } });
+// Paint mode (`+ note` toggled on): drag on the grid creates a note — pitch snaps to
+// a raga row, length to the tala akshara. Capture-phase + the !paintMode guard on the
+// grab handlers above keep paint and grab gestures mutually exclusive. `paint` tracks
+// its owning pointerId (`pid`), same pattern as `grab`, so a second concurrent touch
+// can't overwrite the in-progress gesture and corrupt the eventual commit.
+cv.addEventListener('pointerdown', e=>{ if (mode!=='roll' || !paintMode) return;
+  { const {x,y}=evtPos(e); const gh=hitGridHandle(x,y); if (gh){ if (gh==='tbottom') extendTime(); else startHandleDrag(gh,e); return; } }
+  if (paint) return;   // a paint is already active (e.g. a second finger) — ignore
+  ensureAudio();
+  const {x,y}=evtPos(e); const beat=talaBeat||1;
+  const ts=Math.max(0, snapToAkshara(tAtY(y), beat));
+  const restLane = x < plot().x + REST_LANE_PX;
+  if (restLane){ paint={ ts, rest:true, dur:beat, pid:e.pointerId }; }
+  else { const step=snapToRagaRow(Math.round(stepAtX(x)), ragaRowSteps()); paint={ ts, step, dur:beat, pid:e.pointerId }; }
+  try{ cv.setPointerCapture(e.pointerId); }catch(_){}; render(); }, true);
+cv.addEventListener('pointermove', e=>{ if (!paint || e.pointerId!==paint.pid) return; const {y}=evtPos(e); const beat=talaBeat||1;
+  paint.dur=Math.max(beat, snapToAkshara(tAtY(y)-paint.ts, beat)); render(); }, true);
+cv.addEventListener('pointerup', async e=>{ if (!paint || e.pointerId!==paint.pid) return;
+  if (!paintMode){ paint=null; render(); return; }   // Fix #7: `+ note` toggled off mid-drag — abort, don't commit
+  const p=paint; paint=null;
+  justGrabbed=true;   // suppress the trailing click so a freshly-painted note doesn't auto-open gamaka editing
+  const durs=NOTES.map(n=>n.dur);
+  const place=placePaint({ ts:p.ts, dur:p.dur, notes:NOTES, starts, durs, total:TOTAL });
+  pushUndo(); await applyPaint(place, p); }, true);
+// Defensive, mirroring the grab gesture's pointercancel: an OS-interrupted paint
+// (app backgrounded mid-drag, etc.) must not leave `paint` set — that would render
+// the green preview forever with no gesture left to dismiss it. Paint doesn't touch
+// cv.style.cursor/touchAction per-gesture (unlike grab, which owns the drag axis),
+// so there is nothing else to restore here beyond nulling the state and re-rendering.
+cv.addEventListener('pointercancel', e=>{ if (!paint || e.pointerId!==paint.pid) return; paint=null; render(); }, true);
+// In-roll gamaka drawing/editing (`✎ gamaka` toggled on). Grid handles + `+ time`
+// are checked first (so you can zoom while editing). The note under the initial
+// press is the stroke's target; drag on empty note area = freehand redraw.
+const MOVE_EPS=6;   // px before a press counts as a drag (vs a tap)
+function uAt(i,y){ return Math.max(0,Math.min(1,(tAtY(y)-starts[i])/Math.max(1e-6,NOTES[i].dur))); }
+function stepAt(x){ const p=plot(); return snapStep(Math.round(stepAtX(Math.max(p.x,Math.min(p.x+p.w,x))))); }
+// Roll-coord hit-test of note gi's anchors; returns the anchor index or -1.
+function hitAnchor(gi,x,y){ const c=NOTES[gi].curve; if (!c) return -1; const t0=starts[gi],t1=t0+NOTES[gi].dur;
+  for (let k=0;k<c.length;k++){ const cx=X(c[k][1]),cy=Y(t0+(t1-t0)*c[k][0]); if ((x-cx)*(x-cx)+(y-cy)*(y-cy)<=16*16) return k; } return -1; }
+// Is (x,y) on note gi's curve LINE (within ~12px), for tap-to-add? Sample at the press u.
+function onCurveLine(gi,x,y){ const c=NOTES[gi].curve; if (!c) return false; const u=uAt(gi,y);
+  const st=sampleCurve(c,u); return Math.abs(X(st)-x)<=12; }
+cv.addEventListener('pointerdown', e=>{ if (mode!=='roll' || !gamakaMode) return;
+  { const {x,y}=evtPos(e); const gh=hitGridHandle(x,y); if (gh){ if (gh==='tbottom') extendTime(); else startHandleDrag(gh,e); return; } }
+  if (gamaStroke) return;
+  ensureAudio(); const {x,y}=evtPos(e); const i=hitNote(x,y); if (i<0) return;
+  try{ cv.setPointerCapture(e.pointerId); }catch(_){};
+  const dragIdx = NOTES[i].curve ? hitAnchor(i,x,y) : -1;
+  gamaStroke={ gi:i, pid:e.pointerId, downX:x, downY:y, dragIdx, buffer:null, mode: dragIdx>=0 ? 'anchor' : 'pending', origCurve:NOTES[i].curve };
+}, true);
+cv.addEventListener('pointermove', e=>{ if (!gamaStroke || e.pointerId!==gamaStroke.pid) return; const {x,y}=evtPos(e);
+  const g=gamaStroke;
+  if (g.mode==='anchor'){ if (Math.abs(x-g.downX)>MOVE_EPS || Math.abs(y-g.downY)>MOVE_EPS){
+      if (!g.moved){ pushUndo(); g.moved=true; }
+      NOTES[g.gi].curve=moveAnchor(NOTES[g.gi].curve, g.dragIdx, uAt(g.gi,y), stepAt(x)); render(); }
+    return; }
+  if (g.mode==='pending' && (Math.abs(x-g.downX)>MOVE_EPS || Math.abs(y-g.downY)>MOVE_EPS)){
+    // begin a freehand redraw of the target note's curve
+    pushUndo(); g.mode='free'; g.buffer=[]; NOTES[g.gi].curve=null;
+  }
+  if (g.mode==='free'){ const u=uAt(g.gi,y), st=stepAt(x);
+    if (g.buffer.length && u<=g.buffer[g.buffer.length-1][0]) g.buffer[g.buffer.length-1][1]=st; else g.buffer.push([u,st]);
+    NOTES[g.gi].curve=g.buffer.slice(); render(); }
+}, true);
+cv.addEventListener('pointerup', e=>{ if (!gamaStroke || e.pointerId!==gamaStroke.pid) return; const g=gamaStroke; gamaStroke=null;
+  justGrabbed=true;   // suppress any trailing click (don't fall into the full-screen editor)
+  const {x,y}=evtPos(e); const moved=Math.abs(x-g.downX)>MOVE_EPS||Math.abs(y-g.downY)>MOVE_EPS;
+  if (g.mode==='free'){ NOTES[g.gi].curve=pointsToAnchors(g.buffer); render(); scheduleShare(); return; }
+  if (g.mode==='anchor'){ if (g.moved){ scheduleShare(); }
+    else { pushUndo(); NOTES[g.gi].curve=removeAnchor(NOTES[g.gi].curve, g.dragIdx); render(); scheduleShare(); }  // tap = remove
+    return; }
+  // mode 'pending' with no move: tap on the curve line adds an anchor there
+  if (!moved && NOTES[g.gi].curve && onCurveLine(g.gi,x,y)){ pushUndo();
+    NOTES[g.gi].curve=addAnchor(NOTES[g.gi].curve, uAt(g.gi,y), stepAt(x)); render(); scheduleShare(); }
+}, true);
+cv.addEventListener('pointercancel', e=>{ if (!gamaStroke || e.pointerId!==gamaStroke.pid) return; NOTES[gamaStroke.gi].curve=gamaStroke.origCurve; gamaStroke=null; render(); }, true);
+// Grid stretch-handle drag (pitch-low/pitch-high/time-bottom). These are separate
+// listeners (not folded into grab/paint) because a handle-drag must fire in BOTH
+// normal and paint mode — startHandleDrag() is invoked from the top of both roll
+// pointerdowns above, before their own mode-specific logic runs. No-op unless
+// handleDrag is set, so they coexist peacefully with the grab/paint handlers.
+cv.addEventListener('pointermove', e=>{ if (!handleDrag || e.pointerId!==handleDrag.pid) return; const {x,y}=evtPos(e);
+  const hd=document.getElementById('holder'), content=document.getElementById('content');
+  if (handleDrag.which==='tbottom'){
+    userGridBottom=Math.max(snapToAkshara(tAtY(y), talaBeat||1), (talaBeat||1));
+    recomputeGridBounds(); content.style.height=virtH()+'px';
+    // Fix 3 scroll-follow: glue the bottom edge under the cursor so the new time is visible live.
+    hd.scrollTop=Math.max(0, Math.min(Math.max(0,virtH()-hd.clientHeight), PAD.t + TOTAL*pxU() - y));
+  } else {
+    // Frozen-scale: bound = start bound + cursor pixel-travel / start px-per-step. Independent of
+    // the live (rescaling) stepMin/stepMax, so no feedback loop pins the value.
+    const dSteps=(x-handleDrag.startX)/handleDrag.pxPerStep;
+    const base=(handleDrag.which==='pmin')?handleDrag.startStepMin:handleDrag.startStepMax;
+    const st=snapToRagaRow(Math.round(base+dSteps), ragaRowSteps());
+    if (handleDrag.which==='pmin') userGridMin=st; else userGridMax=st;
+    recomputeGridBounds(); content.style.height=virtH()+'px';
+  }
+  render(); });
+cv.addEventListener('pointerup', e=>{ if (!handleDrag || e.pointerId!==handleDrag.pid) return; handleDrag=null; cv.style.touchAction=ROLL_TOUCH_ACTION; });
+cv.addEventListener('pointercancel', e=>{ if (!handleDrag || e.pointerId!==handleDrag.pid) return; handleDrag=null; cv.style.touchAction=ROLL_TOUCH_ACTION; render(); });
+// Discoverability: hover the grid stretch-handles shows a resize cursor (idle only —
+// not while any drag/grab/paint gesture is in progress). No log param -> hitGridHandle
+// stays silent here, so this high-frequency listener doesn't flood the console (Fix 5).
+cv.addEventListener('pointermove', e=>{ if (mode!=='roll' || handleDrag || grab || paint) return;
+  const {x,y}=evtPos(e); const h=hitGridHandle(x,y);
+  cv.style.cursor = h ? (h==='tbottom'?'pointer':'col-resize') : (paintMode?'crosshair':''); });
+// A moved note is committed with the current gamaka-on-move default; if it carried
+// a gamaka, a toast offers the other behaviour for ~4s. The model stores the curve
+// ABSOLUTE, so 'preserve pitch' = leave the curve (serialize emits shifted relative
+// deltas); 'move with note' = shift the abs curve by +Δstep so the relative deltas
+// stay verbatim and the whole curve rides the note.
+async function onMoveDrop(idx, oldStep){
+  const n=NOTES[idx], dStep=n.step-oldStep;
+  // Derive octave the same way the letter itself is derived (stepToSwara), not via
+  // a raw Math.floor(step/EDO) — that disagrees with stepToSwara's c12 wrap-to-next-
+  // octave behaviour near the top of an octave, which could spell the wrong octave.
+  const ctx=ragaCtx();
+  const newOct=stepToSwara(n.step, ctx).octave, oldOct=stepToSwara(oldStep, ctx).octave;
+  n.octave=newOct;
+  const hasCurve=!!(n.curve && n.curve.length);
+  // Capture the mode once, before the await below — gmovesel can change live while
+  // commitEdit is in flight, and the toast must describe/flip the mode that was
+  // actually applied to this drop, not whatever the dropdown reads afterward.
+  const appliedMode=gamakaOnMove;
+  const applyMode=(mode)=>{ if (!hasCurve) return;
+    // The abs curve is left exactly as it was pre-drop; the mode only decides
+    // whether to shift it by dStep so it rides the note (move-with-note) or
+    // stays put so the note's pitch through the curve is unchanged (preserve-pitch).
+    if (mode==='move-with-note') n.curve=n.curve.map(([u,s])=>[u,s+dStep]);
+    /* preserve-pitch: leave abs curve as-is */ };
+  applyMode(appliedMode);
+  await commitEdit({ changed:new Set([n.tok]), deriveOctave:newOct!==oldOct });
+  if (!hasCurve) return;
+  const other=appliedMode==='preserve-pitch'?'move-with-note':'preserve-pitch';
+  const label=appliedMode==='preserve-pitch'?'move with note':'preserve pitch';
+  showToast(`Gamaka: ${appliedMode==='preserve-pitch'?'pitch preserved':'moved with note'}`, `switch to ${label}`, async ()=>{
+    // Flip: after buildModel, re-find the note by its tok and reshift the abs curve
+    // by the opposite of what appliedMode implied, then re-commit.
+    const j=NOTES.findIndex(x=>x.tok===n.tok); if (j<0) return; const m=NOTES[j];
+    if (!m.curve || !m.curve.length) return;
+    if (other==='move-with-note') m.curve=m.curve.map(([u,s])=>[u,s+dStep]);
+    else m.curve=m.curve.map(([u,s])=>[u,s-dStep]);
+    pushUndo(); await commitEdit({ changed:new Set([m.tok]), deriveOctave:false }); });
+}
+// Build the serializeModel insert for a painted note or rest. For 'split', the host
+// is cut into a HEAD (kept by the host token) and a TAIL continuation (same pitch,
+// inserted after the new item) via splitSpans — this preserves the host's original
+// sustain instead of discarding it. For 'fill'/'append' the item lands at the
+// DRAGGED time `p.ts`, not just after the anchor — a leading rest is inserted ahead
+// of it whenever there's a time gap (append past the true content end, or fill/split
+// before the very first note, via serializeModel's `inserts.get(-1)` prepend).
+async function applyPaint(place, p){
+  const item = p.rest ? { rest:true, dur:p.dur }
+    : { step:p.step, octave:Math.floor(p.step/EDO)+5, dur:p.dur, curve:null };
+  const model=modelByTok(); const changed=new Set(); const inserts=new Map();
+  if (place.kind==='append' && place.anchorTok<0){        // empty piece: seed directly in srcText
+    const lead = p.ts>0 ? ('z'+(Math.round(p.ts)>1?Math.round(p.ts):'')+' ') : '';
+    const len=Math.max(1,Math.round(p.dur));
+    // Octave marks are needed here (unlike commitEdit's derived path) because this
+    // branch writes srcText directly, bypassing serializeModel's deriveOctave — the
+    // blank skeleton's O=5 baseline means a bare letter always parses back to octave
+    // 5, silently flattening a note painted in an upper/lower row (Fix 1).
+    const sw = stepToSwara(p.step, ragaCtx());
+    const body = len > 1 ? String(len) : '';
+    const tok = p.rest ? ('z' + body) : (octMarks(sw.octave - 5) + sw.letter + body);   // bare swara/z when len===1 (Task 3 convention)
+    buildModel(srcText.replace(/\s*$/,'') + '\n' + lead + tok + '\n');
+    syncControls(); resizeCanvas(); render(); await rebuildShare(); return; }
+  if (place.kind==='split'){
+    const hostIdx=NOTES.findIndex(n=>n.tok===place.host);
+    const host=model.get(place.host);
+    const { head, tail }=splitSpans(starts[hostIdx], host.dur, p.ts, p.dur);
+    if (head<=0){
+      // Degenerate: paint lands at/before the host's own start — a zero-length head
+      // would emit a bogus token. Insert BEFORE the host instead (anchor on the
+      // previous surviving note), or — no previous note — prepend via inserts.get(-1),
+      // with a leading rest if `p.ts` is after the very start of the piece.
+      if (hostIdx>0) inserts.set(NOTES[hostIdx-1].tok, [item]);
+      else inserts.set(-1, p.ts>0 ? [{rest:true,dur:p.ts}, item] : [item]);
+    } else {
+      host.dur=head; changed.add(place.host);
+      // Tail continuation carries the host's original remainder onward, same pitch,
+      // no gamaka curve of its own — only emitted when there IS a remainder.
+      const tailNote = tail>0 ? { step:host.step, octave:host.octave, dur:tail, curve:null } : null;
+      inserts.set(place.host, tailNote ? [item, tailNote] : [item]);
+    }
+  } else if (place.kind==='append'){                       // append past the true content end
+    const gap = Math.round(p.ts - contentEnd);
+    inserts.set(place.anchorTok, gap>0 ? [{rest:true,dur:gap}, item] : [item]);
+  } else if (place.anchorTok<0){                            // fill: before the very first note
+    const lead = p.ts>0 ? [{rest:true, dur:p.ts}] : [];
+    inserts.set(-1, [...lead, item]);
+  } else {                                                   // fill: mid-piece
+    inserts.set(place.anchorTok, [item]);
+  }
+  const newSrc=serializeModel(srcText, { model, changed, inserts, deletes:new Set(), deriveOctave:true, ctx:ragaCtx() });
+  buildModel(newSrc); syncControls(); resizeCanvas(); render(); await rebuildShare();
+}
 function hitNote(x,y){ for (let i=0;i<NOTES.length;i++){ const y0=Y(starts[i]),y1=Y(starts[i]+NOTES[i].dur),xc=X(NOTES[i].step),w=Math.max(16,plot().w/(stepMax-stepMin)*4);
   if (y>=y0&&y<=y1&&x>=xc-w/2-6&&x<=xc+w/2+6) return i; } return -1; }
 function addPoint(x,y){ const p=plot(),[ba,bb]=yStartEnd();
@@ -249,11 +626,6 @@ function addPoint(x,y){ const p=plot(),[ba,bb]=yStartEnd();
   const st=stepAtX(Math.max(p.x,Math.min(p.x+p.w,x)));
   const c=NOTES[sel].curve; if (c.length&&u<=c[c.length-1][0]) c[c.length-1][1]=st; else c.push([u,st]);
   liveSet(st); document.getElementById('read').textContent='≈'+freqOf(st).toFixed(0)+' Hz'; }
-function extractAnchors(raw){ if (raw.length<=2) return raw.slice();
-  const A=[raw[0]]; let dir=0;
-  for (let i=1;i<raw.length;i++){ const d=raw[i][1]-raw[i-1][1]; const sd=d>0.3?1:(d<-0.3?-1:0);
-    if (sd!==0){ if (dir!==0&&sd!==dir&&Math.abs(raw[i-1][1]-A[A.length-1][1])>=2) A.push(raw[i-1]); dir=sd; } }
-  A.push(raw[raw.length-1]); return A; }
 function finalizeCurve(){ let c=NOTES[sel].curve; if (!c||c.length<2){ NOTES[sel].curve=null; document.getElementById('clear').disabled=true; document.getElementById('copy').disabled=true; return; }
   c=extractAnchors(c);
   if (document.getElementById('snap').checked) c=c.map(pt=>[pt[0],snapStep(pt[1])]);
@@ -274,11 +646,11 @@ function enterDraw(i){ sel=i; mode='draw';
   for (const b of ['clear','copy','paste','back']) $(b).style.display='';   // draw-only buttons appear
   $('back').disabled=false; $('clear').disabled=!NOTES[i].curve; $('copy').disabled=!NOTES[i].curve; $('paste').disabled=!clipRel;
   setPlayBtn('▶','Play note'); $('rangectl').style.display=''; $('snapctl').style.display=''; $('tzoom').style.display='none'; resizeCanvas(); }
-$('back').onclick=()=>{ mode='roll'; sel=-1; $('mode').textContent='select a note'; $('crumb').textContent='';
+$('back').onclick=()=>{ dEdit=null; drawing=false; dragIdx=-1; mode='roll'; sel=-1; $('mode').textContent='select a note'; $('crumb').textContent='';
   for (const b of ['clear','copy','paste','back']) $(b).style.display='none';   // draw-only buttons hidden in roll mode
   $('read').textContent=''; setPlayBtn('▶',playLabel());
   $('rangectl').style.display='none'; $('snapctl').style.display='none'; $('tzoom').style.display=''; resizeCanvas(); };
-$('clear').onclick=()=>{ if (sel>=0){ NOTES[sel].curve=null; $('clear').disabled=true; $('copy').disabled=true; render(); scheduleShare(); } };
+$('clear').onclick=()=>{ if (sel>=0 && NOTES[sel].curve){ pushUndo(); NOTES[sel].curve=null; $('clear').disabled=true; $('copy').disabled=true; render(); scheduleShare(); } };
 function flashBtn(id,msg){ const b=$(id),t=b.textContent; b.textContent=msg; setTimeout(()=>b.textContent=t,1100); }
 // Copy stores the curve relative to its note's step; Paste re-anchors it (transpose
 // only — preserves the copied shape/tuning exactly), plays the target for feedback.
@@ -328,6 +700,30 @@ $('rplus').onclick=()=>{ drawSpan=Math.min(60,drawSpan+8); resizeCanvas(); };   
 // canvas stays viewport-sized; only the scroll range grows. 1 = fully expanded floor.
 $('tmin').onclick=()=>{ zoom=Math.max(1, Math.round((zoom-0.5)*10)/10); resizeCanvas(); };
 $('tplus').onclick=()=>{ zoom=Math.min(8, Math.round((zoom+0.5)*10)/10); resizeCanvas(); };
+// `+ note` toggle: paint mode is mutually exclusive with the roll's long-press grab
+// (both handlers guard on paintMode, see the pointerdown listeners above), and with
+// `✎ gamaka` mode below.
+$('paintbtn').onclick=()=>{ paintMode=!paintMode; if (paintMode){ gamakaMode=false; $('gamakabtn').classList.remove('on'); if (gamaStroke){ NOTES[gamaStroke.gi].curve=gamaStroke.origCurve; gamaStroke=null; } }
+  $('paintbtn').classList.toggle('on',paintMode); cv.style.cursor=paintMode?'crosshair':''; render(); };
+// `✎ gamaka` toggle: shows draggable anchor dots on the roll (rendered in render()) and
+// is mutually exclusive with `+ note` paint mode. Pointer handlers land in later tasks.
+$('gamakabtn').onclick=()=>{ gamakaMode=!gamakaMode; if (gamakaMode){ paintMode=false; $('paintbtn').classList.remove('on'); }
+  if (gamaStroke){ NOTES[gamaStroke.gi].curve=gamaStroke.origCurve; gamaStroke=null; } $('gamakabtn').classList.toggle('on',gamakaMode); cv.style.cursor=gamakaMode?'crosshair':''; render(); };
+// Gamaka-on-move default: 'preserve pitch' (leave the abs curve — serialize emits shifted
+// relative deltas) or 'move with note' (shift the abs curve so the deltas stay verbatim
+// and the curve rides the note). Persisted; the post-move toast always offers the other.
+const GKEY='ragamroll.gamakaOnMove';
+let gamakaOnMove=localStorage.getItem(GKEY)||'preserve-pitch';
+$('gmovesel').value=gamakaOnMove;
+$('gmovesel').onchange=e=>{ gamakaOnMove=e.target.value; try{ localStorage.setItem(GKEY,gamakaOnMove); }catch(_){}; };
+// Non-blocking toast: ~4s auto-dismiss, optional one-tap action.
+let toastTimer=0;
+function showToast(msg, actionLabel, onAction){ const t=$('toast'); t.innerHTML='';
+  t.append(document.createTextNode(msg));
+  if (actionLabel){ const b=document.createElement('button'); b.textContent=actionLabel;
+    b.onclick=()=>{ hideToast(); onAction(); }; t.append(b); }
+  t.style.display='flex'; clearTimeout(toastTimer); toastTimer=setTimeout(hideToast,4000); }
+function hideToast(){ $('toast').style.display='none'; }
 // Drone/tala levels are LIVE: each routes through a per-session gain bus, so a
 // slider change scales the currently-playing drone / accent strums immediately.
 $('dronevol').oninput=e=>{ droneVol=Number(e.target.value); if (session&&session.dBus&&AC) session.dBus.gain.setTargetAtTime(droneVol,AC.currentTime,0.02); };
@@ -471,6 +867,35 @@ let shareLink='', shareTimer=null;
 function inlineSrc(){ const curves={};
   NOTES.forEach((n)=>{ if (n.curve) curves[n.tok]=n.curve.map(([u,s])=>[Math.round(u*100)/100, Math.round(s-n.step)]); });
   return serializeInline(srcText, curves); }
+
+// ---------- model<->srgm edit glue (note-edit core wiring) ----------
+// Raga context for step<->swara naming, from the current composition's raga.
+function ragaCtx(){ const { ragaSteps, ragaSwaraName } = buildRagaSteps(curRaga || ''); return { useRaga: !!(curRaga && ragaSteps), ragaSteps, ragaSwaraName }; }
+// Snapshot of the current model keyed by source-token ordinal (rests excluded).
+function modelByTok(){ const m=new Map(); NOTES.forEach(n=>m.set(n.tok,{ step:n.step, dur:n.dur, octave:n.octave, curve:n.curve })); return m; }
+// The raga's pitch-classes (single-octave 53-EDO MOD-steps) for pitch snapping.
+// IMPORTANT: snapToRagaRow(step, gridSteps) reconstructs the octave from `step`
+// itself, so gridSteps must be single-octave mods (0..52), NOT absolute multi-octave
+// rows — passing absolute rows would double-count the octave. Raga mode => the
+// raga's mod-steps; no-raga (c12) => the distinct pitch-classes of existing notes.
+function ragaRowSteps(){ const { ragaSteps }=ragaCtx();
+  if (ragaSteps) return [...ragaSteps];
+  return [...new Set(NOTES.map(n=>((n.step%EDO)+EDO)%EDO))].sort((a,b)=>a-b); }
+
+// ---- undo (structural edits round-trip through srcText) ----
+let undoStack=[];
+function pushUndo(){ undoStack.push(srcText); if (undoStack.length>50) undoStack.shift(); }
+async function undo(){ hideToast(); if (!undoStack.length) return; const prev=undoStack.pop();
+  if (mode==='draw') $('back').click(); buildModel(prev); syncControls(); resizeCanvas(); render(); await rebuildShare(); }
+$('undobtn').onclick=()=>{ undo(); };
+// Ctrl/Cmd+Z triggers structural undo only in roll mode and only outside the srgm
+// editor textarea, so native textarea undo (typing) still works while editing text.
+document.addEventListener('keydown', e=>{ if ((e.ctrlKey||e.metaKey) && !e.shiftKey && (e.key==='z'||e.key==='Z') && mode==='roll' && document.activeElement!==$('editor')){ e.preventDefault(); undo(); } });
+
+// Re-serialize the current model to srgm, then rebuild everything from that text.
+async function commitEdit({ changed=new Set(), inserts=new Map(), deletes=new Set(), deriveOctave=false }){
+  const newSrc=serializeModel(srcText, { model:modelByTok(), changed, inserts, deletes, deriveOctave, ctx:ragaCtx() });
+  buildModel(newSrc); syncControls(); resizeCanvas(); render(); await rebuildShare(); }
 // Reflect srcText into the editor textarea — but never clobber the box the user
 // is actively typing in (that also preserves its native ctrl-z history).
 function syncEditor(){ const t=$('editor'); if (t && document.activeElement!==t) t.value=srcText; }
@@ -482,7 +907,7 @@ async function rebuildShare(){ srcText=inlineSrc(); syncEditor();
 function scheduleShare(){ clearTimeout(shareTimer); shareTimer=setTimeout(rebuildShare,150); }
 // Editor edits: reparse the srgm the user typed (debounced), rebuild the roll.
 let editTimer=null;
-async function onEditorInput(){ if (mode==='draw') $('back').click();   // a reparse changes NOTES; leave draw mode so sel can't dangle
+async function onEditorInput(){ hideToast(); if (mode==='draw') $('back').click();   // a reparse changes NOTES; leave draw mode so sel can't dangle
   srcText=$('editor').value; buildModel(srcText);
   syncControls(); resizeCanvas(); render();
   try{ localStorage.setItem(LS_KEY, srcText); }catch(_){}
@@ -501,6 +926,8 @@ function logNotes(tag){ try{ console.log(`[draw] ${tag} — idx:tok swara [pts]:
 // A share hash is pako(srgm text). Legacy links were pako(JSON {v,src,g}); detect
 // and convert those once (apply the index-keyed curves; they re-emit inline).
 function applyShared(decoded){
+  hideToast();
+  userGridMin = userGridMax = userGridBottom = null;   // new composition: start at auto/seed bounds, not a stale stretch
   let legacy=null;
   try{ const o=JSON.parse(decoded); if (o&&typeof o.src==='string') legacy=o; }catch(_){}
   console.log(`[draw] pako decoded — ${legacy?'LEGACY {v,src,g}':'raw srgm text'} (${decoded.length} chars):\n%s`,
@@ -520,7 +947,8 @@ async function loadComposition(){
 // ---------- composition I/O: Open (examples / file / link), Save, Export MIDI ----------
 const baseName = s => String(s||'ragamroll').replace(/^.*[\/\\]/,'').replace(/\.[^.]+$/,'') || 'ragamroll';
 // Load a whole new composition into the roll + editor (and persist / reshare).
-async function loadSrc(text, name){ if (mode==='draw') $('back').click(); stopPlayback();
+async function loadSrc(text, name){ hideToast(); if (mode==='draw') $('back').click(); stopPlayback();
+  userGridMin = userGridMax = userGridBottom = null;   // new composition: start at auto/seed bounds, not a stale stretch
   if (name) docName=name; buildModel(text); syncControls(); resizeCanvas(); render(); await rebuildShare(); }
 async function pasteLink(){ const inp=window.prompt('Paste a RagamRoll share link or pako token:'); if (!inp) return;
   const m=/pako:[A-Za-z0-9\-_]+/.exec(inp); const tok=m?m[0]:inp.trim().replace(/^#/,'');

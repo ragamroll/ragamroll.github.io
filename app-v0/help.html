@@ -153,6 +153,21 @@ G2 G2 P4 P4  D2 P2 &gt;S4 S4</code></pre>
   upgrades to the full-resolution contour and keeps your notes; a different file loads for playback only. Either way
   the notes that came from the link already carry their full-resolution gamakas.</p>
 
+  <h2 id="draw-editing">Editing notes on the roll (draw)</h2>
+  <p>The <b>draw</b> roll (draw.html) is directly editable — move, resize, and create notes on the grid.</p>
+  <ul>
+    <li><b>Select / edit a note's gamaka:</b> tap (or click) a note to open its pitch-curve editor, as before.</li>
+    <li><b>Move a note's pitch:</b> on a <b>touch screen</b>, long-press a note (~⅓ s) to grab it, then drag sideways; on a <b>desktop</b>, just press and drag a note. Pitch snaps to the raga's swara rows. The following notes keep their own pitch.</li>
+    <li><b>Resize a note's length:</b> after grabbing, drag the <b>handle at the note's bottom edge</b> — the duration snaps to the tala's akshara pulse and pushes the following notes.</li>
+    <li><b>Create a note:</b> tap <b>+ note</b>, then drag on the grid — pitch snaps to a raga row, length to the akshara. Painting over a rest fills it, past the end appends (the note lands where you drag, with a leading rest), over a note splits it.</li>
+    <li><b>Add a rest (silence):</b> in <b>+ note</b> mode, paint in the narrow <b>rest lane</b> at the far left of the grid — it inserts a rest of the length you drag.</li>
+    <li><b>Resize the grid:</b> drag the <b>handles</b> at the pitch axis's two ends to widen/narrow the pitch range (by whole raga rows), and the handle at the <b>bottom</b> of the time axis to lengthen/shorten the empty grid. A blank piece opens with a small grid — stretch it out to make room to write.</li>
+    <li><b>Gamaka on move:</b> moving a note that carries a gamaka keeps the <em>sound</em> unchanged by default (the note relabels); a toast lets you switch that move to carry the curve to the new pitch instead. The <b>gamaka on move</b> control sets the default.</li>
+    <li><b>Draw a gamaka on the roll:</b> tap <b>✎ gamaka</b>, then drag across a note to trace its pitch curve — right there on the roll, so you can see the notes around it (is it a descent or an ascent?). Zoom in first with the pitch handles + <b>expand</b> for room. Tapping a note still opens the full-screen curve editor when <b>✎ gamaka</b> is off.</li>
+    <li><b>Edit a gamaka's points:</b> in <b>✎ gamaka</b> mode, drag a point to move it, tap a point to remove it, tap the curve line to add a point. Removing the last points clears the curve. Everything is undoable (Undo / Ctrl-Z), including an accidental Clear.</li>
+    <li class="sub">The grid bounds are a view convenience — they aren't saved; the notes and rests you write are.</li>
+  </ul>
+
   <div class="back" style="border-top:1px solid #333; border-bottom:0; margin-top:2rem;">
     <a href="./index.html">&larr; Back to RagaM-Roll</a>
   </div>
