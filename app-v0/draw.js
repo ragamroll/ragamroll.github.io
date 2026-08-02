@@ -4,8 +4,9 @@
 // the 22 shrutis, audio is microtonal. Curves + the srgm source pack into a
 // #pako link (melody + gamakas).
 import { parse, TALA_MAP } from './core/parser.js';
-import { setRagas } from './core/raga-base.js';
-import { setRagaExt } from './core/raga-ext.js';
+import { setRagas, getRagas, resolveRagaName } from './core/raga-base.js';
+import { setRagaExt, getRagaExt } from './core/raga-ext.js';
+import { chooseSeed } from './core/raga-seed.js';
 import { midiToFreq } from './audio/schedule.js';
 import { BOXES, EDO, stepFreq, defaultShrutiStep } from './core/shruti.js';
 import { encodeShareToken, decodeShareToken } from './core/share.js';
@@ -748,12 +749,40 @@ function syncControls(){ $('sapick').value=saPlay==null?'':String(saPlay);
   $('ragasearch').disabled=!blank; $('talasel').disabled=!blank;
   $('editnote').textContent = blank ? 'pick a raga / tala, then type swaras below' : 'raga · tala locked while notes exist';
   $('ragasearch').value = curRaga || ''; $('talasel').value = curTalaName; }
+// The per-raga seed map (drafts.json), fetched once. Tries the deployed path
+// (./ragas/) then the local-curation path (../tools/out/); empty map if neither
+// is reachable (offline / not built) — seeding then falls back to the plain scale.
+let _draftsPromise = null;
+function loadDrafts(){
+  if (!_draftsPromise) _draftsPromise = (async () => {
+    for (const url of ['./ragas/drafts.json', '../tools/out/drafts.json']) {
+      try { const r = await fetch(url); if (r.ok) return await r.json(); } catch(_){}
+    }
+    _draftsPromise = null; // total failure (offline / not built) — don't memoize {}, retry next pick
+    return {};
+  })();
+  return _draftsPromise;
+}
 // Set the Raga=/Tala= directive in the srgm (blank pieces only) and reload.
-function applyRagaTala(kind, name){ if (NOTES.length || !name) return; let s=srcText;
-  const nv = kind==='Raga' ? 'Raga='+name+',0' : 'Tala='+name+',4';
-  const re = kind==='Raga' ? /(^|\s)Raga=\S+/ : /(^|\s)Tala=\S+/;
+// A Raga pick seeds the piece with that raga's notation (curated draft, else a
+// plain scale); a Tala pick only rewrites the directive (unchanged behaviour).
+async function applyRagaTala(kind, name){ if (NOTES.length || !name) return;
+  if (kind==='Raga'){
+    // #ragasearch is free-text; canonicalize once so a non-canonical typed
+    // case (e.g. "Mohanam") still hits drafts[name]/getRagaExt/getRagas().
+    const cname = resolveRagaName(name) || name;
+    const drafts = await loadDrafts();
+    if (NOTES.length) return; // piece may no longer be blank after the async fetch
+    const picked = chooseSeed(cname, drafts, getRagaExt(cname), getRagas());
+    // seed the piece with the raga's notation, else fall back to a bare blank with Raga= set
+    const seed = picked ? picked.srgm : `Raga=${cname},0\nTala=adi,4\nO=5 L=1\n`;
+    loadSrc(seed, docName); setEditorH(editorH>10?editorH:Math.round((window.innerHeight||600)*0.35)); return;
+  }
+  // Tala (blank only): rewrite the Tala= directive and reload (unchanged behaviour)
+  let s=srcText; const nv='Tala='+name+',4'; const re=/(^|\s)Tala=\S+/;
   s = re.test(s) ? s.replace(re, (m,p)=>p+nv) : nv+'\n'+s;
-  loadSrc(s, docName); setEditorH(editorH>10?editorH:Math.round((window.innerHeight||600)*0.35)); }
+  loadSrc(s, docName); setEditorH(editorH>10?editorH:Math.round((window.innerHeight||600)*0.35));
+}
 // Back to the app: carry the composition CURRENTLY open here into the app (it reads
 // the same localStorage key), so the app opens the same piece — not whatever it held.
 $('backapp').onclick=e=>{ e.preventDefault(); try{ localStorage.setItem(LS_KEY, srcText); }catch(_){}; location.href='./index.html'; };

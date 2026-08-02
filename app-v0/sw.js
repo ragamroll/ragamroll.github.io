@@ -1,4 +1,4 @@
-const CACHE = 'ragamroll-aa8314e';
+const CACHE = 'ragamroll-01d6c16';
 const ASSETS = [
   './', './index.html', './help.html', './draw.html', './draw.js', './pitchy.html', './app.js', './worker.js', './version.js', './manifest.webmanifest',
   './vendor/preact.module.js', './vendor/hooks.module.js', './vendor/htm.module.js', './vendor/htm-preact.js',
@@ -13,7 +13,7 @@ const ASSETS = [
   './core/parser.js', './core/gamaka-inline.js', './core/gamaka-curve.js', './core/tuning.js', './core/raga-base.js', './core/raga-base.json', './core/reference.js',
   './core/shruti.js', './core/melakarta.js', './core/tala-preview.js', './core/raga-shruti.js', './core/share.js',
   './core/raga-ext.js', './core/raga-ext.json', './core/raga-add.json', './core/raga-preview.js', './core/retune.js',
-  './core/detect.js', './core/detect-raga-helper.js', './core/note-edit.js',
+  './core/detect.js', './core/detect-raga-helper.js', './core/note-edit.js', './core/raga-seed.js',
   './core/renderers/notation.js', './core/renderers/roll.js',
   './core/midi/gm.js', './core/midi/smf.js', './core/midi/sequence.js', './core/midi/tala.js',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png',
