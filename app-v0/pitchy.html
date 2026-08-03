@@ -589,6 +589,14 @@
 
     // Chosen raga's swaras (53-EDO steps mod octave) to emphasize; null = none.
     let ragaSteps = null;
+    // `— none —` in the picker means c12 implicitly (notesToSrgm already emits
+    // Raga=c12,0 with chromatic tokens for it), so detection has a scale to work
+    // against even with no raga chosen: the 12 semitone pitch classes at their
+    // default shrutis. Built here rather than via buildRagaSteps('c12') — that
+    // entry carries only a C12_SWARAS name table and no arohana, so it falls
+    // through to the defaults and returns a SEVEN-note diatonic set, which would
+    // silently detect against the wrong scale.
+    const C12_STEPS = new Set(Array.from({ length: 12 }, (_, pc) => defaultShrutiStep(pc)));
     let ragaSwaraName = new Map();  // step -> short swara name for the label
     function setRaga(name) {
       ({ ragaSteps, ragaSwaraName } = buildRagaSteps(name));
@@ -604,7 +612,16 @@
     let boundaries = [];     // {t, step (absolute 53-EDO), name} — kept sorted by t
     let notes = [];          // derived {step, t0, t1, name}
     let undoStack = [];      // snapshots of `boundaries` taken before each edit
-    function pushUndo() { undoStack.push(boundaries.map((b) => ({ ...b }))); if (undoStack.length > 60) undoStack.shift(); }
+    // Snapshot the boundaries AND the Sa/axis they were measured against. A
+    // boundary's step is absolute RELATIVE TO Sa, so restoring steps under a
+    // different Sa would silently re-pitch every note with no error. This was
+    // already latent for alignSa, invisible only because its correction is a
+    // fraction of a step; a Sa re-anchor moves whole steps and would make it
+    // obvious and wrong.
+    function pushUndo() {
+      undoStack.push({ bnds: boundaries.map((b) => ({ ...b })), sa: saRefHz, stepMin, stepMax });
+      if (undoStack.length > 60) undoStack.shift();
+    }
     const swaraNameForStep = (s) => D.swaraNameForStep(s, ragaSteps, ragaSwaraName);
     // Pitch ALWAYS snaps to the nearest shruti line (a note sits on a shruti).
     function snapStepAtX(ox) {
@@ -641,9 +658,41 @@
       const ps = notes.map((n) => n.step);
       stepMin = Math.min(stepMin, Math.min(...ps) - 4);
       stepMax = Math.max(stepMax, Math.max(...ps) + 4);
+      rebuildLines();
+    }
+    // The 22 shruti lines spanning [stepMin, stepMax]. Pulled out of
+    // fitAxisToNotes so the Sa re-anchor can rebuild the grid WITHOUT going
+    // through computeAxis — that re-derives the range from the contour, which a
+    // notation-only session does not have, so it would collapse the axis to its
+    // -4..4 default and leave no lines to snap to.
+    function rebuildLines() {
       LINES = []; const o0 = Math.floor(stepMin / EDO), o1 = Math.ceil(stepMax / EDO);
       for (let o = o0; o <= o1; o++) for (const b of BOXES) { const s = o * EDO + b.step; if (s >= stepMin && s <= stepMax) LINES.push(s); }
       LINES.sort((a, b) => a - b);
+    }
+    // Re-anchor Sa onto a grid line. RE-LABEL, not re-tune: the recording and
+    // every note's sounding pitch are unchanged — only the reference the ratios
+    // are measured against moves, so the pitches get renamed. The contour needs
+    // no migration (cleanedPoints stores frequencies and stepOf divides by
+    // saRefHz on demand), but the boundaries do: their steps are absolute
+    // against the OLD Sa, so each shifts by -d to stay on the audio frequency it
+    // was placed against. The axis shifts with them, which also keeps the view
+    // still instead of jumping by d.
+    function setSaToStep(d) {
+      if (!d) { statusMsg.textContent = 'That line is already Sa.'; return; }   // no-op: clicking the current Sa
+      pushUndo();
+      saRefHz = saRefHz * Math.pow(2, d / EDO);
+      for (const b of boundaries) if (b.step != null) b.step -= d;
+      stepMin -= d; stepMax -= d;
+      rebuildLines();
+      // Rename AFTER the shift: swaraNameForStep reads the new pitch class, and
+      // notesFromBoundaries copies the boundary's name onto its note.
+      for (const b of boundaries) if (b.step != null) b.name = swaraNameForStep(b.step);
+      computeCrossings(cleanedPoints);
+      refreshSaInfo(); retuneDrone();
+      rebuildNotes();                    // re-derives curve gamakas against the new Sa
+      renderFrame(player.currentTime || 0);
+      statusMsg.textContent = `Sa moved to ${noteName(saRefHz)} (${saRefHz.toFixed(1)} Hz) — notes renamed, pitches unchanged.`;
     }
     // Parse the notation textarea back into notes (two-way). Each note's inline
     // gamaka is carried onto its boundary so it survives; rests -> null
@@ -657,12 +706,39 @@
       const secPerUnit = 30 / tempo;                       // 1 length-unit = an eighth note
       const sN = evs.find((e) => !e.rest && (e.swara === 'S' || e.swara === 's'));
       const saMidi = sN ? sN.midi - (sN.octave - 5) * 12 : 60;
+      // The notation's own Raga= wins, and has to be adopted BEFORE the boundary
+      // loop below: swaraNameForStep names each boundary from the raga, so
+      // without this a mohanam G reads as the bare shruti 'G3a'. notesToSrgm
+      // also re-emits whatever the dropdown holds, so a regenerated srgm used to
+      // come back as Raga=c12. parse() always emits a raga event (c12 when the
+      // srgm declares none) with the name already canonicalized by
+      // resolveRagaName, so the LAST one is decisive: a listed raga selects it;
+      // c12 or an unlisted name (mela_N and c12 are filtered out of the picker)
+      // clears to none rather than leaving a stale raga applied to notes that
+      // never declared it. setRaga() is deliberately NOT used here — it calls
+      // updateNoteUI(), which would rewrite the textarea from the OLD notes
+      // before this parse has replaced them.
+      const rk = [...model.events].reverse().find((e) => e.type === 'raga');
+      const rname = rk ? String(rk.key[0]) : '';
+      const ropt = rname && rname.toLowerCase() !== 'c12'
+        ? [...$('raga-sel').options].find((o) => o.value.toLowerCase() === rname.toLowerCase())
+        : null;
+      $('raga-sel').value = ropt ? ropt.value : '';
+      ({ ragaSteps, ragaSwaraName } = buildRagaSteps($('raga-sel').value));
       pushUndo();
       boundaries = [];
       let t = 0;
       for (const e of evs) {
         if (!e.rest && e.absLen > 0) {
-          const step = stepOfSemitone(e.midi - saMidi);
+          // Resolve the step through the RAGA's own shruti for this letter, not
+          // just the 12-EDO reconstruction. stepOfSemitone puts every semitone on
+          // its default JI-12 shruti, which is wrong wherever the raga assigns
+          // that letter a different comma (mela_1's G1 is step 8; semitone 2
+          // defaults to 9), so a note written out and read back moved by a comma.
+          // The notation already names the raga, so nothing extra is needed in
+          // it — the reader just has to ask. stepForLetter falls through to the
+          // reconstruction when the raga has no such letter (or no raga at all).
+          const step = stepForLetter((e.swara || '').toUpperCase(), stepOfSemitone(e.midi - saMidi));
           const gam = (Array.isArray(e.gamaka) && e.gamaka.length >= 2) ? e.gamaka.map(([u, d]) => [u, d]) : null;
           boundaries.push({ t, step, name: swaraNameForStep(step), gamaka: gam });
         } else if (e.absLen > 0) {
@@ -672,6 +748,26 @@
       }
       boundaries.push({ t, step: null, name: null });        // bound the last note
       if (t > audioDuration) audioDuration = t;              // extend the time axis if the notation is longer
+      // Notation-only session (nothing analyzed): the srgm IS the session, so it
+      // has to establish what the audio-load path normally would, or the roll
+      // draws but is inert.
+      //   Sa    — the analysis path sets saRefHz from the first voiced frame; with
+      //           no audio it stays 0, so scheduleNotes skips every note
+      //           (`!(saRefHz > 0)`) and startDrone bails. Only set it when it is
+      //           still unset: a SHARED session also runs with hasAudio false but
+      //           carries a tuned Sa (see the pako/IDB restore), and re-applying
+      //           the notation there must not clobber it.
+      //   A/B   — resetMarkers() only runs on audio load, so markerB stays 0 and
+      //           synthTick's end check (`markerB > markerA`) never fires: playback
+      //           would run past the end forever. This mirrors resetMarkers by
+      //           covering the whole (re)parsed piece, since applyNotation replaces
+      //           every boundary anyway.
+      //   Buttons — likewise only enabled by the audio-load path.
+      if (!hasAudio) {
+        if (!(saRefHz > 0)) { saRefHz = 440 * Math.pow(2, (saMidi - 69) / 12); refreshSaInfo(); }
+        markerA = 0; markerB = t;
+        playBtn.disabled = false; rewindBtn.disabled = false;
+      }
       rebuildNotes();
       fitAxisToNotes();
       notationDirty = false;
@@ -737,10 +833,19 @@
       statusMsg.textContent = `Snapped to ${out.length} notes from the syllables.`;
     }
     function detectNotes() {
-      if (!ragaSteps) { statusMsg.textContent = 'Pick a raga first to detect notes.'; return; }
+      // No raga picked -> detect against c12 (see C12_STEPS). ragaSwaraName is
+      // left as-is (empty without a raga), so swaraNameForStep falls through to
+      // the shruti-slot names none-mode already displays — detection becomes
+      // available without changing how anything is labelled.
+      const steps = ragaSteps || C12_STEPS;
+      // Detection reads the analyzed contour, which a notation-only session
+      // (pasted srgm, no audio) does not have. Without this the run would fall
+      // through to the generic 'No sustained notes detected', which reads as
+      // "your audio has no notes" rather than "there is no audio".
+      if (!cleanedPoints.length) { statusMsg.textContent = 'Load an audio file first — detection reads the pitch contour.'; return; }
       // Gating + note-segmentation (and onset-snapping) now live in D.segmentNotes.
       const onsets = $('snaponsets').checked ? D.computeOnsets(pitchDataPoints) : [];
-      const boundaries0 = D.segmentNotes(cleanedPoints, ragaSteps, { stepMin, stepMax, saRefHz, snapOnsets: $('snaponsets').checked, onsets, ragaSwaraName });
+      const boundaries0 = D.segmentNotes(cleanedPoints, steps, { stepMin, stepMax, saRefHz, snapOnsets: $('snaponsets').checked, onsets, ragaSwaraName });
       if (!boundaries0.length) { statusMsg.textContent = 'No sustained notes detected.'; return; }
       pushUndo();
       boundaries = boundaries0;
@@ -771,6 +876,7 @@
       // Sa pitch even when it is several steps off the grid.
       const med = devs[Math.floor(devs.length / 2)];
       if (Math.abs(med) < 0.05) { statusMsg.textContent = 'Sa already aligned.'; return; }
+      pushUndo();   // now that the snapshot carries Sa, the retune is undoable too
       saRefHz = saRefHz * Math.pow(2, med / EDO);
       refreshSaInfo();
       retuneDrone();   // keep the drone on the newly-tuned Sa
@@ -919,7 +1025,15 @@
     $('gamakas').addEventListener('change', () => { rebuildNotes(); renderFrame(player.currentTime || 0); });
     $('undonote').addEventListener('click', () => {
       if (!undoStack.length) { statusMsg.textContent = 'Nothing to undo.'; return; }
-      boundaries = undoStack.pop(); rebuildNotes(); renderFrame(player.currentTime || 0);
+      const s = undoStack.pop();
+      boundaries = s.bnds;
+      // Only rebuild the grid when the snapshot's Sa/axis actually differ — an
+      // ordinary edit (drag, insert, delete) leaves them alone, and recomputing
+      // crossings on every undo would be wasted work.
+      const anchorChanged = s.sa !== saRefHz || s.stepMin !== stepMin || s.stepMax !== stepMax;
+      saRefHz = s.sa; stepMin = s.stepMin; stepMax = s.stepMax;
+      if (anchorChanged) { rebuildLines(); computeCrossings(cleanedPoints); refreshSaInfo(); retuneDrone(); }
+      rebuildNotes(); renderFrame(player.currentTime || 0);
     });
     $('clearnotes').addEventListener('click', () => {
       if (!boundaries.length) return;
@@ -999,6 +1113,43 @@
         ctx.fillStyle = 'rgba(45,212,160,0.22)'; ctx.fillRect(x - 5, y0, 10, h);
         ctx.strokeStyle = '#2dd4a0'; ctx.lineWidth = 1.4; ctx.strokeRect(x - 5, y0, 10, h);
         ctx.fillStyle = '#2dd4a0'; ctx.textAlign = 'left'; ctx.fillText(n.name, x + 8, (y0 + y1) / 2);
+      }
+      // Gamaka curves — the note's own pitch shape, drawn along its span from the
+      // note-relative [u, delta] pairs (u across [t0,t1], delta in 53-EDO steps
+      // from the note's swara). Teal-family, tying them to the NOTATED model;
+      // cyan stays the MEASURED audio contour. The two sources are drawn
+      // differently on purpose (see notesFromBoundaries):
+      //   notation -> solid, the written ornament
+      //   curve    -> dashed + dim, resampled off the cyan contour already on
+      //               screen. It shows the quantized shape that would be written
+      //               out, which is worth seeing against the raw contour, but it
+      //               must not read as a second independent measurement.
+      // No new toggle: notated curves appear when the notation carries them, and
+      // derived ones only exist when `gamaka from curve` is ticked, so both are
+      // already under the user's control.
+      // The source is read back off the BOUNDARIES rather than tagged onto the
+      // notes: notesFromBoundaries' output is deep-equal'd by the golden-chain
+      // test, so a rendering concern must not add a field to it. A note's start
+      // boundary carries the notated curve (n.t0 is copied from b.t, so the
+      // lookup is exact); anything else with a gamaka got it from gamakaForNote.
+      const notatedAt = new Set(boundaries.filter((b) => b.gamaka).map((b) => b.t));
+      for (const n of notes) {
+        const g = n.gamaka;
+        if (!g || g.length < 2) continue;
+        const dur = n.t1 - n.t0, derived = !notatedAt.has(n.t0);
+        ctx.strokeStyle = '#7ef7cf';
+        ctx.globalAlpha = derived ? 0.5 : 0.95;
+        ctx.lineWidth = derived ? 1.2 : 1.8;
+        if (derived) ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        for (let k = 0; k < g.length; k++) {
+          const u = Math.min(1, Math.max(0, g[k][0]));
+          const x = Xs(n.step + g[k][1]), y = Yt(n.t0 + u * dur);
+          if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        if (derived) ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
       }
       // Boundary lines — thin full-width dividers you can grab (drag) or delete.
       for (const bnd of boundaries) {
@@ -1141,6 +1292,18 @@
       hctx.strokeStyle = '#333'; hctx.lineWidth = 1;
       hctx.beginPath(); hctx.moveTo(0, hdr.height - 0.5); hctx.lineTo(hdr.width, hdr.height - 0.5); hctx.stroke();
     }
+    // Click the header to make the nearest grid line Sa. The header carried no
+    // gestures before, so this conflicts with nothing (right-click on the roll
+    // is already boundary-delete). Hit-testing snaps to the nearest of ALL 22
+    // shruti lines rather than to a drawn label — the header only labels the
+    // emphasized ones, and any line must be selectable as the tonic.
+    hdr.style.cursor = 'crosshair';
+    hdr.title = 'Click a pitch line to make it Sa — notes are renamed, pitches do not change';
+    hdr.addEventListener('click', (e) => {
+      if (e.offsetX < PAD.l) return;                 // the A/B + playhead gutter columns, not the pitch axis
+      if (!LINES.length) { statusMsg.textContent = 'Load audio or paste notation first.'; return; }
+      setSaToStep(snapStepAtX(e.offsetX));
+    });
     function renderFrame(t) {
       drawRoll(cleanedPoints);
       drawPlayhead(t);
@@ -1218,7 +1381,7 @@
     function synthTick() {
       if (!synthPlaying) return;
       const pos = synthPosStart + (actx.currentTime - synthCtxStart) * playbackSpeed;
-      if (markerB > markerA && pos >= markerB) { synthPlaying = false; synthRaf = 0; stopNotes(); pausedAtSynth = markerB; playBtn.textContent = '▶ Play'; renderFrame(markerB); return; }
+      if (markerB > markerA && pos >= markerB) { synthPlaying = false; synthRaf = 0; stopNotes(); stopDrone(); pausedAtSynth = markerB; playBtn.textContent = '▶ Play'; renderFrame(markerB); return; }
       renderFrame(Math.max(0, pos));
       synthRaf = requestAnimationFrame(synthTick);
     }
@@ -1226,7 +1389,7 @@
       if (!synthPlaying) return;
       pausedAtSynth = Math.max(0, synthPosStart + (actx.currentTime - synthCtxStart) * playbackSpeed);
       synthPlaying = false; if (synthRaf) cancelAnimationFrame(synthRaf); synthRaf = 0;
-      stopNotes(); playBtn.textContent = '▶ Play'; renderFrame(pausedAtSynth);
+      stopNotes(); stopDrone(); playBtn.textContent = '▶ Play'; renderFrame(pausedAtSynth);
     }
 
     // Independent volume + mute for the audio (element) and the notes (gain bus).
@@ -1321,8 +1484,13 @@
       }
       stopNotes(); scheduleNotes(player.currentTime);   // play the drawn notes in sync
       stopPlayhead(); tick(); });
-    player.addEventListener('pause', () => { playBtn.textContent = '▶ Play'; stopNotes(); stopPlayhead(); renderFrame(player.currentTime); });
-    player.addEventListener('ended', () => { playBtn.textContent = '▶ Play'; stopNotes(); stopPlayhead(); renderFrame(0); });
+    // The drone is started by scheduleNotes (it plays alongside the notes/audio), so
+    // it has to be stopped at every real STOP — not inside stopNotes(), which also
+    // runs mid-playback to reschedule (rate change, scrub, rewind-while-playing)
+    // where the drone must keep sounding. Unmuting or nudging the drone volume still
+    // starts it independently of playback (kickDrone).
+    player.addEventListener('pause', () => { playBtn.textContent = '▶ Play'; stopNotes(); stopDrone(); stopPlayhead(); renderFrame(player.currentTime); });
+    player.addEventListener('ended', () => { playBtn.textContent = '▶ Play'; stopNotes(); stopDrone(); stopPlayhead(); renderFrame(0); });
 
     downloadBtn.addEventListener('click', () => {
       if (pitchDataPoints.length === 0) return;
@@ -1362,6 +1530,7 @@
       xyFor(step, t) { return { x: Xs(step), y: Yt(t) }; },
       get srgm() { return notesToSrgm(); },
       get liveNotes() { return liveOsc.length; },
+      get droneVoices() { return droneOsc.length; },
       get paused() { return player.paused; },
       get hasAudio() { return hasAudio; },
       get synthPlaying() { return synthPlaying; },

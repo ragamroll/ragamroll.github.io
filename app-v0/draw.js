@@ -18,7 +18,9 @@ import { buildSequence } from './core/midi/sequence.js';
 import { writeSMF } from './core/midi/smf.js';
 import { serializeModel, snapToRagaRow, snapToAkshara, placePaint, splitSpans, ragaRowsInRange, octMarks } from './core/note-edit.js';
 import { buildRagaSteps } from './core/detect-raga-helper.js';
-import { stepToSwara } from './core/detect.js';
+// Aliased: shruti.js exports a DIFFERENT stepForLetter(scale, letter). This one
+// is (letter, approxStep, ragaSwaraName) -> the raga's own step for that letter.
+import { stepToSwara, stepForLetter as stepForRagaLetter } from './core/detect.js';
 
 const LS_KEY = 'ragamroll.srgm';
 const SHRUTI = [...new Set(BOXES.map(b => b.step))].sort((a, b) => a - b);   // 22 steps in an octave
@@ -53,8 +55,20 @@ function buildModel(src){
   saRef = sNote ? sNote.midi - (sNote.octave - 5) * 12 : (notes.length ? Math.min(...notes.map(n => n.midi)) : 60);
   saPlay = null;          // reset Sa override to auto on a new composition
   saFreq = midiToFreq(saRef);   // saRef is the LAYOUT anchor (steps); saPlay only retunes playback
+  // The raga has to be resolved BEFORE the notes: each note's step is read back
+  // through the raga's own shruti for its letter, not just the 12-EDO
+  // reconstruction. stepOfSemitone puts every semitone on its default JI-12
+  // shruti, which is wrong wherever the raga assigns that letter a different
+  // comma (mela_1's G1 is step 8; semitone 2 defaults to 9), so a piece written
+  // out and read back moved by a comma. The notation already names the raga, so
+  // nothing extra is needed in it — the reader just has to ask. stepForRagaLetter
+  // falls through to the reconstruction when the raga has no such letter, and
+  // when there is no raga at all.
+  const rk = [...model.events].reverse().find(e => e.type === 'raga');
+  curRaga = rk ? String(rk.key[0]) : '';
+  const { ragaSwaraName: readBackNames } = buildRagaSteps(curRaga || '');
   NOTES = notes.map((n, i) => {
-    const step = stepOfSemitone(n.midi - saRef);
+    const step = stepForRagaLetter(n.swara.toUpperCase(), stepOfSemitone(n.midi - saRef), readBackNames);
     // Inline gamaka is stored NOTE-RELATIVE (delta); the roll model is absolute.
     const curve = (Array.isArray(n.gamaka) && n.gamaka.length) ? n.gamaka.map(([u, d]) => [u, step + d]) : null;
     return { step, dur: n.absLen, swara: n.swara.toUpperCase(), octave: n.octave, curve, tok: keep[i] };
@@ -72,8 +86,6 @@ function buildModel(src){
   talaMeasure = (tp && tp.props && tp.props.measure > 0) ? tp.props.measure : 0;
   talaAccents = (tp && tp.props && Array.isArray(tp.props.accents)) ? tp.props.accents : [];
   talaBeat = (tp && tp.props && tp.props.beat > 0) ? tp.props.beat : 0;
-  const rk = [...model.events].reverse().find(e => e.type === 'raga');
-  curRaga = rk ? String(rk.key[0]) : '';
   curTala = tp ? `beat ${tp.props.beat}` : '';
   curTalaName = (srcText.match(/(?:^|\s)Tala=([A-Za-z0-9]+)/) || [])[1] || 'adi';
   recomputeGridBounds();

@@ -5,6 +5,7 @@ import { getRagas, setRagas } from './raga-base.js';
 import { ragaVarieties, presentLetters, defaultAb } from './raga-shruti.js';
 import { stepForVariety } from './melakarta.js';
 import { nameForSlot } from './shruti.js';
+import { getRagaExt, scaleFromC16 } from './raga-ext.js';
 
 // pitchy.html's boot merges raga-base.json with raga-add.json before calling
 // setRagas (see pitchy.html ~1687-1692: `{ ...base, ...add }`) — many ragas
@@ -36,12 +37,22 @@ export function buildRagaSteps(name) {
   const { varieties } = ragaVarieties(ragas, name);
   const present = presentLetters(ragas, name);
   const ab = defaultAb(varieties);
+  // The raga's OWN authored swaras (C16 + comma), when raga-ext supplies them.
+  // ragaVarieties deliberately returns the PARENT MELA's varieties — its
+  // contract is the raga-browser header, which shows the full mela so absent
+  // swaras can be dimmed. That is a display view, and using it to decide PITCH
+  // is wrong for a janya whose swaras differ from its parent: revathi is
+  // mela 2 (Ratnangi, G1/D1) but sounds G3a/D2a, which is what both its C12
+  // notes (G=E, D=A) and its authored swaras say. raga-preview already resolves
+  // pitch this way via scaleFromC16; this brings detection/naming in line.
+  const authored = (() => { const s = getRagaExt(name)?.swaras; return s ? scaleFromC16(s) : null; })();
   const add = (step, nm) => { ragaSteps.add(step); ragaSwaraName.set(step, nm); };
   if (present.has('S')) add(0, 'S');       // S_STEP
   if (present.has('P')) add(31, 'P');      // P_STEP
   for (const L of ['R', 'G', 'M', 'D', 'N']) {
-    if (!present.has(L) || varieties[L] == null) continue;
-    const st = stepForVariety(L, varieties[L], ab[L]);
+    if (!present.has(L)) continue;
+    const st = (authored && authored[L] != null) ? authored[L]
+      : (varieties[L] != null ? stepForVariety(L, varieties[L], ab[L]) : null);
     if (st != null) add(st, nameForSlot(st, L));
   }
   return { ragaSteps, ragaSwaraName };

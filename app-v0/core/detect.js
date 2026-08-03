@@ -78,6 +78,13 @@ export function gateContour(pitchDataPoints, clarityThresh) {
 
 const BRIDGE_STEPS = 5;            // max endpoint pitch gap (53-EDO) to bridge
 const HALF = Math.SQRT2;           // half-octave ratio (octave-nearest test)
+// Octave-continuity guard (see cleanContour step 1): more doublings than this to
+// reconcile a frame means it is noise, not an octave error.
+// Re-seeding the chain from the global median after a silence was tried too and
+// REJECTED: it re-pitched any phrase sitting above that median, which the golden
+// fixtures caught. Dropping the noise is enough — the bad frame never becomes
+// the reference in the first place, so continuity needs no special case.
+const MAX_OCTAVE_FIX = 2;
 const CLAMP = 60;          // draw's max gamaka span (± steps); EDO imported from shruti.js
 const TARGET = 120;        // downsample the ~86 fps contour to this many points
 
@@ -91,23 +98,36 @@ export function cleanContour(points, bridgeMs) {
   const gmed = sorted[Math.floor(sorted.length / 2)];
 
   // 1. octave continuity — each frame to the octave nearest the previous.
+  // A frame needing more than MAX_OCTAVE_FIX doublings to reconcile is not an
+  // octave error at all: it is noise, so it is DROPPED rather than hoisted into
+  // the music's range. Low-frequency rumble reads with HIGH clarity (0.87+ at
+  // 50-60 Hz), so the clarity gate never catches it, and the chain would
+  // otherwise multiply such a frame by up to 32x to make it "continuous". One
+  // hoisted frame then does two kinds of damage: it becomes the reference, so
+  // every later frame is pulled toward it (a lone 57 Hz blip between two takes
+  // put the whole second take an octave down), and being early it can become
+  // the Sa anchor, which computeAxis reads from the first voiced frame.
   let prev = null;
   for (const p of vi) {
     let f = p.frequency;
     const ref = prev == null ? gmed : prev;
-    for (let k = 0; k < 5; k++) {
+    let k = 0;
+    for (; k < 5; k++) {
       if (f / ref > HALF) f /= 2;
       else if (ref / f > HALF) f *= 2;
       else break;
     }
+    if (k > MAX_OCTAVE_FIX) { p.frequency = null; continue; }   // noise — drop, do not hoist
     p.frequency = f; prev = f;
   }
 
-  // 2. median-3 despike.
-  const src = vi.map(p => p.frequency);
-  for (let i = 1; i < vi.length - 1; i++) {
+  // 2. median-3 despike. The voiced list is re-derived because step 1 may have
+  // dropped frames, and a null inside the 3-window would corrupt the compares.
+  const vd = pts.filter(p => p.frequency !== null);
+  const src = vd.map(p => p.frequency);
+  for (let i = 1; i < vd.length - 1; i++) {
     const a = src[i - 1], b = src[i], c = src[i + 1];
-    vi[i].frequency = a <= b ? (b <= c ? b : (a <= c ? c : a)) : (a <= c ? a : (b <= c ? c : b));
+    vd[i].frequency = a <= b ? (b <= c ? b : (a <= c ? c : a)) : (a <= c ? a : (b <= c ? c : b));
   }
 
   // 3. bridge only short, close-pitch gaps.
@@ -334,6 +354,20 @@ export function stepToSwara(step, { useRaga, ragaSteps, ragaSwaraName } = {}) {
   return { letter, octave: 5 + o };
 }
 
+// Nearest raga step to an absolute step, searching the neighbouring octaves as
+// well: the raga pitch nearest a step just below an octave boundary is the NEXT
+// octave's S, not anything within its own octave.
+export function nearestRagaStep(step, ragaSteps) {
+  if (!ragaSteps || !ragaSteps.size) return step;
+  const o = Math.floor(step / EDO);
+  let best = step, bd = Infinity;
+  for (let k = o - 1; k <= o + 1; k++) for (const m of ragaSteps) {
+    const s = k * EDO + m, d = Math.abs(s - step);
+    if (d < bd) { bd = d; best = s; }
+  }
+  return best;
+}
+
 // Serialize `notes` (as produced by notesFromBoundaries) into srgm notation,
 // pure extraction of notesToSrgm (pitchy.html 995-1042).
 export function notesToSrgm(notes, { includeGamaka = true, ragaName, useRaga, ragaSteps, ragaSwaraName } = {}) {
@@ -351,7 +385,31 @@ export function notesToSrgm(notes, { includeGamaka = true, ragaName, useRaga, ra
   for (const n of ns) {
     const qStart = Math.round(n.t0 * RES);
     if (qStart > qCursor) { toks.push('z' + (qStart - qCursor)); qCursor = qStart; }   // leading rest + gaps
-    const { letter, octave: targetOct } = stepToSwara(n.step, { useRaga, ragaSteps, ragaSwaraName });
+    // Off-raga fidelity. A step the raga does not contain cannot be written as
+    // a bare swara letter: the parser resolves letters through the raga's OWN
+    // varieties, so an off-raga R3b re-reads as the raga's Ri, and a letter the
+    // raga never uses (mohanam has no Ma) resolves to nothing and the note
+    // VANISHES from the notation. Bind such a note to the nearest raga swara
+    // and carry the remaining offset in its gamaka, whose deltas are
+    // note-relative and unconstrained by the raga — so the pitch survives the
+    // round-trip exactly. Notes produced by detection are already snapped onto
+    // raga lines, so this only fires for hand-placed or pasted off-raga notes.
+    let emitStep = n.step;
+    let gam = (includeGamaka && n.gamaka && n.gamaka.length >= 2) ? n.gamaka : null;
+    if (useRaga && ragaSteps && ragaSteps.size) {
+      const near = nearestRagaStep(n.step, ragaSteps);
+      if (near !== n.step) {
+        const off = n.step - near;            // exact integer 53-EDO offset
+        emitStep = near;
+        // This offset is PITCH, not ornament, so it is emitted even when gamaka
+        // display is switched off — otherwise hiding ornaments would silently
+        // re-pitch the note. With ornaments off the flat offset alone is
+        // written; with them on, every existing delta is re-based onto the new
+        // anchor so the curve keeps its shape and its absolute pitch.
+        gam = gam ? gam.map(([u, d]) => [u, d + off]) : [[0, off], [1, off]];
+      }
+    }
+    const { letter, octave: targetOct } = stepToSwara(emitStep, { useRaga, ragaSteps, ragaSwaraName });
     // Emit the DELTA from the previous note's octave (>/< accumulate in the parser).
     const dOct = targetOct - curOct;
     const oct = dOct > 0 ? '>'.repeat(dOct) : (dOct < 0 ? '<'.repeat(-dOct) : '');
@@ -359,7 +417,7 @@ export function notesToSrgm(notes, { includeGamaka = true, ragaName, useRaga, ra
     const len = Math.max(1, Math.round(n.t1 * RES) - qCursor);
     qCursor += len;
     let tok = oct + letter + len;
-    if (includeGamaka && n.gamaka && n.gamaka.length >= 2) tok += `{gamaka:[${n.gamaka.map(([u, d]) => `[${u},${d}]`).join(',')}]}`;
+    if (gam && gam.length >= 2) tok += `{gamaka:[${gam.map(([u, d]) => `[${u},${d}]`).join(',')}]}`;
     toks.push(tok);
   }
   // Gamaka-bearing tokens go on their own line for readability; plain notes
