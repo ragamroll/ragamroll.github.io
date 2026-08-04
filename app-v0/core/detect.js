@@ -77,7 +77,30 @@ export function gateContour(pitchDataPoints, clarityThresh) {
 }
 
 const BRIDGE_STEPS = 5;            // max endpoint pitch gap (53-EDO) to bridge
-const HALF = Math.SQRT2;           // half-octave ratio (octave-nearest test)
+// Octave-error threshold: a frame is only treated as an octave error once it is
+// more than this far from the reference. It was Math.SQRT2 — half an octave, 600
+// cents — which is BELOW a perfect fifth (702c), so every genuine melodic leap of
+// a fifth or wider was "corrected" by an octave. That was the drift engine: one
+// leap up a fifth got halved, the chain stayed an octave low, and the rest of the
+// piece followed it down. 960 cents clears a minor seventh (996c is just above,
+// a major sixth 884c comfortably below) while staying well under an octave, so
+// real leaps survive and true octave errors are still caught. Swept on the
+// corpus against two metrics at once — see the note on REF_WIN — 960c is the
+// knee: 1020c and 1080c score identically and only erode the margin below 1200.
+const OCT_ERR = Math.pow(2, 0.8);
+// Reference for that comparison: the median of the last REF_WIN corrected frames,
+// not the single previous frame. A rolling median cannot be captured by one
+// aberrant frame, which a chain of length 1 could be.
+//
+// Tuned against TWO metrics, because either alone is misleading. (1) The cleaner
+// must never WIDEN a contour's pitch span — its job is removing octave errors.
+// (2) It must shift as FEW frames as possible away from the raw detector output.
+// Optimising (1) alone favours a long window, but a rolling median is a LAGGING
+// CENTRE, so a long one folds wide-ranging contours toward it and wrecks (2) —
+// at window 9 / 900c one recording had 76% of its frames shifted. Window 9 with
+// 960c gives 0 widened and 6.5% shifted overall (worst single recording 32%),
+// against 33.9% shifted for the pre-fix code.
+const REF_WIN = 9;
 // Octave-continuity guard (see cleanContour step 1): more doublings than this to
 // reconcile a frame means it is noise, not an octave error.
 // Re-seeding the chain from the global median after a silence was tried too and
@@ -98,27 +121,43 @@ export function cleanContour(points, bridgeMs) {
   const gmed = sorted[Math.floor(sorted.length / 2)];
 
   // 1. octave continuity — each frame to the octave nearest the previous.
-  // A frame needing more than MAX_OCTAVE_FIX doublings to reconcile is not an
-  // octave error at all: it is noise, so it is DROPPED rather than hoisted into
-  // the music's range. Low-frequency rumble reads with HIGH clarity (0.87+ at
-  // 50-60 Hz), so the clarity gate never catches it, and the chain would
-  // otherwise multiply such a frame by up to 32x to make it "continuous". One
-  // hoisted frame then does two kinds of damage: it becomes the reference, so
-  // every later frame is pulled toward it (a lone 57 Hz blip between two takes
-  // put the whole second take an octave down), and being early it can become
-  // the Sa anchor, which computeAxis reads from the first voiced frame.
-  let prev = null;
+  // A frame far from the recording's overall pitch is not an octave error, it is
+  // noise, and is DROPPED rather than hoisted into the music's range. Rumble
+  // reads with HIGH clarity (0.87+ at 50-60 Hz) so the clarity gate never
+  // catches it, and the chain would otherwise multiply it by up to 32x to make
+  // it "continuous". One hoisted frame then does two kinds of damage: it becomes
+  // the reference, so every later frame is pulled toward it (a lone 57 Hz blip
+  // between two takes put the whole second take an octave down), and being early
+  // it can become the Sa anchor, which computeAxis reads from the first voiced
+  // frame.
+  //
+  // The noise test measures against the GLOBAL MEDIAN, never against `prev`.
+  // Judging by distance from `prev` conflates "this frame is noise" with "the
+  // chain has wandered", and the chain is exactly what cannot be trusted: where
+  // it had drifted down to 49 Hz, music at 279 Hz (median 285) read as 5.7x away
+  // and 5.2 seconds of a real phrase were deleted. Deleting music is a worse
+  // failure than misplacing its octave. The median is robust to both drift and
+  // to the noise itself.
+  const recent = [];                                   // last REF_WIN corrected frames
   for (const p of vi) {
     let f = p.frequency;
-    const ref = prev == null ? gmed : prev;
-    let k = 0;
-    for (; k < 5; k++) {
-      if (f / ref > HALF) f /= 2;
-      else if (ref / f > HALF) f *= 2;
+    let kg = 0, g = p.frequency;                       // doublings to reconcile with the median
+    for (; kg < 5; kg++) {
+      if (g / gmed > OCT_ERR) g /= 2;
+      else if (gmed / g > OCT_ERR) g *= 2;
       else break;
     }
-    if (k > MAX_OCTAVE_FIX) { p.frequency = null; continue; }   // noise — drop, do not hoist
-    p.frequency = f; prev = f;
+    if (kg > MAX_OCTAVE_FIX) { p.frequency = null; continue; }   // noise — drop, do not hoist
+    const ref = recent.length
+      ? recent.slice().sort((a, b) => a - b)[Math.floor(recent.length / 2)]
+      : gmed;
+    for (let k = 0; k < 5; k++) {
+      if (f / ref > OCT_ERR) f /= 2;
+      else if (ref / f > OCT_ERR) f *= 2;
+      else break;
+    }
+    p.frequency = f;
+    recent.push(f); if (recent.length > REF_WIN) recent.shift();
   }
 
   // 2. median-3 despike. The voiced list is re-derived because step 1 may have
