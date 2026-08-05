@@ -1,4 +1,4 @@
-const CACHE = 'ragamroll-1406fc2';
+const CACHE = 'ragamroll-3cebb49';
 const ASSETS = [
   './', './index.html', './help.html', './draw.html', './draw.js', './pitchy.html', './app.js', './worker.js', './version.js', './manifest.webmanifest',
   './vendor/preact.module.js', './vendor/hooks.module.js', './vendor/htm.module.js', './vendor/htm-preact.js',
@@ -47,6 +47,23 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   e.respondWith((async () => {
+    // PAGES are network-first, everything else cache-first. Cache-first on
+    // navigations meant a published change was invisible until the worker
+    // happened to update and the user loaded the page a SECOND time — the html
+    // came from cache, so the new html that names the new assets never ran.
+    // Falls back to the cache the moment the network fails, so offline is
+    // unchanged.
+    if (e.request.mode === 'navigate') {
+      try {
+        const fresh = await fetch(e.request);
+        if (fresh && fresh.ok) {
+          const clone = fresh.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, clone));
+          return fresh;
+        }
+      } catch { /* offline — fall through to the cache */ }
+      return (await caches.match(e.request)) || (await caches.match('./index.html')) || Response.error();
+    }
     const hit = await caches.match(e.request);
     if (hit) return hit;
     try {

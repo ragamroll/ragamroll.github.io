@@ -2846,5 +2846,15 @@
       statusMsg.textContent = 'Back navigation blocked — you have unsaved edits. Use Share or Download to save first.';
     });
   </script>
+<script>
+  // pitchy is reached DIRECTLY from /ragas, so without this it never triggered a
+  // service-worker update check: the worker installed by a past visit to the app
+  // root kept serving a cached pitchy.html indefinitely, and a deploy could sit
+  // unnoticed for anyone who only opens pitchy links. update() asks explicitly
+  // rather than waiting for the browser's own schedule.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').then((r) => { try { r.update(); } catch (_) {} }).catch(() => {});
+  }
+</script>
 </body>
 </html>
