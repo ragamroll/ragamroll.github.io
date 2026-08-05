@@ -113,7 +113,52 @@ const TARGET = 120;        // downsample the ~86 fps contour to this many points
 
 const C12 = ['S', 'r', 'R', 'g', 'G', 'm', 'M', 'P', 'd', 'D', 'n', 'N'];   // internal to notesToSrgm (no-raga chromatic tokens); not exported
 
-export function cleanContour(points, bridgeMs) {
+// `opts.despike:false` skips the median-3 pass; passing bridgeMs 0 skips gap
+// filling. Together they give an OCTAVE-CORRECTED-ONLY contour: the detector's
+// octave flips fixed, but nothing interpolated and nothing smoothed. That is the
+// right source for sampling a gamaka — the fully cleaned curve is partly
+// invented, while the raw one carries octave errors straight into the ornament.
+// ---- manual corrections to the raw contour ---------------------------------
+// Operations, not mutated frames, so they replay over whatever the detector
+// currently produces: edits written in place would be wiped by a re-gate (the
+// clarity/bridge sliders re-derive from the stored frames) and a frozen contour
+// would go stale against a detection change. Times anchor to the AUDIO, so an op
+// stays valid across those changes.
+//   {op:'del',  t0,t1}    drop these frames
+//   {op:'oct',  t0,t1,n}  shift by n octaves
+//   {op:'join', t0,t1}    log-linear interpolation across the silence
+// Shared by pitchy (interactive) and notate-audio (the corpus build), so a
+// correction made by hand and one applied at build time cannot diverge.
+export function applyRawEdits(points, ops) {
+  if (!ops || !ops.length) return points;
+  const pts = points.map((p) => ({ time: p.time, frequency: p.frequency }));
+  const inSpan = (p, e) => p.time >= e.t0 - 1e-9 && p.time <= e.t1 + 1e-9;
+  for (const e of ops) {
+    if (e.op === 'del') { for (const p of pts) if (inSpan(p, e)) p.frequency = null; }
+    else if (e.op === 'oct') { for (const p of pts) if (p.frequency != null && inSpan(p, e)) p.frequency *= Math.pow(2, e.n); }
+    else if (e.op === 'join') {
+      let a = null, b = null;
+      for (const p of pts) { if (p.frequency != null && p.time <= e.t0 + 1e-9) a = p; }
+      for (const p of pts) { if (p.frequency != null && p.time >= e.t1 - 1e-9) { b = p; break; } }
+      if (!a || !b || b.time <= a.time) continue;
+      for (const p of pts) {
+        if (p.frequency != null || p.time <= a.time || p.time >= b.time) continue;
+        const r = (p.time - a.time) / (b.time - a.time);
+        p.frequency = a.frequency * Math.pow(b.frequency / a.frequency, r);
+      }
+    }
+  }
+  return pts;
+}
+
+// Octave ops must be re-applied AFTER cleaning as well as before: the automatic
+// octave-continuity pass reads a deliberately moved span as an octave off its
+// neighbours and undoes it. A manual correction wins over the automatic one.
+export const reapplyOctaveEdits = (points, ops) =>
+  applyRawEdits(points, (ops || []).filter((e) => e.op === 'oct'));
+
+export function cleanContour(points, bridgeMs, opts = {}) {
+  const despike = opts.despike !== false;
   const pts = points.map(p => ({ time: p.time, frequency: p.frequency }));
   const vi = pts.filter(p => p.frequency !== null);
   if (vi.length < 2) return pts;
@@ -162,11 +207,13 @@ export function cleanContour(points, bridgeMs) {
 
   // 2. median-3 despike. The voiced list is re-derived because step 1 may have
   // dropped frames, and a null inside the 3-window would corrupt the compares.
+  if (despike) {
   const vd = pts.filter(p => p.frequency !== null);
   const src = vd.map(p => p.frequency);
   for (let i = 1; i < vd.length - 1; i++) {
     const a = src[i - 1], b = src[i], c = src[i + 1];
     vd[i].frequency = a <= b ? (b <= c ? b : (a <= c ? c : a)) : (a <= c ? a : (b <= c ? c : b));
+  }
   }
 
   // 3. bridge only short, close-pitch gaps.
@@ -307,7 +354,20 @@ export function gamakaForNote(n, cleanedPoints, saRefHz) {
   for (let [u, d] of pts) {
     u = Math.min(1, Math.max(0, Math.round(u * 100) / 100)); d = Math.max(-60, Math.min(60, d));
     const pv = clean[clean.length - 1];
-    if (pv) { if (u <= pv[0]) continue; if (d === pv[1]) { clean[clean.length - 1] = [pv[0], d]; continue; } }
+    if (pv) {
+      if (u <= pv[0]) continue;
+      // A run of equal deltas is a HELD pitch, and a hold has an END as well as
+      // a start. Collapse the run's interior but keep both endpoints: the old
+      // code kept only the first (the assignment it made was a no-op), so a
+      // sustained segment shrank to a single sample and whatever came next
+      // ramped away from the hold's START instead of from where it let go.
+      if (d === pv[1]) {
+        const pv2 = clean[clean.length - 2];
+        if (pv2 && pv2[1] === d) clean[clean.length - 1] = [u, d];   // extend the run
+        else clean.push([u, d]);                                     // open it: this is its end so far
+        continue;
+      }
+    }
     clean.push([u, d]);
   }
   if (clean.length < 2) return null;

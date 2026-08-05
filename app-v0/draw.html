@@ -88,6 +88,16 @@ button.mini{padding:.1rem .5rem;font-size:1rem;line-height:1;margin-left:.3rem}
 .ctxsep{height:1px;background:var(--hair);margin:.25rem 0}
 .omlabel{display:flex;flex-direction:column;gap:.2rem;color:var(--muted);font-size:.78rem;padding:.3rem .55rem}
 .omlabel select{background:var(--panel2);color:var(--ink);border:1px solid var(--hair);border-radius:6px;padding:.2rem .3rem;font-size:.85rem;max-width:52vw}
+  /* Notation the parser could not honour. Persistent and dismissible, NOT a
+     toast: this reports something already lost from the piece, and a warning
+     that vanishes after four seconds is how a dropped gamaka goes unnoticed. */
+  #parsewarn { margin:.5rem; padding:.5rem .6rem; border:1px solid #a63; border-radius:4px;
+    background:#241a10; color:#eda; font-size:.85rem; max-height:22vh; overflow:auto; }
+  #parsewarn b { color:#ffb454; }
+  #parsewarn ul { margin:.3rem 0 0; padding-left:1.2rem; }
+  #parsewarn li { margin:.15rem 0; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.8rem; }
+  #parsewarn button { float:right; background:none; border:1px solid #a63; color:#eda;
+    border-radius:3px; cursor:pointer; font-size:.75rem; padding:.1rem .4rem; }
 </style>
 </head>
 <body>
@@ -166,6 +176,7 @@ button.mini{padding:.1rem .5rem;font-size:1rem;line-height:1;margin-left:.3rem}
   <button data-act="link">Paste a share link…</button>
 </div>
 <input type="file" id="fileinput" accept=".srgm,.txt,text/plain" hidden>
+<div id="parsewarn" role="alert" style="display:none"></div>
 <div id="toast" role="status" style="display:none"></div>
 <div class="ctxmenu" id="ctxmenu">
   <button data-act="copy">Copy gamaka</button>

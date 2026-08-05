@@ -73,6 +73,41 @@
     }
     #scroll canvas { display: block; }
     #hdr { position: sticky; top: 0; z-index: 2; background-color: #1a1a1e; }
+    #pitchtable { height: calc(100vh - 470px); min-height: 160px; overflow-y: auto; border: 1px solid #333;
+      border-radius: 6px; background: #16161a; font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: .74rem; width: 100%; box-sizing: border-box; }
+    #pitchtable table { border-collapse: collapse; width: 100%; }
+    #pitchtable th { position: sticky; top: 0; background: #16161a; color: #888; font-weight: normal;
+      text-align: right; padding: 3px 6px; border-bottom: 1px solid #333; }
+    #pitchtable td { padding: 1px 6px; text-align: right; color: #cfcfcf; white-space: nowrap; }
+    /* Notation the parser could not honour — persistent and dismissible, since it
+       reports something already lost rather than a passing status. */
+    #parsewarn { margin:.4rem 0; padding:.5rem .6rem; border:1px solid #a63; border-radius:4px;
+      background:#241a10; color:#eda; font-size:.85rem; max-height:22vh; overflow:auto; }
+    #parsewarn b { color:#ffb454; }
+    #parsewarn ul { margin:.3rem 0 0; padding-left:1.2rem; }
+    #parsewarn li { margin:.15rem 0; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.8rem; }
+    #parsewarn button { float:right; background:none; border:1px solid #a63; color:#eda;
+      border-radius:3px; cursor:pointer; font-size:.75rem; padding:.1rem .4rem; }
+    #pitchtable tr.spiky td { color: #ffb454; }
+    /* Only the DERIVED columns dim. Dimming the whole row made an intact raw
+       reading look blanked, which is what a deletion appeared to do to it. */
+    #pitchtable tr.gated td:nth-child(n+3) { color: #6a6a72; }
+    #pitchtable tr.byhand td:nth-child(n+3) { color: #6a6a72; text-decoration: line-through; }
+    #pitchtable tr.byhand td:first-child::after { content: ' \270E'; color: #c084fc; }
+    /* The A/B play range, so the table shows what will be heard. Declared BEFORE
+       .sel so the selected row inside the range still reads as selected. */
+    #pitchtable tr.inab td { background: rgba(255,180,84,0.10); }
+    #pitchtable tr.inab td:first-child { box-shadow: inset 3px 0 0 #ffb454; }
+    #pitchtable tr.aba td { border-top: 1px solid #ffb454; }
+    #pitchtable tr.abb td { border-bottom: 1px solid #ffb454; }
+    #pitchtable tr.aba td:first-child::before,
+    #pitchtable tr.abb td:first-child::before { color: #ffb454; font-weight: bold; }
+    #pitchtable tr.aba td:first-child::before { content: 'A '; }
+    #pitchtable tr.abb td:first-child::before { content: 'B '; }
+    #pitchtable tr.sel td { background: rgba(180,140,255,0.28); }
+    #pitchtable tr.gap td { border-top: 1px dashed #444; }
+    #pitchtable tr:hover td { background: #23232a; cursor: pointer; }
 
     #tools2, #tools4 { font-size: 0.85rem; color: #bbb; gap: 8px; }
     #tools4 .grp { gap: 6px; }
@@ -89,6 +124,40 @@
       width: 100%; box-sizing: border-box; height: 70vh; resize: vertical;
       background: #16161a; color: #d8d8d8; border: 1px solid #333; border-radius: 6px;
       font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.85rem; padding: 8px;
+    }
+    /* Desktop: the control stack above the grid was costing ~320px, a third of
+       it pure margin, and the page scrolled because the grid still claimed 74vh
+       underneath it. Tighten the gaps, size the mixer's sliders (they render
+       ~38px tall by default, making tools3 the tallest row), and let the grid
+       take whatever vertical space is actually left. Untouched on mobile, where
+       the stacked layout and larger touch targets are right. */
+    @media (min-width: 761px) {
+      .controls { margin-bottom: 7px; }
+      .status { margin-bottom: 5px; }
+      #tools3 { gap: 18px; }
+      #tools3 input[type=range] { width: 96px; height: 18px; }
+      #tools3 .grp { gap: 6px; }
+      /* The mixer buttons, not the sliders, set this row's height: the global
+         button padding of 8px/16px made them 31-38px tall. */
+      #tools3 button { padding: 4px 10px; line-height: 1.25; }
+      #scroll { max-height: calc(100vh - 265px); }
+      /* Let the roll claim the width the layout gives it. Sized to its content it
+         would stay 440px and collapsing the notation column would leave a gap
+         rather than a wider grid; min-width:0 stops the canvas forcing the
+         container wider than the flex line, which would feed back into baseW(). */
+      #stage > #scroll { flex: 1 1 auto; min-width: 0; }
+      /* body centres its children, so #stage was sized to its content and there
+         was no spare width for the roll to grow into — collapsing the notation
+         column freed space that nothing could claim. */
+      #stage { align-self: stretch; }
+      /* Plenty of horizontal room at desktop widths: widening the notation column
+         stops its transport row wrapping to three lines (89px at 300px wide). */
+      #notewrap { width: 420px; }
+      /* The notation column is taller than the grid, so it — not the grid — was
+         what made the page scroll. With the page scrolling, the layer toggles
+         slide out of view during playback, which is exactly when they are wanted.
+         Cap it to the same band so everything fits on one screen. */
+      #notation { height: calc(100vh - 470px); min-height: 160px; }
     }
     @media (max-width: 760px) {
       #stage { flex-direction: column; align-items: center; }
@@ -138,6 +207,7 @@
     <button id="paste-btn">Paste link</button>
   </div>
 
+  <div id="parsewarn" role="alert" style="display:none"></div>
   <div class="status adv" id="status-msg">Select an audio file to begin...</div>
   <div class="status adv" id="sa-info"></div>
   <div class="status" id="sharemsg" style="display:none; color:#ffd479; max-width:900px"></div>
@@ -146,33 +216,20 @@
     <span class="grp">Raga
       <select id="raga-sel"><option value="">— none —</option></select>
     </span>
-    <span class="grp">Pitch
-      <button class="z" id="zxo">−</button><button class="z" id="zxi">+</button>
-    </span>
-    <span class="grp">Time
-      <button class="z" id="zyo">−</button><button class="z" id="zyi">+</button>
-    </span>
-    <button class="z" id="zreset">Reset</button>
-    <span class="grp">Notes <b id="notecount">0</b>
+    <button class="z" id="clearall" title="Discard the audio, notation, notes and every manual pitch edit, and forget the saved session. Cannot be undone.">Start afresh</button>
+    <span class="grp noteonly">Notes <b id="notecount">0</b>
       <button class="z" id="detectbtn">Detect notes</button>
       <button class="z" id="alignsa" title="Retune Sa so a held Sa sits on the Sa grid line">Align Sa</button>
       <button class="z" id="seedbtn">Seed markers</button>
+      <button class="z" id="tapbtn" title="Arm tap-to-mark: while playing, SHIFT or a click on the roll drops a marker at the playhead. SPACE stays play/pause. Taps are stored exactly as made — use align taps afterwards.">◉ tap</button>
+      <button class="z" id="aligntaps" title="Shift every tapped marker by the median distance to the nearest detected syllable onset. Shows the offset and its spread before committing; undoable.">align taps</button>
       <button class="z" id="selfuse">Select ↕ to fuse</button>
       <button class="z" id="tidymarkers" title="Delete markers not connected to a note">Tidy</button>
       <button class="z" id="undonote">Undo</button><button class="z" id="clearnotes">Clear</button>
     </span>
-    <label class="grp"><input type="checkbox" id="snapcross" checked> snap to crossing</label>
-    <label class="grp"><input type="checkbox" id="gamakas"> gamaka from curve</label>
-    <label class="grp"><input type="checkbox" id="snaponsets" checked> snap onsets</label>
-  </div>
-
-  <div class="controls" id="tools3">
-    <span class="grp"><button id="dronemute" class="chlabel" data-on="1" title="Mute/unmute the tanpura drone (Sa · Pa · upper Sa)">🕉 Drone</button>
-      <input type="range" id="dronevol" min="0" max="1" step="0.01" value="0.15"></span>
-    <span class="grp"><button id="notemute" class="chlabel" data-on="1" title="Mute/unmute the notes">🎵 Notes</button>
-      <input type="range" id="notevol" min="0" max="1" step="0.01" value="0.5"></span>
-    <span class="grp"><button id="audiomute" class="chlabel" data-on="1" title="Mute/unmute the audio">🎙 Audio</button>
-      <input type="range" id="audiovol" min="0" max="1" step="0.01" value="1"></span>
+    <label class="grp noteonly"><input type="checkbox" id="snapcross" checked> snap to crossing</label>
+    <label class="grp noteonly"><input type="checkbox" id="gamakas"> gamaka from curve</label>
+    <label class="grp noteonly"><input type="checkbox" id="snaponsets" checked> snap onsets</label>
   </div>
 
   <div class="controls adv" id="tools4">
@@ -184,31 +241,87 @@
       <input type="range" id="bridgems" min="0" max="500" step="10" value="250">
       <b id="bridgelbl">250ms</b>
     </span>
+    <span class="grp">mode
+      <select id="modesel" title="Notation: derive and edit notes. Pitch edit: correct the measured curve, frame by frame.">
+        <option value="notation">notation</option>
+        <option value="pitch">pitch edit</option>
+      </select></span>
+    <span class="grp"><button class="z" id="widegrid" title="Collapse the notation column and give the width to the roll">⇤ wide grid</button></span>
+    <span class="grp">raw
+      <button class="z" id="raweditbtn" title="Click a raw pitch segment to select it; shift-click a second to span a range">✎ edit</button>
+      <button class="z" id="rawdel" title="Drop the selected frames — noise, breath, tanpura" disabled>delete</button>
+      <button class="z" id="rawup" title="Shift the selection up an octave (detector slipped down)" disabled>8va ↑</button>
+      <button class="z" id="rawdn" title="Shift the selection down an octave" disabled>8va ↓</button>
+      <button class="z" id="rawjoin" title="Interpolate across the silence between the selected segments" disabled>join</button>
+      <button class="z" id="rawundo" title="Undo the last raw-curve edit" disabled>undo edit</button>
+      <button class="z" id="rawsave" title="Download the edits as JSON for curated/" disabled>save edits</button>
+    </span>
+    <span class="grp"><button class="z" id="spikebtn" title="List the sharpest departures from the local pitch, worst first" disabled>⚡ spikes</button></span>
   </div>
 
   <!-- Compact transport+mixer bar; in viewer mode the essential controls are
        moved here (above the grid) and everything .adv is hidden. -->
   <div id="viewerbar" style="display:none"></div>
 
+  <!-- Transport + mixer, the row nearest the grid. The transport used to live
+       inside #notewrap, which "wide grid" hides wholesale — so widening the grid
+       took play, rewind and speed with it. It belongs with the other things that
+       act on playback rather than with the notation text, which is also where
+       viewer mode has always put it. -->
+  <div class="controls" id="tools3">
+    <span class="grp"><button id="rewind-btn" disabled title="Rewind to start">⏮</button>
+      <button id="play-btn" title="Play / pause — SPACE" disabled>▶ Play</button>
+      <select id="speed" title="Playback speed — slows audio + notes together, keeping pitch (hear gamaka detail while editing)">
+        <option value="1">1×</option>
+        <option value="0.75">0.75×</option>
+        <option value="0.5">0.5×</option>
+        <option value="0.35">0.35×</option>
+        <option value="0.25">0.25×</option>
+      </select></span>
+    <span class="grp"><button id="dronemute" class="chlabel" data-on="1" title="Mute/unmute the tanpura drone (Sa · Pa · upper Sa)">🕉 Drone</button>
+      <input type="range" id="dronevol" min="0" max="1" step="0.01" value="0.5"></span>
+    <span class="grp"><button id="notemute" class="chlabel" data-on="1" title="Mute/unmute the notes">🎵 Notes</button>
+      <input type="range" id="notevol" min="0" max="1" step="0.01" value="0.5"></span>
+    <span class="grp"><button id="audiomute" class="chlabel" data-on="1" title="Mute/unmute the audio">🎙 Audio</button>
+      <input type="range" id="audiovol" min="0" max="1" step="0.01" value="0.5"></span>
+  </div>
+
+  <!-- Nearest the grid: what is on it and how big it is drawn. These are the
+       controls reached for WHILE looking at the roll — zoom in, turn a layer on,
+       fatten the curve — so they sit against it, with the transport a row above.
+       Kept .adv so viewer mode still hides them, as it did when they lived in
+       the rows above. -->
+  <div class="controls adv" id="tools5">
+    <span class="grp" title="Magnify the pitch axis — the range shown always covers the whole contour, so this spreads it over more or fewer pixels rather than revealing more of it">Pitch
+      <button class="z" id="zxo">−</button><button class="z" id="zxi">+</button>
+    </span>
+    <span class="grp" title="Magnify the time axis — spreads the recording over more or fewer pixels">Time
+      <button class="z" id="zyo">−</button><button class="z" id="zyi">+</button>
+    </span>
+      <button class="z" id="zreset" title="Zoom both axes back to 1x. Nothing else is touched.">Reset zoom</button>
+    <span class="grp">show
+      <label title="The cleaned pitch contour (cyan) — octave-corrected, despiked, gaps bridged — and the amber crossing dots derived from it. This is what detection reads.">
+        <input type="checkbox" id="showcurve"> cleaned up pitch</label>
+      <label title="What the detector measured (violet). The dim line is every frame it reported; the bright line is what survived the clarity gate and your edits — where only the dim line runs, those frames were gated out.">
+        <input type="checkbox" id="showraw" checked> raw pitch</label>
+      <label title="Curve thickness. A one-frame segment is a single dot; fatten it until it reads on screen.">
+        thickness <input type="range" id="curvew" min="1" max="8" step="0.5" value="1.6" style="width:70px;vertical-align:middle"></label>
+      <label title="The derived notes, their gamaka curves and the boundary lines between them (teal).">
+        <input type="checkbox" id="shownotes" checked> notes/gamaka</label>
+    </span>
+  </div>
+
   <div id="stage">
-    <div id="scroll"><canvas id="hdr" width="440" height="24"></canvas><canvas id="pitch-canvas" width="440" height="760"></canvas></div>
+    <div id="scroll"><canvas id="hdr" width="440" height="34"></canvas><canvas id="pitch-canvas" width="440" height="760"></canvas></div>
     <div id="notewrap">
       <div class="status" style="margin:0 0 6px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
-        <button id="rewind-btn" disabled title="Rewind to start">⏮</button>
-        <button id="play-btn" disabled>▶ Play</button>
-        <select id="speed" title="Playback speed — slows audio + notes together, keeping pitch (hear gamaka detail while editing)">
-          <option value="1">1×</option>
-          <option value="0.75">0.75×</option>
-          <option value="0.5">0.5×</option>
-          <option value="0.35">0.35×</option>
-          <option value="0.25">0.25×</option>
-        </select>
         <span class="adv" style="display:inline-flex; gap:8px; align-items:center">Notation
           <button class="z" id="regennotation" title="Regenerate text from the drawn notes">↻ from notes</button>
           <button class="z" id="applynotation" title="Parse the text into notes">notes ← text</button>
           <label style="font-weight:normal"><input type="checkbox" id="showgamaka" checked> gamaka</label>
         </span>
       </div>
+      <div id="pitchtable" style="display:none"></div>
       <textarea id="notation" class="adv" placeholder="Draw notes (Seed / tap / gutter / drag a crossing to insert) — srgm appears here. Editable; ↻ resyncs."></textarea>
       <div class="status adv" style="margin:8px 0 4px; display:flex; gap:8px; align-items:center">
         Heard syllables
@@ -259,6 +372,16 @@
 
     let pitchDataPoints = [];   // raw detector output (CSV exports this, unchanged)
     let cleanedPoints = [];     // octave-corrected + smoothed + gap-bridged (canvas + srgm)
+    // The same frames with ONLY the clarity gate applied — what the detector
+    // actually reported, before any octave correction. Kept so the roll can show
+    // raw and cleaned together: cleaning moves frames by whole octaves, and
+    // without seeing both there is no way to tell a detector octave error from a
+    // correction that fired when it should not have. Empty in a shared session,
+    // which carries a downsampled contour and no raw frames.
+    let gatedPoints = [];
+    // Octave-corrected only: no gap bridging, no despiking. The gamaka source —
+    // see gamakaForNote.
+    let octavePoints = [];
     let audioDuration = 0;
 
     // Playback: an <audio> element off the file's object URL drives a playhead
@@ -325,6 +448,7 @@
         s.sa = saRefHz;
         s.raga = $('raga-sel').value || '';
         s.markerA = markerA; s.markerB = markerB;
+        s.rawEdits = rawEdits;
         await idbPut(s);
       } catch (e) { console.warn('model persist failed', e); }
     }
@@ -351,6 +475,7 @@
 
       objectUrl = URL.createObjectURL(file);
       player.src = objectUrl;
+      player.volume = audioVolVal();
 
       try {
         const arrayBuffer = await file.arrayBuffer();
@@ -406,6 +531,12 @@
     // contour reads against the shrutis exactly as it will in ragamroll.
     const PAD = { l: 50, r: 14, t: 16, b: 16 };
     const PH_X0 = 26;      // playhead gutter column starts here; [0,PH_X0)=A/B gutter
+    // The gutters are FROZEN against horizontal scroll: the canvas is one wide
+    // bitmap inside a scrolling box, so anything drawn at a fixed canvas x slides
+    // away with the pitch columns. Drawing them shifted by scrollLeft instead
+    // pins them to the left edge of the viewport, spreadsheet-style. Pointer
+    // coords are canvas-relative, so gutter hit tests subtract the same offset.
+    const gutOff = () => { const el = $('scroll'); return el ? el.scrollLeft : 0; };
     let saRefHz = 0, stepMin = -4, stepMax = 4;
     let LINES = [];        // absolute shruti-line steps within [stepMin, stepMax]
     let crossings = [];    // {step, t} where the contour crosses a shruti line
@@ -414,26 +545,111 @@
     // Zoom: canvas is BASE_W x BASE_H at zoom 1; each axis scales independently
     // and the #scroll container provides scrolling. Coordinate maps read
     // canvas.width/height, so redrawing after a resize is all that's needed.
-    const BASE_W = 440, BASE_H = 760;
+    // The grid's unzoomed width follows the space the layout gives it, so
+    // collapsing the notation column actually widens the roll instead of leaving
+    // a fixed 440px canvas with empty space beside it. Height stays fixed; the
+    // time axis is what zooming stretches.
+    const BASE_H = 760, BASE_W_MIN = 440;
+    function baseW() {
+      const sc = $('scroll');
+      if (!sc) return BASE_W_MIN;
+      const avail = Math.floor(sc.getBoundingClientRect().width) - 2;   // border
+      return Math.max(BASE_W_MIN, avail || BASE_W_MIN);
+    }
+    // The roll may not be narrower than its container: below that, zooming out
+    // stops revealing anything and just leaves dead space to the right of the
+    // grid. baseW() already IS the container width whenever there is room, so
+    // the floor is normally zoomX = 1; it only drops below 1 on a window too
+    // narrow for BASE_W_MIN, where the canvas overflows anyway.
+    function fitW() {
+      const sc = $('scroll');
+      return sc ? Math.max(0, Math.floor(sc.getBoundingClientRect().width) - 2) : 0;
+    }
+    const minZoomX = () => { const b = baseW(); return b > 0 ? Math.min(1, fitW() / b) : 1; };
     let zoomX = 1, zoomY = 1;
-    function applyZoom() {
-      canvas.width = Math.round(BASE_W * zoomX);
+    // keepView: hold the time range already on screen instead of chasing the
+    // playhead. A slider that re-derives the contour (clarity, bridge) comes
+    // through here, and following the playhead then threw the view back to
+    // wherever playback sat -- 0 if nothing had played -- so adjusting clarity
+    // while looking at 20s snapped the roll to the start. Zooming still follows,
+    // because stretching the canvas under a fixed scroll window really can put
+    // the playhead outside it.
+    function applyZoom(keepView) {
+      const sc = $('scroll');
+      const anchor = (keepView && sc) ? viewTopTime() : null;
+      canvas.width = Math.max(Math.round(baseW() * zoomX), fitW());
       canvas.height = Math.round(BASE_H * zoomY);
       canvas.style.width = canvas.width + 'px';
       canvas.style.height = canvas.height + 'px';
-      renderFrame(player.currentTime || 0);
+      // Zooming time stretches the canvas under a scroll window that does not
+      // move, so the playhead can end up outside the visible band — expand a few
+      // times and it disappears. Re-reveal it. nowPos() rather than
+      // player.currentTime: with no audio the synth clock holds the position and
+      // the audio element sits at 0, which would draw the playhead at the top
+      // whatever had actually been played.
+      const t = nowPos();
+      renderFrame(t);
+      if (anchor != null) scrollToTime(anchor);
+      else followPlayhead(t);
     }
-    const clampZ = (z) => Math.max(1, Math.min(8, z));
-    $('zxo').addEventListener('click', () => { zoomX = clampZ(zoomX / 1.4); applyZoom(); });
-    $('zxi').addEventListener('click', () => { zoomX = clampZ(zoomX * 1.4); applyZoom(); });
-    $('zyo').addEventListener('click', () => { zoomY = clampZ(zoomY / 1.4); applyZoom(); });
-    $('zyi').addEventListener('click', () => { zoomY = clampZ(zoomY * 1.4); applyZoom(); });
+    // Time at the top edge of the scroll window, and the inverse. Both work in
+    // container coordinates via getBoundingClientRect, since the canvas sits
+    // below a sticky header inside the same scroller and its offsetTop is
+    // page-relative rather than container-relative.
+    function viewTopTime() {
+      const sc = $('scroll');
+      if (!sc || !(audioDuration > 0)) return null;
+      const off = canvas.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop;
+      return yToTime(sc.scrollTop - off);
+    }
+    function scrollToTime(t) {
+      const sc = $('scroll');
+      if (!sc || !(audioDuration > 0)) return;
+      const off = canvas.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop;
+      sc.scrollTop = Math.max(0, off + Yt(t) - PAD.t);
+    }
+    // Zoom out below 1 to see a whole recording, and much further in than the old
+    // 8x ceiling — editing a spike needs real magnification. Guarded on total
+    // canvas AREA rather than per-axis, since browsers cap that: both axes at
+    // their maximum would ask for a canvas no browser will allocate, and the
+    // failure is a blank grid rather than an error.
+    const MAX_CANVAS_PX = 60e6;
+    const clampZ = (z) => Math.max(0.25, Math.min(24, z));
+    window.addEventListener('resize', () => { if (audioDuration > 0) applyZoom(true); });   // a resize is not a request to jump to the playhead
+    function zoomFits(zx, zy) { return baseW() * zx * BASE_H * zy <= MAX_CANVAS_PX; }
+    $('zxo').addEventListener('click', () => {
+      const z = Math.max(minZoomX(), clampZ(zoomX / 1.4));
+      if (z >= zoomX) { statusMsg.textContent = 'The grid already fills the width — zooming out further would only add blank space.'; return; }
+      if (!zoomFits(z, zoomY)) { statusMsg.textContent = 'Zoom limit — zoom out the other axis first.'; return; }
+      zoomX = z; applyZoom();
+    });
+    $('zxi').addEventListener('click', () => { const z = clampZ(zoomX * 1.4); if (!zoomFits(z, zoomY)) { statusMsg.textContent = 'Zoom limit — zoom out the other axis first.'; return; } zoomX = z; applyZoom(); });
+    $('zyo').addEventListener('click', () => { const z = clampZ(zoomY / 1.4); if (!zoomFits(zoomX, z)) { statusMsg.textContent = 'Zoom limit — zoom out the other axis first.'; return; } zoomY = z; applyZoom(); });
+    $('zyi').addEventListener('click', () => { const z = clampZ(zoomY * 1.4); if (!zoomFits(zoomX, z)) { statusMsg.textContent = 'Zoom limit — zoom out the other axis first.'; return; } zoomY = z; applyZoom(); });
     $('zreset').addEventListener('click', () => { zoomX = zoomY = 1; applyZoom(); });
+    // Start afresh. Everything worth losing is named in the prompt, because the
+    // saved session survives a plain reload and there was no way to get back to
+    // an empty page short of clearing site data by hand. Deleting the stored
+    // session and reloading is deliberate: reconstructing first-load state by
+    // resetting each variable would silently drift as new state is added, while
+    // a reload can only ever produce exactly what a first visit produces.
+    $('clearall').addEventListener('click', async () => {
+      const what = [rawEdits.length && `${rawEdits.length} manual pitch edit(s)`,
+                    notes.length && `${notes.length} note(s)`,
+                    audioDuration > 0 && 'the loaded audio'].filter(Boolean).join(', ');
+      if (!confirm(`Start afresh?\n\nThis discards ${what || 'the current session'} and the saved session. It cannot be undone.`)) return;
+      try { const db = await idbOpen(); await new Promise((res, rej) => {
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).delete(IDB_KEY);
+        tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+      }); } catch (_) { /* nothing stored yet, or storage blocked: reload still clears memory */ }
+      location.href = location.pathname;     // drop any #share payload too
+    });
 
     // A/B play markers (seconds on the time axis). Play is bounded to [A, B].
     let markerA = 0, markerB = 0, dragMk = null;
     const yToTime = (oy) => audioDuration > 0 ? (oy - PAD.t) / plotH() * audioDuration : 0;
-    function resetMarkers() { markerA = 0; markerB = audioDuration; boundaries = []; notes = []; updateNoteUI(); }
+    function resetMarkers() { markerA = 0; markerB = audioDuration; abFromSel = false; boundaries = []; notes = []; updateNoteUI(); }
     // Press handling: shift = delete a boundary; gutter = playhead/A-B; a boundary
     // line = drag it; otherwise a candidate TAP (also lets #scroll pan) that adds
     // a boundary if it doesn't move.
@@ -483,9 +699,40 @@
     canvas.addEventListener('pointerdown', (e) => {
       if (!(audioDuration > 0)) return;
       const ox = e.offsetX, oy = e.offsetY;
+      // Gutter tests run in VIEWPORT x: the gutters are pinned against horizontal
+      // scroll, so where they are drawn and where a press on them lands both move
+      // with scrollLeft. Plot coords (pitch) stay canvas-relative and use ox.
+      const gx = ox - gutOff();
       if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey)
         console.log('[pitchy] pointerdown mods', { alt: e.altKey, ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey }, 'x', ox.toFixed(0), 't', yToTime(oy).toFixed(2));
       if (selMode) { selBox = { y0: oy, y1: oy }; canvas.setPointerCapture(e.pointerId); e.preventDefault(); renderFrame(player.currentTime || 0); return; }
+      // Armed tap wins the press outright. A trackpad tap on the roll otherwise
+      // means "place a marker HERE", taking time from the cursor -- the opposite
+      // of marking by ear, where only the instant matters.
+      if (tapArmed && ox >= PAD.l) { e.preventDefault(); tapMark(e.timeStamp); return; }
+      // Raw-curve editing takes the press before any note gesture: in this mode
+      // the canvas is for correcting the contour, not for placing notes.
+      if (rawEditMode && gx >= PAD.l) {
+        // Press starts a candidate SPAN drag and also selects the run under the
+        // pointer. A drag wins on release if it actually moved: a spike lives
+        // INSIDE a run, so whole-run selection alone cannot isolate one, which is
+        // most of what this mode is for. A plain click still grabs the whole
+        // gesture, which is what octave-shifting and joining want.
+        const t = yToTime(oy);
+        const r = runAt(t);
+        if (r) {
+          if (e.shiftKey && selRuns.length) {
+            const lo = Math.min(selRuns[0].t0, r.t0), hi = Math.max(selRuns[0].t1, r.t1);
+            selRuns = rawRuns.filter((x) => x.t0 >= lo - 1e-9 && x.t1 <= hi + 1e-9);
+          } else selRuns = [r];
+        } else selRuns = [];
+        rawDrag = { t0: t, t1: t, moved: false };
+        refreshRawButtons();
+        tapXY = null; e.preventDefault();
+        try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+        renderFrame(player.currentTime || 0);
+        return;
+      }
       if (e.ctrlKey || e.metaKey) {
         if (e.shiftKey) splitNoteAt(yToTime(oy)); else deleteNoteByTime(yToTime(oy));   // ctrl/cmd = delete; +shift = split
         tapXY = null; e.preventDefault(); return;
@@ -494,9 +741,11 @@
       // Two separate gutter columns. A/B column ([0,PH_X0)): press = A, drag =
       // B — marks the play segment, nothing else (no scroll, no roll change).
       // Playhead column ([PH_X0,PAD.l)): scrub the playhead.
-      if (ox < PAD.l) {
+      if (gx < PAD.l) {
         const t = Math.max(0, Math.min(audioDuration, yToTime(oy)));
-        if (ox < PH_X0) { dragMk = 'AB'; abDrag = t; markerA = t; markerB = audioDuration; }
+        // Dragging A/B by hand takes ownership of the range back from the
+        // selection, so a later deselect leaves this loop alone.
+        if (gx < PH_X0) { dragMk = 'AB'; abDrag = t; markerA = t; markerB = audioDuration; abFromSel = false; }
         else { dragMk = 'P'; player.currentTime = t; }
         tapXY = null; canvas.setPointerCapture(e.pointerId); e.preventDefault();
         renderFrame(player.currentTime || 0); return;
@@ -519,6 +768,13 @@
       tapXY = { x: ox, y: oy };                       // empty space -> drag can still scroll
     });
     canvas.addEventListener('pointermove', (e) => {
+      if (rawDrag) {
+        e.preventDefault();
+        rawDrag.t1 = Math.max(0, Math.min(audioDuration, yToTime(e.offsetY)));
+        if (Math.abs(rawDrag.t1 - rawDrag.t0) > 0.03) rawDrag.moved = true;
+        renderFrame(player.currentTime || 0);
+        return;
+      }
       if (selBox) { e.preventDefault(); selBox.y1 = e.offsetY; renderFrame(player.currentTime || 0); return; }
       if (paintNote) {
         e.preventDefault();
@@ -551,13 +807,29 @@
       }
       if (dragBoundary) {
         e.preventDefault();
-        dragBoundary.t = Math.max(0, Math.min(audioDuration, yToTime(e.offsetY)));
+        {
+          const raw = Math.max(0, Math.min(audioDuration, yToTime(e.offsetY)));
+          const snapped = $('snapcross').checked ? snapRawEnd(raw) : null;
+          dragBoundary.t = snapped != null ? snapped : raw;
+        }
         rebuildNotes(); renderFrame(player.currentTime || 0);
         return;
       }
       if (tapXY && Math.hypot(e.offsetX - tapXY.x, e.offsetY - tapXY.y) > 6) tapXY = null; // became a scroll
     });
     const endPointer = (e) => {
+      if (rawDrag) {
+        const d = rawDrag; rawDrag = null;
+        try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+        if (d.moved) {
+          // An arbitrary span, not a run: this is how a spike inside a gesture
+          // gets isolated. Held in selRuns so every action treats it alike.
+          selRuns = [{ t0: Math.min(d.t0, d.t1), t1: Math.max(d.t0, d.t1), span: true }];
+          refreshRawButtons();
+        }
+        renderFrame(player.currentTime || 0);
+        return;
+      }
       if (selBox) {
         const ta = yToTime(selBox.y0), tb = yToTime(selBox.y1);
         selBox = null; try { canvas.releasePointerCapture(e.pointerId); } catch {}
@@ -577,11 +849,32 @@
       if (dragMk) {
         const wasP = dragMk === 'P';
         dragMk = null; try { canvas.releasePointerCapture(e.pointerId); } catch {}
+        if (!wasP && pitchMode) renderPitchTable();   // hand-dragged A/B: repaint the range
+
         if (wasP && !player.paused) { stopNotes(); scheduleNotes(player.currentTime); } // resync notes after a scrub
         return;
       }
       if (dragNoteB) { dragNoteB = null; try { canvas.releasePointerCapture(e.pointerId); } catch {} return; }
-      if (dragBoundary) { dragBoundary = null; try { canvas.releasePointerCapture(e.pointerId); } catch {} return; }
+      if (dragBoundary) {
+        // A resize changes which slice of the contour the note covers, so any
+        // gamaka stored ON the boundary is now the shape of a span that no
+        // longer exists. notesFromBoundaries gives a stored curve precedence and
+        // never re-derives it, so without dropping it the note keeps a frozen
+        // ornament from its old length — the reason resizing to capture a
+        // particular gesture did nothing. Both sides of the dragged boundary
+        // changed span, so clear both. Only when there is a contour to re-derive
+        // FROM: in a notation-only session this would delete authored gamaka
+        // with nothing to replace it.
+        if (gatedPoints.some((p) => p.frequency != null)) {
+          const bs = boundaries.slice().sort((a, b) => a.t - b.t);
+          const i = bs.indexOf(dragBoundary);
+          for (const b of [bs[i], bs[i - 1]]) if (b) delete b.gamaka;
+          rebuildNotes();
+        }
+        dragBoundary = null; try { canvas.releasePointerCapture(e.pointerId); } catch {}
+        renderFrame(player.currentTime || 0);
+        return;
+      }
       if (tapXY) { addBoundary(tapXY.x, tapXY.y); tapXY = null; }
     };
     canvas.addEventListener('pointerup', endPointer);
@@ -638,16 +931,27 @@
       if (!$('snapcross').checked) return t;
       let best = t, bd = 0.1;
       for (const c of crossings) { if (c.step !== step) continue; const d = Math.abs(c.t - t); if (d < bd) { bd = d; best = c.t; } }
+      // Raw-segment ends are time-only targets: a gesture starts and stops at a
+      // moment, on whatever pitch it happened to be. Nearest target wins.
+      const r = snapRawEnd(t);
+      if (r != null && Math.abs(r - t) < bd) best = r;
       return best;
     }
     // Sample a note's curve slice as a NOTE-RELATIVE gamaka: [u (0..1 across the
     // note), delta (53-EDO steps from the note's swara)]. null if flat/too short.
-    const gamakaForNote = (n) => D.gamakaForNote(n, cleanedPoints, saRefHz);
+    // Gamaka is sampled from the RAW contour, not the cleaned one. Cleaning
+    // bridges gaps by interpolation (236 frames on one corpus recording) and
+    // median-filters spikes, so a curve taken from it is partly invented and
+    // smoother than what was actually sung. Nulls inside a note simply drop out
+    // of the sample, so a note spanning two raw gestures gets a straight line
+    // across the silence between them — which is what bridging two segment ends
+    // is meant to produce.
+    const gamakaForNote = (n) => D.gamakaForNote(n, octavePoints, saRefHz);
     // Derive the monophonic note segments from the sorted boundaries. When the
     // gamaka toggle is on, each note also carries its curve slice as a gamaka.
     function rebuildNotes() {
       boundaries.sort((a, b) => a.t - b.t);   // in place — D.notesFromBoundaries sorts a copy, so keep the original's in-place order
-      notes = D.notesFromBoundaries(boundaries, { gamakas: $('gamakas').checked, cleanedPoints, saRefHz });
+      notes = D.notesFromBoundaries(boundaries, { gamakas: $('gamakas').checked, cleanedPoints: octavePoints, saRefHz });
       updateNoteUI();
       persistModelSoon();   // every model mutation flows through here -> save the tuned notes
     }
@@ -658,6 +962,27 @@
       const ps = notes.map((n) => n.step);
       stepMin = Math.min(stepMin, Math.min(...ps) - 4);
       stepMax = Math.max(stepMax, Math.max(...ps) + 4);
+      rebuildLines();
+    }
+    // The axis is derived from the CLEANED contour, but the raw overlay draws
+    // frames at their true pitch — and cleaning is exactly what pulls an outlier
+    // back into range. A frame the detector put two octaves low is lifted before
+    // computeAxis ever sees it, so the raw curve tried to draw it off the bottom
+    // of the axis and it was clipped: invisible, unclickable, and impossible to
+    // judge, while the spike list insisted it was there. Widen to cover raw so
+    // what one part of the UI reports, another can show.
+    function fitAxisToRaw() {
+      if (!(saRefHz > 0)) return;
+      let lo = Infinity, hi = -Infinity;
+      for (const p of gatedPoints) {
+        if (p.frequency == null) continue;
+        const st = stepOf(p.frequency);
+        if (st < lo) lo = st;
+        if (st > hi) hi = st;
+      }
+      if (!isFinite(lo)) return;
+      stepMin = Math.min(stepMin, Math.floor(lo) - 2);
+      stepMax = Math.max(stepMax, Math.ceil(hi) + 2);
       rebuildLines();
     }
     // The 22 shruti lines spanning [stepMin, stepMax]. Pulled out of
@@ -696,10 +1021,33 @@
     }
     // Parse the notation textarea back into notes (two-way). Each note's inline
     // gamaka is carried onto its boundary so it survives; rests -> null
+    // Everything the parser could not honour, shown beside the notation it came
+    // from. The parser has always recorded these -- a gamaka it cannot read
+    // arrives as "malformed attributes ... playing the plain note" -- but only
+    // index.html ever displayed them, so a corrupted gamaka silently became a
+    // plain note here and in draw, with nothing on screen to say so. Persistent
+    // and dismissible rather than a status line, which the next message
+    // overwrites: this reports something already dropped from the piece.
+    function reportDiagnostics(model, generated) {
+      const el = $('parsewarn');
+      if (!el) return;
+      const ds = (model && model.diagnostics) || [];
+      if (!ds.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+      el.innerHTML = '<button type="button">dismiss</button><b>' + (generated
+        ? 'This notation was generated by RagaM-Roll and cannot be read back — that is a bug, please report it.'
+        : ds.length + ' part(s) of this notation could not be read as written.') +
+        '</b> What is being used instead:<ul>' +
+        ds.map((d) => `<li>${d.message.replace(/[<&]/g, (c) => ({ '<': '&lt;', '&': '&amp;' }[c]))}</li>`).join('') +
+        '</ul>';
+      el.querySelector('button').onclick = () => { el.style.display = 'none'; };
+      el.style.display = '';
+    }
+
     // boundaries; times come from the srgm lengths at its tempo.
     function applyNotation() {
       let model;
       try { model = parse($('notation').value); } catch { statusMsg.textContent = 'Could not parse the notation.'; return; }
+      reportDiagnostics(model);
       const evs = model.events.filter((e) => e.type === 'note');
       if (!evs.length) { statusMsg.textContent = 'No notes in the notation.'; return; }
       const tempo = (model.meta && model.meta.tempo > 0) ? model.meta.tempo : 120;
@@ -765,7 +1113,7 @@
       //   Buttons — likewise only enabled by the audio-load path.
       if (!hasAudio) {
         if (!(saRefHz > 0)) { saRefHz = 440 * Math.pow(2, (saMidi - 69) / 12); refreshSaInfo(); }
-        markerA = 0; markerB = t;
+        markerA = 0; markerB = t; abFromSel = false;
         playBtn.disabled = false; rewindBtn.disabled = false;
       }
       rebuildNotes();
@@ -998,6 +1346,131 @@
       deleteBoundaryAtY(e.offsetY);
     });
     $('seedbtn').addEventListener('click', seedFromCrossings);
+
+    // Shift the tapped markers onto the detected syllable onsets, by the MEDIAN
+    // distance rather than the mean so one tap that missed its syllable does not
+    // drag the whole set. Applied as a single offset to every tap, because what
+    // is being corrected is one consistent reaction lag, not per-tap noise --
+    // moving each tap to its own nearest onset would discard the ear's timing
+    // wherever the detector and the ear disagree.
+    //
+    // Only taps with an onset within MATCH_S vote. On fluid singing a legato
+    // svara change makes no attack for the RMS detector to find, so some taps
+    // have nothing to align against; those are still SHIFTED, but they do not
+    // get to define the shift. How many voted is reported, because an offset
+    // decided by two taps out of thirty is not one to trust silently.
+    const TAP_MATCH_S = 0.4;
+    $('aligntaps').addEventListener('click', () => {
+      const taps = boundaries.filter((b) => b.tapped);
+      if (!taps.length) { statusMsg.textContent = 'No tapped markers to align — arm ◉ tap and mark while playing.'; return; }
+      const onsets = D.computeOnsets(pitchDataPoints);
+      if (!onsets.length) { statusMsg.textContent = 'No syllable onsets detected in this audio, so there is nothing to align against.'; return; }
+      const diffs = [];
+      for (const b of taps) {
+        let bd = Infinity, near = null;
+        for (const o of onsets) { const d = Math.abs(o - b.t); if (d < bd) { bd = d; near = o; } }
+        if (near != null && bd <= TAP_MATCH_S) diffs.push(b.t - near);   // + = tapped late
+      }
+      if (diffs.length < 3) {
+        statusMsg.textContent = `Only ${diffs.length} of ${taps.length} taps landed near a detected onset — too few to measure an offset. Nudge them by hand instead.`;
+        return;
+      }
+      diffs.sort((a, b) => a - b);
+      const med = diffs[Math.floor(diffs.length / 2)];
+      const dev = diffs.map((d) => Math.abs(d - med)).sort((a, b) => a - b);
+      const mad = dev[Math.floor(dev.length / 2)];
+      const ms = (v) => `${v >= 0 ? '+' : ''}${(v * 1000).toFixed(0)}ms`;
+      if (!confirm(`Shift all ${taps.length} tapped marker(s) by ${ms(-med)}?\n\n` +
+                   `Measured from ${diffs.length} of ${taps.length} taps that landed within ${TAP_MATCH_S}s of a detected onset.\n` +
+                   `You tapped ${ms(med)} relative to the onsets, spread ±${(mad * 1000).toFixed(0)}ms.\n\n` +
+                   `Undoable.`)) return;
+      pushUndo();
+      for (const b of taps) b.t = Math.max(0, Math.min(audioDuration, b.t - med));
+      boundaries.sort((a, b) => a.t - b.t);
+      rebuildNotes(); renderFrame(nowPos());
+      statusMsg.textContent = `Aligned ${taps.length} tap(s) by ${ms(-med)} (from ${diffs.length} matched, spread ±${(mad * 1000).toFixed(0)}ms).`;
+    });
+
+    // ---- tap to mark -------------------------------------------------------
+    // Marking syllable starts BY EAR, for free-rhythm material (an arohana is
+    // sung fluidly, with no pulse to anticipate), where seedFromCrossings cannot
+    // help: it splits where the PITCH crosses a shruti line, which is not where a
+    // syllable begins. Taps land in `boundaries` like any other marker, flagged
+    // so `align taps` can shift only these and so every existing tool -- drag,
+    // delete, undo, rebuildNotes -- works on them unchanged.
+    let tapArmed = false;
+    function setTapArmed(on) {
+      tapArmed = on;
+      $('tapbtn').classList.toggle('active', on);
+      statusMsg.textContent = on
+        ? 'Tap armed: SHIFT (or click the roll) marks the playhead; SPACE plays and pauses. Taps are stored as made — use "align taps" after.'
+        : '';
+      canvas.style.cursor = on ? 'crosshair' : '';
+    }
+    $('tapbtn').addEventListener('click', () => setTapArmed(!tapArmed));
+
+    // A tap is timed from when the EVENT was generated, not from when this
+    // handler ran: main-thread scheduling can sit on a keypress for tens of
+    // milliseconds, and that is measurement error rather than reaction time.
+    // The correction is in wall-clock, so it scales by playbackRate -- at half
+    // speed a 100ms stall is only 50ms of the recording.
+    function tapMark(evTimeStamp) {
+      if (!(audioDuration > 0)) return;
+      const lagMs = Math.max(0, performance.now() - (evTimeStamp ?? performance.now()));
+      const rate = player.playbackRate || 1;
+      const t = Math.max(0, Math.min(audioDuration, nowPos() - (lagMs / 1000) * rate));
+      pushUndo();
+      boundaries.push({ t, step: stepAtTime(t), name: swaraNameForStep(stepAtTime(t)), tapped: true });
+      boundaries.sort((a, b) => a.t - b.t);
+      rebuildNotes();
+      const n = boundaries.filter((b) => b.tapped).length;
+      statusMsg.textContent = `tap ${n} @ ${t.toFixed(2)}s`;
+      renderFrame(nowPos());
+    }
+
+    // The pitch under a tap comes from the CURVE, not the cursor -- the hand is
+    // doing timing, not pointing. Nearest voiced frame within a beat either way;
+    // failing that the previous marker's step, since a tap in a silence is still
+    // a real boundary and dropping it would lose the timing that was the point.
+    function stepAtTime(t) {
+      let best = null, bd = 0.5;
+      for (const p of cleanedPoints) {
+        if (p.frequency == null) continue;
+        const d = Math.abs(p.time - t);
+        if (d < bd) { bd = d; best = p; }
+      }
+      if (best) {
+        const raw = stepOf(best.frequency);
+        return ragaSteps ? D.nearestRagaStep(raw, ragaSteps) : Math.round(raw);
+      }
+      const prev = boundaries.filter((b) => b.t <= t).pop();
+      return prev ? prev.step : 0;
+    }
+
+    // SPACE marks. Ignored while typing, and preventDefault stops it scrolling
+    // the page or re-triggering whichever button last had focus.
+    // SPACE is play/pause and nothing else; SHIFT marks. Keeping them separate
+    // means the transport key never changes meaning underneath you -- one key
+    // that sometimes marks and sometimes stops the audio is worse than either.
+    // Shift is a modifier, so it fires on its own keydown and leaves the typing
+    // keys alone; a tap costs no hand movement away from the transport.
+    //
+    // preventDefault on SPACE stops the page scrolling and stops it re-firing
+    // whichever button was last clicked -- otherwise pressing space straight
+    // after arming would instantly disarm it again.
+    const isEditable = (el) => el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT'
+                                   || el.tagName === 'SELECT' || el.isContentEditable);
+    window.addEventListener('keydown', (e) => {
+      if (isEditable(e.target)) return;
+      if (e.repeat) return;                 // a held key is one tap, not a stream
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+        if (tapArmed) tapMark(e.timeStamp);
+        return;                             // never preventDefault: shift must still modify clicks
+      }
+      if (e.code !== 'Space') return;
+      e.preventDefault();
+      if (!playBtn.disabled) playBtn.click();
+    });
     $('detectbtn').addEventListener('click', detectNotes);
     $('alignsa').addEventListener('click', alignSa);
     $('snapsyl').addEventListener('click', snapToSyllables);
@@ -1014,15 +1487,329 @@
     // The notation textarea is editable. While the user has hand-edited it
     // (dirty), stop auto-overwriting so edits survive; "↻ from notes" resyncs.
     let notationDirty = false;
+    // ROUND TRIP. Notation this app writes is immediately read back, and anything
+    // the parser cannot honour in it is OUR bug, not a typo -- a serializer that
+    // emits something it cannot parse silently drops whatever it mangled, which
+    // is how a gamaka went missing with the notation still looking correct. The
+    // check runs where the text is produced, so the damage is caught at the
+    // moment it is written rather than by whoever opens the file later.
+    function setNotation(text) {
+      $('notation').value = text;
+      let m = null;
+      try { m = parse(text); } catch (_) { m = { diagnostics: [{ message: 'the generated notation could not be parsed at all' }] }; }
+      reportDiagnostics(m, true);
+    }
     function updateNoteUI() {
       $('notecount').textContent = notes.length;
-      if (!notationDirty) $('notation').value = notesToSrgm($('showgamaka').checked);
+      if (!notationDirty) setNotation(notesToSrgm($('showgamaka').checked));
     }
     $('notation').addEventListener('input', () => { notationDirty = true; });
-    $('regennotation').addEventListener('click', () => { notationDirty = false; $('notation').value = notesToSrgm($('showgamaka').checked); });
-    $('showgamaka').addEventListener('change', () => { if (!notationDirty) $('notation').value = notesToSrgm($('showgamaka').checked); });
+    $('regennotation').addEventListener('click', () => { notationDirty = false; setNotation(notesToSrgm($('showgamaka').checked)); });
+    $('showgamaka').addEventListener('change', () => { if (!notationDirty) setNotation(notesToSrgm($('showgamaka').checked)); });
     $('applynotation').addEventListener('click', applyNotation);
     $('gamakas').addEventListener('change', () => { rebuildNotes(); renderFrame(player.currentTime || 0); });
+    // Raw-curve editing. A click selects a whole run: a run is one continuous
+    // gesture as the detector saw it, which is the unit these corrections
+    // actually apply to. Shift-click extends across a range so join has two ends
+    // to work with.
+    let rawEditMode = false;
+    function setRawEditMode(on) {
+      rawEditMode = on;
+      $('raweditbtn').classList.toggle('active', on);
+      if (!on) selRuns = [];
+      if (on && !$('showraw').checked) { $('showraw').checked = true; }   // editing what you cannot see is pointless
+      statusMsg.textContent = on
+        ? 'Raw edit: click a segment to select it, drag to select part of one (a spike), shift-click a second segment to span a range. Then delete / 8va / join.'
+        : '';
+      refreshRawButtons();
+      renderFrame(player.currentTime || 0);
+    }
+    function refreshRawButtons() {
+      const n = selRuns.length;
+      for (const id of ['rawdel', 'rawup', 'rawdn']) $(id).disabled = n === 0;
+      $('rawjoin').disabled = n < 2 || selRuns.some((r) => r.span);   // joining needs real run ends
+      $('rawundo').disabled = rawEdits.length === 0;
+      $('spikebtn').disabled = !gatedPoints.some((p) => p.frequency != null);
+      $('rawsave').disabled = rawEdits.length === 0;
+      syncSelMarkers();
+    }
+    // A selected segment IS the play range: A/B already own seek-on-play and
+    // stop-at-B for both backends, so selecting drives them rather than
+    // duplicating the transport. Every selRuns assignment routes through
+    // refreshRawButtons, so this one call covers click, shift-extend,
+    // drag-span, table-row, mode exit, edit, join and undo alike.
+    const MIN_AB = 0.25;               // one frame is ~11ms — inaudible as a range
+    let abFromSel = false;
+    function syncSelMarkers() {
+      const a0 = markerA, b0 = markerB;
+      if (rawEditMode && selRuns.length) {
+        const a = Math.min(...selRuns.map((r) => r.t0));
+        const b = Math.max(...selRuns.map((r) => r.t1));
+        markerA = Math.max(0, a);
+        markerB = Math.min(audioDuration || b + MIN_AB, Math.max(b, markerA + MIN_AB));
+        abFromSel = true;
+      } else if (abFromSel) {
+        // Only undo markers WE set. Clearing a selection must not silently
+        // destroy an A/B loop the user dragged by hand.
+        markerA = 0; markerB = audioDuration;
+        abFromSel = false;
+      }
+      // The table paints the range, so it has to be redrawn when the range moves.
+      if (pitchMode && (markerA !== a0 || markerB !== b0)) renderPitchTable();
+    }
+    function pushRawEdit(e) {
+      rawEdits.push(e);
+      selRuns = [];
+      recompute();                     // replays every op over a freshly gated contour
+      rebuildNotes();
+      refreshRawButtons();
+      if (pitchMode) renderPitchTable();
+      persistModelSoon();
+    }
+    // Collapsing the notation column widens the roll, because baseW() reads the
+    // container. Re-zoom after the layout settles so the canvas picks up the new
+    // width rather than waiting for the next zoom click.
+    $('widegrid').addEventListener('click', () => {
+      const nw = $('notewrap');
+      const hidden = nw.style.display === 'none';
+      nw.style.display = hidden ? '' : 'none';
+      $('widegrid').classList.toggle('active', !hidden);
+      $('widegrid').textContent = hidden ? '⇤ wide grid' : '⇥ show notation';
+      requestAnimationFrame(applyZoom);
+    });
+    const SPIKE_WIN = 6, SPIKE_CENTS = 150;   // a spike: this far from the pitch around it
+    const OCT_CENTS = 600;                    // past a tritone from the cleaner's reading: an octave error
+    // Cleaning of the UNEDITED raw, cached because raw never changes once analysed.
+    // The octave test asks what the cleaner had to move, and reading that off the
+    // edited pipeline would make an octave flag vanish the moment the frame was
+    // deleted -- the same trap the deviation metric already avoids by reading raw.
+    let rawCleanRef = null, rawCleanKey = '';
+    function rawCleaned() {
+      const key = `${pitchDataPoints.length}|${clarityThresh}|${bridgeMs}`;
+      if (rawCleanKey !== key) { rawCleanKey = key; rawCleanRef = D.cleanContour(D.gateContour(pitchDataPoints, clarityThresh), bridgeMs); }
+      return rawCleanRef;
+    }
+    const SPIKE_CTX = 3;                      // neighbouring rows kept either side, for context
+    $('spikebtn').addEventListener('click', () => {
+      spikesOnly = !spikesOnly;
+      $('spikebtn').classList.toggle('active', spikesOnly);
+      // Filtering only means something in the table, so switch into it if needed.
+      if (!pitchMode) { $('modesel').value = 'pitch'; setPitchMode(true); } else renderPitchTable();
+      statusMsg.textContent = spikesOnly ? 'Showing only frames that depart sharply from their surroundings.' : '';
+    });
+    // ---- pitch-edit mode: the frames as a table ---------------------------
+    // The table and the multi-curve export are one model: the same per-frame rows
+    // rendered, or serialised. A row shows every stage side by side, so a blank
+    // is attributable — gated frames are dimmed rather than simply absent, which
+    // a flat CSV cannot express.
+    let pitchMode = false, tableSel = -1, spikesOnly = false;
+    const HOP = 512 / 44100;
+    // Two defect classes, either of which makes a frame worth looking at.
+    const isSpiky = (r) => (r.dev != null && Math.abs(r.dev) >= SPIKE_CENTS)
+                        || (r.oct != null && Math.abs(r.oct) >= OCT_CENTS);
+    function frameRows() {
+      const dev = [];
+      // Deviation is computed from RAW, not the edited curve: spikiness is a
+      // property of what the detector measured, so the highlight survives the
+      // edit that removes it — otherwise a corrected frame stops being findable
+      // the moment you correct it, and you lose track of what you have done.
+      const lg = pitchDataPoints.map((p) => (p.frequency == null ? null : Math.log2(p.frequency)));
+      // Deviation is measured against each side SEPARATELY, and counts only when
+      // the frame departs from BOTH in the SAME direction. A single window median
+      // straddling a transition sits on the far side of it, so the onset of a
+      // steep glide read as a 200-cent spike while being perfectly smooth. A
+      // frame on a glide lies BETWEEN its two sides -- above one, below the other
+      // -- and that opposite-sign signature is what separates it from a spike,
+      // which departs from everything around it the same way.
+      const med = (w) => { w.sort((a, b) => a - b); return w[Math.floor(w.length / 2)]; };
+      const sideMed = (i, d) => {
+        const w = [];
+        for (let k = 1; k <= SPIKE_WIN; k++) {
+          const j = i + d * k;
+          if (j < 0 || j >= lg.length) break;
+          if (lg[j] != null) w.push(lg[j]);
+        }
+        return w.length >= 3 ? med(w) : null;
+      };
+      for (let i = 0; i < lg.length; i++) {
+        if (lg[i] == null) { dev.push(null); continue; }
+        const L = sideMed(i, -1), R = sideMed(i, 1);
+        if (L == null || R == null) { dev.push(null); continue; }
+        const dl = (lg[i] - L) * 1200, dr = (lg[i] - R) * 1200;
+        dev.push((dl > 0) !== (dr > 0) ? 0                                 // between its sides: smooth
+                 : (Math.abs(dl) <= Math.abs(dr) ? dl : dr));              // the weaker of two agreeing departures
+      }
+      const ref = rawCleaned();
+      return pitchDataPoints.map((src, i) => {
+        // The other defect the list has to surface, and a different one: not a
+        // lone frame off its neighbours but a RUN the detector halved or doubled.
+        // Inside such a run the window is dominated by the broken frames, so the
+        // deviation test flags the one CORRECT frame among them and misses the
+        // rest. Asking what the cleaner moved names the broken frames instead.
+        const rc = ref[i];
+        const oct = (src.frequency == null || !rc || rc.frequency == null) ? null
+                  : 1200 * Math.log2(rc.frequency / src.frequency);
+        return {
+          i, t: src.time, raw: src.frequency, clarity: src.clarity, rms: src.rms,
+          edited: gatedPoints[i] ? gatedPoints[i].frequency : null,
+          cleaned: cleanedPoints[i] ? cleanedPoints[i].frequency : null,
+          dev: dev[i], oct,
+        };
+      });
+    }
+    // Coalesced to one paint per frame: the sliders fire on every pointer move
+    // and the table is a few thousand rows, so re-rendering per event would make
+    // dragging the clarity threshold crawl.
+    let ptRaf = 0;
+    function schedulePitchTable() {
+      if (ptRaf || !pitchMode) return;
+      ptRaf = requestAnimationFrame(() => { ptRaf = 0; renderPitchTable(); });
+    }
+    function renderPitchTable() {
+      const el = $('pitchtable');
+      if (!pitchDataPoints.length) { el.innerHTML = '<table><tr><td>Load audio to see its frames.</td></tr></table>'; return; }
+      let rows = frameRows();
+      // The highlight marks spiky frames; this filter is how you REACH them — 16
+      // among 3094 are not findable by scrolling. A separate ranked panel did
+      // that before, duplicating the highlight and costing height above the grid.
+      if (spikesOnly) {
+        // Keep neighbours: a frame in isolation cannot be judged — whether 226Hz
+        // is wrong depends entirely on what sits either side of it. Filtering to
+        // the spikes alone removed exactly the evidence needed to act on them.
+        const keep = new Set();
+        rows.forEach((r, i) => {
+          if (!isSpiky(r)) return;
+          for (let j = Math.max(0, i - SPIKE_CTX); j <= Math.min(rows.length - 1, i + SPIKE_CTX); j++) keep.add(j);
+        });
+        rows = rows.filter((_, i) => keep.has(i)).map((r, i, a) => ({ ...r, gap: i > 0 && r.i - a[i - 1].i > 1 }));
+      }
+      if (!rows.length) { el.innerHTML = '<table><tr><td>No frame departs more than ' + SPIKE_CENTS + ' cents from BOTH its neighbourhoods, and none is an octave off the cleaned reading.</td></tr></table>'; return; }
+      // Which rows the A/B range covers. The edges are the FIRST and LAST rows
+      // actually shown inside it, not the rows nearest A and B: under the spike
+      // filter the row at A may be hidden, and labelling a hidden neighbour would
+      // put A somewhere the range does not start.
+      // A range covering the whole take is the resting state, not a selection:
+      // painting every row amber would say nothing and drown the spike colours.
+      const abOn = markerB > markerA && !(markerA <= 1e-9 && markerB >= audioDuration - 1e-6);
+      const inAB = (t) => abOn && t >= markerA - 1e-9 && t <= markerB + 1e-9;
+      let abFirst = -1, abLast = -1;
+      if (abOn) rows.forEach((r, i) => { if (inAB(r.t)) { if (abFirst < 0) abFirst = i; abLast = i; } });
+      const body = rows.map((r, ri) => {
+        const spiky = isSpiky(r);
+        // Two different reasons a frame has no edited value, which one "gated"
+        // class conflated: below the clarity threshold, or deleted by hand.
+        const dropped = r.raw != null && r.edited == null;
+        const byHand = dropped && r.clarity != null && r.clarity >= clarityThresh;
+        const cls = [spiky ? 'spiky' : '', byHand ? 'byhand' : (dropped ? 'gated' : ''),
+                     inAB(r.t) ? 'inab' : '', ri === abFirst ? 'aba' : '', ri === abLast ? 'abb' : '',
+                     r.i === tableSel ? 'sel' : ''].filter(Boolean).join(' ');
+        const n = (v, d = 1) => (v == null ? '·' : v.toFixed(d));
+        const sep = r.gap ? ' gap' : '';
+        return `<tr class="${cls}${sep}" data-i="${r.i}"><td>${r.t.toFixed(3)}</td><td>${n(r.raw)}</td>` +
+               `<td>${n(r.edited)}</td><td>${n(r.cleaned)}</td><td>${n(r.clarity, 2)}</td>` +
+               `<td>${n(r.rms, 4)}</td><td>${r.dev == null ? '' : (r.dev > 0 ? '+' : '') + r.dev.toFixed(0)}</td></tr>`;
+      }).join('');
+      el.innerHTML = '<table><thead><tr><th>time</th><th>raw</th><th>edited</th><th>cleaned</th>' +
+                     '<th>clar</th><th>rms</th><th>off</th></tr></thead><tbody>' + body + '</tbody></table>';
+    }
+    $('pitchtable').addEventListener('click', (e) => {
+      const tr = e.target.closest('tr[data-i]'); if (!tr) return;
+      tableSel = +tr.dataset.i;
+      const t = pitchDataPoints[tableSel].time;
+      // One frame's worth of time, so delete removes THIS row and not its run.
+      selRuns = [{ t0: t - HOP * 0.5, t1: t + HOP * 0.5, span: true }];
+      if (!rawEditMode) setRawEditMode(true);
+      refreshRawButtons(); renderPitchTable();
+      followPlayhead(t); renderFrame(player.currentTime || 0);
+    });
+    function setPitchMode(on) {
+      pitchMode = on;
+      $('pitchtable').style.display = on ? '' : 'none';
+      // The notation pane and its tools belong to the other mode.
+      for (const id of ['notation', 'syllables']) { const el = $(id); if (el) el.style.display = on ? 'none' : ''; }
+      document.querySelectorAll('#notewrap .status').forEach((n, i) => { if (i > 0) n.style.display = on ? 'none' : ''; });
+      // Only the NOTE groups: tools2 also holds the zoom controls, and hiding the
+      // whole row took the time and pitch zoom away with them.
+      document.querySelectorAll('#tools2 .noteonly').forEach((n) => { n.style.display = on ? 'none' : ''; });
+      if (on) { setRawEditMode(true); renderPitchTable(); }
+      statusMsg.textContent = on
+        ? 'Pitch edit: click a row to select that frame, then delete or shift its octave. Every stage of the curve is shown side by side.'
+        : '';
+    }
+    $('modesel').addEventListener('change', (e) => setPitchMode(e.target.value === 'pitch'));
+    $('raweditbtn').addEventListener('click', () => setRawEditMode(!rawEditMode));
+    $('rawdel').addEventListener('click', () => {
+      const t0 = Math.min(...selRuns.map((r) => r.t0)), t1 = Math.max(...selRuns.map((r) => r.t1));
+      pushRawEdit({ op: 'del', t0, t1 });
+    });
+    $('rawup').addEventListener('click', () => rawShift(1));
+    $('rawdn').addEventListener('click', () => rawShift(-1));
+    function rawShift(n) {
+      const t0 = Math.min(...selRuns.map((r) => r.t0)), t1 = Math.max(...selRuns.map((r) => r.t1));
+      pushRawEdit({ op: 'oct', t0, t1, n });
+    }
+    $('rawjoin').addEventListener('click', () => {
+      // Bridge every gap inside the selected span, so selecting two ends joins
+      // everything between them into one gesture.
+      const rs = selRuns.slice().sort((a, b) => a.t0 - b.t0);
+      for (let i = 0; i + 1 < rs.length; i++) rawEdits.push({ op: 'join', t0: rs[i].t1, t1: rs[i + 1].t0 });
+      selRuns = []; recompute(); rebuildNotes(); refreshRawButtons(); persistModelSoon();
+    });
+    $('rawundo').addEventListener('click', () => {
+      if (!rawEdits.length) return;
+      rawEdits.pop(); selRuns = [];
+      recompute(); rebuildNotes(); refreshRawButtons();
+      // The list is derived from the contour, so an undo that restores frames has
+      // to re-derive it. Without this the undone spike stayed missing from the
+      // list while being visibly back on the grid.
+      if (pitchMode) renderPitchTable();
+      persistModelSoon();
+    });
+    $('rawsave').addEventListener('click', () => {
+      const raga = $('raga-sel').value || 'raga';
+      const blob = new Blob([JSON.stringify({ v: 1, raga, edits: rawEdits }, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = `raga-${raga}-aroha.edits.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      statusMsg.textContent = `Saved ${rawEdits.length} edit(s) — drop it in curated/ and rebuild to publish.`;
+    });
+    // One contour layer, drawn so that short runs survive.
+    //
+    // Two frames 11ms apart are a QUARTER of a pixel at default zoom, so the path
+    // is there but sub-pixel: what reaches the screen is a sliver of anti-aliased
+    // colour, and on top of a bright Sa grid line it is indistinguishable from it.
+    // Any run whose drawn extent is smaller than the stroke gets a dot at its
+    // centre instead, which is the smallest thing that reliably reads. A single
+    // frame is just that case at its limit — its path is zero-length and strokes
+    // nothing at all.
+    //
+    // Cased in the page background first: no width separates a curve from the
+    // grid line it is superimposed on, but an outline does.
+    function strokeContour(pts, colour, w, xy, cased = true) {
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      ctx.beginPath();
+      const dots = [];
+      let on = false, sx = 0, sy = 0, lx = 0, ly = 0;
+      const endRun = () => { if (on && Math.hypot(lx - sx, ly - sy) < Math.max(2, w)) dots.push([(sx + lx) / 2, (sy + ly) / 2]); };
+      for (const p of pts) {
+        if (p.frequency === null) { endRun(); on = false; continue; }
+        const { x, y } = xy(p);
+        if (!on) { ctx.moveTo(x, y); on = true; sx = x; sy = y; } else ctx.lineTo(x, y);
+        lx = x; ly = y;
+      }
+      endRun();
+      if (cased) { ctx.strokeStyle = '#0d0d11'; ctx.lineWidth = w + 2.5; ctx.stroke(); }
+      ctx.strokeStyle = colour;    ctx.lineWidth = w;       ctx.stroke();
+      const r = Math.max(1.5, w * 0.8);
+      for (const [x, y] of dots) {
+        if (cased) { ctx.beginPath(); ctx.arc(x, y, r + 1.25, 0, Math.PI * 2); ctx.fillStyle = '#0d0d11'; ctx.fill(); }
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = colour; ctx.fill();
+      }
+    }
+    const curveW = () => { const v = +($('curvew')?.value); return v > 0 ? v : 1.6; };
+    $('curvew').addEventListener('input', () => renderFrame(nowPos()));
+    for (const id of ['showcurve', 'showraw', 'shownotes'])   // display only — never re-detect
+      $(id).addEventListener('change', () => renderFrame(player.currentTime || 0));
     $('undonote').addEventListener('click', () => {
       if (!undoStack.length) { statusMsg.textContent = 'Nothing to undo.'; return; }
       const s = undoStack.pop();
@@ -1077,25 +1864,80 @@
         }
       }
 
-      // Pitch contour — break the line across unvoiced (null) gaps.
-      ctx.strokeStyle = '#00e5ff';
-      ctx.lineWidth = 2;
-      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-      ctx.beginPath();
-      let on = false;
-      for (const p of data) {
-        if (p.frequency === null) { on = false; continue; }
-        const x = Xs(stepOf(p.frequency)), y = Yt(p.time);
-        if (!on) { ctx.moveTo(x, y); on = true; } else ctx.lineTo(x, y);
+      // Time graduations. The roll had pitch lines but nothing to read time
+      // against, so a moment named elsewhere — a spike at 4.71s, a note boundary
+      // — could not be found on the grid at all. Step comes from a 1-2-5 sequence
+      // chosen so labels stay about 52px apart, which means the ticks get finer
+      // as time is zoomed in rather than crowding.
+      const timeLabels = [];
+      if (audioDuration > 0) {
+        const pps = plotH() / audioDuration;                 // pixels per second
+        const nice = [0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60];
+        const step = nice.find((v) => v * pps >= 52) ?? 60;
+        ctx.font = '10px ui-monospace, Menlo, Consolas, monospace';
+        ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+        for (let t = 0; t <= audioDuration + 1e-9; t += step) {
+          const y = Yt(t);
+          if (y < yTop - 1 || y > yBot + 1) continue;
+          ctx.strokeStyle = 'rgba(236,231,217,0.10)';
+          ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(PAD.l, y + 0.5); ctx.lineTo(canvas.width - PAD.r, y + 0.5); ctx.stroke();
+          // The LINE spans the plot and so is visible at any scroll position, but
+          // the label is a fixed x — it is deferred to the pinned gutter pass
+          // below, which also puts it on top of the curves instead of under them.
+          const mm = Math.floor(t / 60), ss = t - mm * 60;
+          timeLabels.push([y, step < 1 ? t.toFixed(step < 0.1 ? 2 : 1) + 's'
+                    : mm ? `${mm}:${String(Math.round(ss)).padStart(2, '0')}` : `${Math.round(t)}s`]);
+        }
       }
-      ctx.stroke();
 
-      // Shruti-line intersections — candidate note anchors.
-      ctx.fillStyle = '#ffb454';
-      for (const c of crossings) {
-        ctx.beginPath();
-        ctx.arc(Xs(c.step), Yt(c.t), 2.4, 0, 7);
-        ctx.fill();
+      // Raw detector output, behind the cleaned curve and dimmed, when asked.
+      // Where the two diverge, cleaning moved those frames by whole octaves —
+      // the only way to judge whether that was a fix or an over-correction.
+      if ($('showraw')?.checked && gatedPoints.length) {
+        // TWO tones, because this layer had been showing the GATED raw while the
+        // table's raw column showed the true pre-gate measurement — frames below
+        // the clarity threshold were simply absent from the roll with nothing to
+        // say why. The dim line is what the detector actually measured; the
+        // bright one is what survived gating and manual edits. Where only the dim
+        // line runs, the gate dropped those frames.
+        const xy = (p) => ({ x: Xs(stepOf(p.frequency)), y: Yt(p.time) });
+        strokeContour(pitchDataPoints, '#6a4b86', curveW(), xy, false);
+        strokeContour(gatedPoints, '#c98bff', curveW(), xy);
+      }
+
+      // Selected raw segments — a band behind the curve, so what an edit will
+      // act on is unambiguous before it is applied.
+      if (rawEditMode && rawDrag && rawDrag.moved) {
+        const y0 = Yt(Math.min(rawDrag.t0, rawDrag.t1)), y1 = Yt(Math.max(rawDrag.t0, rawDrag.t1));
+        ctx.fillStyle = 'rgba(180,140,255,0.28)';
+        ctx.fillRect(PAD.l, y0, canvas.width - PAD.l - PAD.r, Math.max(2, y1 - y0));
+      }
+      if (rawEditMode && selRuns.length) {
+        ctx.fillStyle = 'rgba(180,140,255,0.16)';
+        for (const r of selRuns) {
+          const y0 = Yt(r.t0), y1 = Yt(r.t1);
+          ctx.fillRect(PAD.l, y0, canvas.width - PAD.l - PAD.r, Math.max(2, y1 - y0));
+        }
+      }
+
+      // Pitch contour — break the line across unvoiced (null) gaps.
+      if ($('showcurve')?.checked !== false) {
+        // kept a shade heavier than raw, as before
+        strokeContour(data, '#00e5ff', curveW() * 1.25, (p) => ({ x: Xs(stepOf(p.frequency)), y: Yt(p.time) }));
+      }
+
+      // Shruti-line intersections — candidate note anchors. Folded into the
+      // pitch-curve toggle rather than given one of their own: they are computed
+      // FROM that curve (where it crosses a shruti line) and mean nothing
+      // without it, so they hide with their source.
+      if ($('showcurve')?.checked !== false) {
+        ctx.fillStyle = '#ffb454';
+        for (const c of crossings) {
+          ctx.beginPath();
+          ctx.arc(Xs(c.step), Yt(c.t), 2.4, 0, 7);
+          ctx.fill();
+        }
       }
 
       // A/B out-of-segment shade — drawn BEHIND the notes so notes stay at full
@@ -1106,6 +1948,11 @@
         ctx.fillRect(x0, yTop, w, Math.max(0, yA - yTop));
         ctx.fillRect(x0, yB, w, Math.max(0, yBot - yB));
       }
+      // ---- notes layer: bars, gamaka curves and boundary lines -------------
+      // One toggle covers all three: they are the notation read off the audio,
+      // and hiding the notes while leaving their boundaries would just be
+      // clutter over a contour the user is trying to look at on its own.
+      if ($('shownotes')?.checked !== false) {
       // Derived note segments — a teal bar on the swara line over [t0, t1].
       ctx.textBaseline = 'middle';
       for (const n of notes) {
@@ -1157,6 +2004,7 @@
         ctx.strokeStyle = 'rgba(140,160,180,0.5)'; ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(PAD.l, y); ctx.lineTo(canvas.width - PAD.r, y); ctx.stroke();
       }
+      }   // end notes layer
       // Paint-a-note preview (dragging a crossing along its swara).
       if (paintNote) {
         const x = Xs(paintNote.step), y0 = Yt(Math.min(paintNote.t0, paintNote.t1)), y1 = Yt(Math.max(paintNote.t0, paintNote.t1));
@@ -1174,10 +2022,18 @@
       // Two SEPARATE gutter columns: A/B start-stop markers (left) and the
       // playhead scrub (right), split by a divider. Drag the A/B column to mark
       // the segment; drag the playhead column to scrub.
+      ctx.save(); ctx.translate(gutOff(), 0);
+      // Opaque base first: the column tints are translucent, and pinned over the
+      // roll they would let notes and curves smear through the gutter.
+      ctx.fillStyle = '#1a1a1e'; ctx.fillRect(0, 0, PAD.l, canvas.height);
       ctx.fillStyle = 'rgba(255,180,84,0.07)'; ctx.fillRect(0, yTop, PH_X0, yBot - yTop);
       ctx.fillStyle = 'rgba(255,92,92,0.06)';  ctx.fillRect(PH_X0, yTop, PAD.l - PH_X0, yBot - yTop);
       ctx.strokeStyle = '#3a3a42'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(PH_X0 + 0.5, yTop); ctx.lineTo(PH_X0 + 0.5, yBot); ctx.stroke();
+      ctx.font = '10px ui-monospace, Menlo, Consolas, monospace';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+      ctx.fillStyle = 'rgba(236,231,217,0.62)';
+      for (const [y, lab] of timeLabels) ctx.fillText(lab, PAD.l + 3, y - 2);
       // A/B play markers — dashed amber lines + tabs in the A/B column (the
       // out-of-segment shade is drawn earlier, behind the notes).
       if (markerB > markerA) {
@@ -1194,6 +2050,7 @@
           ctx.fillStyle = '#1a1a1e'; ctx.fillText(lab, (PH_X0 - 2) / 2, ty);
         }
       }
+      ctx.restore();
     }
 
     // ---- Clean the raw pitch track ------------------------------------------
@@ -1218,15 +2075,74 @@
     // Apply the clarity gate to the stored raw frames -> {time, frequency}.
     // (Frames whose clarity is missing — old saved sessions — pass through.)
     const gatePoints = () => D.gateContour(pitchDataPoints, clarityThresh);
+    // The ends of each unbroken run of RAW frames. A run is one continuous pitch
+    // gesture as the detector actually saw it, so its edges are far better note
+    // boundaries than an arbitrary drag position: snapping to them lets a note
+    // span exactly one gesture, or bridge two with the silent gap between them
+    // drawn as a straight line through the gamaka.
+    let rawEnds = [], rawRuns = [];
+    function computeRawEnds() {
+      rawEnds = []; rawRuns = []; let run = null;
+      for (const p of gatedPoints) {
+        if (p.frequency == null) { if (run) { rawRuns.push(run); rawEnds.push(run.t0, run.t1); run = null; } continue; }
+        if (!run) run = { t0: p.time, t1: p.time }; else run.t1 = p.time;
+      }
+      if (run) { rawRuns.push(run); rawEnds.push(run.t0, run.t1); }
+    }
+
+    // ---- manual corrections to the raw curve ------------------------------
+    // Stored as OPERATIONS, never as mutated frames, and replayed over the
+    // freshly gated contour on every recompute. That keeps the clarity and
+    // bridge sliders working (they re-derive from the stored frames, which would
+    // wipe edits written in place), and it means a correction still applies
+    // after a detection change rather than freezing a contour that has since
+    // been improved. Times are anchored to the AUDIO, so they stay valid.
+    //   {op:'del',  t0,t1}    drop these frames — noise, breath, tanpura
+    //   {op:'oct',  t0,t1,n}  shift by n octaves — a detector slip
+    //   {op:'join', t0,t1}    interpolate across the silence between two runs
+    let rawEdits = [], selRuns = [], rawDrag = null;
+    const applyRawEdits = (points) => D.applyRawEdits(points, rawEdits);
+    const applyRawEditsTo = (points, ops) => D.applyRawEdits(points, ops);
+    const runAt = (t) => rawRuns.find((r) => t >= r.t0 - 0.02 && t <= r.t1 + 0.02) || null;
+    const RAW_SNAP_S = 0.12;                 // how close a drag must land to grab an end
+    function snapRawEnd(t) {
+      let best = null, bd = RAW_SNAP_S;
+      for (const e of rawEnds) { const d = Math.abs(e - t); if (d < bd) { bd = d; best = e; } }
+      return best;
+    }
     // Re-derive everything downstream of the raw frames (gate -> clean -> axis ->
     // crossings) and repaint. Cheap enough to run live on a slider drag.
     function recompute() {
-      cleanedPoints = cleanContour(gatePoints());
+      gatedPoints = applyRawEdits(gatePoints());
+      computeRawEnds();
+      // Octave ops are re-applied AFTER cleaning as well. Applied only before,
+      // the automatic octave-continuity pass simply undoes them: a span the user
+      // deliberately moved reads to the cleaner as an octave off its neighbours,
+      // which is exactly what it exists to correct. A manual correction has to
+      // win over the automatic one — that is the point of making it by hand.
+      const octOnly = rawEdits.filter((e) => e.op === 'oct');
+      const reapply = (pts) => octOnly.length ? applyRawEditsTo(pts, octOnly) : pts;
+      octavePoints = reapply(cleanContour(gatedPoints, 0, { despike: false }));
+      cleanedPoints = reapply(cleanContour(gatedPoints));
       computeAxis(cleanedPoints);
+      fitAxisToRaw();          // computeAxis derives the range from CLEANED; widen for raw
       computeCrossings(cleanedPoints);
       refreshSaInfo();
       updateNoteUI();
-      renderFrame(player.currentTime || 0);
+      // applyZoom rather than renderFrame: baseW() follows the container, so the
+      // canvas has to be re-sized here or it keeps whatever width it had when the
+      // page loaded and leaves the space beside it empty. keepView, because this
+      // runs on every clarity/bridge slider move and the user is looking at a
+      // particular passage while they turn it.
+      applyZoom(true);
+      // Raw-curve buttons start disabled in the markup; nothing else enables them
+      // once a contour exists, so ⚡ spikes stayed dead after loading audio.
+      refreshRawButtons();
+      // The table is derived from the same contours the sliders just changed --
+      // its edited and cleaned columns, its gated/by-hand classes and its spike
+      // flags all read the clarity threshold. Without this the curves moved under
+      // a table that still described the previous threshold.
+      schedulePitchTable();
     }
 
     const cleanContour = (points) => D.cleanContour(points, bridgeMs);
@@ -1266,13 +2182,17 @@
       // Playhead scrub handle in the gutter's right lane (clamped to viewport).
       const yTop = PAD.t, yBot = canvas.height - PAD.b, ty = Math.max(yTop + 6, Math.min(yBot - 6, y));
       ctx.fillStyle = '#ff5c5c';
+      ctx.save(); ctx.translate(gutOff(), 0);
       ctx.fillRect(PH_X0, ty - 6, PAD.l - PH_X0 - 1, 12);
+      ctx.restore();
     }
     // Sticky header: swara names aligned to the same pitch columns as the roll.
     // Same width as the main canvas so it scrolls horizontally in step and pins
     // vertically (position:sticky), staying visible as the roll scrolls in time.
     const hdr = $('hdr'), hctx = hdr.getContext('2d');
     function drawHeader() {
+      const HDR_H = 34;                 // two lines: swara name, then its frequency
+      if (hdr.height !== HDR_H) hdr.height = HDR_H;
       if (hdr.width !== canvas.width) { hdr.width = canvas.width; hdr.style.width = canvas.width + 'px'; }
       hctx.clearRect(0, 0, hdr.width, hdr.height);
       hctx.fillStyle = '#1a1a1e'; hctx.fillRect(0, 0, hdr.width, hdr.height);
@@ -1280,13 +2200,28 @@
       hctx.textBaseline = 'middle'; hctx.textAlign = 'center';
       if (audioDuration > 0) {
         const o0 = Math.floor(stepMin / EDO), o1 = Math.ceil(stepMax / EDO);
+        // A swara name says which degree a column is; it does not say what pitch
+        // that is, which is what a reading off the curve or the table has to be
+        // compared against. The frequency goes underneath -- but only where there
+        // is room for it, since the names stay legible far closer together than
+        // a 5-character number does.
+        let lastHzX = -1e9;
         for (let o = o0; o <= o1; o++) for (const b of BOXES) {
           const s = o * EDO + b.step;
           if (s < stepMin || s > stepMax) continue;
           const isSa = b.step === 0, emph = ragaSteps ? ragaSteps.has(b.step) : (isSa || b.step === 31);
           if (!emph) continue;
+          const x = Xs(s);
+          hctx.font = '10px -apple-system, sans-serif';
           hctx.fillStyle = isSa ? '#9db2c4' : '#6c8093';
-          hctx.fillText(ragaSteps ? (ragaSwaraName.get(b.step) || 'S') : (isSa ? 'S' : 'P'), Xs(s), 12);
+          hctx.fillText(ragaSteps ? (ragaSwaraName.get(b.step) || 'S') : (isSa ? 'S' : 'P'), x, 10);
+          if (saRefHz > 0 && x - lastHzX >= 34) {
+            const f = saRefHz * Math.pow(2, s / EDO);
+            hctx.font = '9px ui-monospace, Menlo, Consolas, monospace';
+            hctx.fillStyle = isSa ? 'rgba(157,178,196,0.72)' : 'rgba(108,128,147,0.72)';
+            hctx.fillText(f < 100 ? f.toFixed(1) : f.toFixed(0), x, 23);
+            lastHzX = x;
+          }
         }
       }
       hctx.strokeStyle = '#333'; hctx.lineWidth = 1;
@@ -1309,9 +2244,61 @@
       drawPlayhead(t);
       drawHeader();
     }
+    // The pinned gutters are drawn at scrollLeft, so a horizontal scroll has to
+    // repaint or they stand still while the roll slides out from under them,
+    // catching up only on the next playback frame. Vertical scroll moves nothing
+    // pinned (the header is CSS-sticky), so it deliberately does NOT repaint —
+    // that is the common case and repainting a tall canvas on every wheel tick
+    // for no visible change is the thing to avoid.
+    {
+      const sc = $('scroll');
+      let pending = 0, lastLeft = -1;
+      sc.addEventListener('scroll', () => {
+        if (sc.scrollLeft === lastLeft) return;
+        lastLeft = sc.scrollLeft;
+        if (pending) return;
+        pending = requestAnimationFrame(() => { pending = 0; renderFrame(nowPos()); });
+      }, { passive: true });
+    }
+    // Scroll the roll so the playhead stays in view while playing, matching
+    // draw's roll: parked ~40% down the viewport, so what is coming is visible
+    // rather than the playhead sitting at the bottom edge. Deliberately NOT in
+    // renderFrame — that also runs on zoom, a toggle or a drag, where taking the
+    // scroll position away from the user would fight them. Only the two playback
+    // ticks call it. canvas.offsetTop accounts for the sticky header above the
+    // roll inside the same scroll container.
+    // Playback position from whichever clock is running: the audio element when
+    // there is audio, else the synth clock — live while playing, else wherever it
+    // was paused.
+    function nowPos() {
+      if (hasAudio) return player.currentTime || 0;
+      if (synthPlaying && actx) return Math.max(0, synthPosStart + (actx.currentTime - synthCtxStart) * playbackSpeed);
+      return pausedAtSynth || 0;
+    }
+    const FOLLOW_FRAC = 0.4;
+    function followPlayhead(t) {
+      const sc = $('scroll');
+      if (!sc || !(audioDuration > 0)) return;
+      // Never follow while a gesture is in progress. Painting a note previews the
+      // audio from its start so you can hear what you are marking, which starts
+      // the playback tick — and scrolling the canvas then drags the grid out from
+      // under the pointer mid-note, the more violently the further time is
+      // expanded. The preview keeps playing; the view just holds still until the
+      // gesture ends.
+      if (paintNote || dragBoundary || dragNoteB || dragMk || selBox) return;
+      // Canvas top in the SCROLL CONTAINER's content coordinates. canvas.offsetTop
+      // is measured from the offsetParent, which is not #scroll (that is
+      // position:static), so using it directly overshot by the container's own
+      // page offset — scrolling the start of the timeline up out of view and
+      // hiding the playhead until playback happened to catch up with it.
+      const top = canvas.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop;
+      const y = top + Yt(t);
+      sc.scrollTop = Math.max(0, Math.min(sc.scrollHeight - sc.clientHeight, y - sc.clientHeight * FOLLOW_FRAC));
+    }
     function tick() {
       if (!previewing && markerB > markerA && player.currentTime >= markerB) { player.pause(); renderFrame(markerB); return; }
       renderFrame(player.currentTime);
+      followPlayhead(player.currentTime);
       if (!player.paused && !player.ended) rafId = requestAnimationFrame(tick);
     }
     function stopPlayhead() { if (rafId) { cancelAnimationFrame(rafId); rafId = 0; } }
@@ -1383,6 +2370,7 @@
       const pos = synthPosStart + (actx.currentTime - synthCtxStart) * playbackSpeed;
       if (markerB > markerA && pos >= markerB) { synthPlaying = false; synthRaf = 0; stopNotes(); stopDrone(); pausedAtSynth = markerB; playBtn.textContent = '▶ Play'; renderFrame(markerB); return; }
       renderFrame(Math.max(0, pos));
+      followPlayhead(Math.max(0, pos));
       synthRaf = requestAnimationFrame(synthTick);
     }
     function synthStop() {
@@ -1393,11 +2381,11 @@
     }
 
     // Independent volume + mute for the audio (element) and the notes (gain bus).
-    $('audiovol').addEventListener('input', () => { if ($('audiomute').dataset.on === '1') player.volume = parseFloat($('audiovol').value); });
+    $('audiovol').addEventListener('input', () => { if ($('audiomute').dataset.on === '1') player.volume = audioVolVal(); });
     $('audiomute').addEventListener('click', () => {
       const btn = $('audiomute'), on = btn.dataset.on === '1';
       btn.dataset.on = on ? '0' : '1'; btn.classList.toggle('muted', on);
-      player.volume = on ? 0 : parseFloat($('audiovol').value);
+      player.volume = on ? 0 : audioVolVal();
     });
     $('notevol').addEventListener('input', () => { if (notesGain && $('notemute').dataset.on === '1') notesGain.gain.value = parseFloat($('notevol').value); });
     $('notemute').addEventListener('click', () => {
@@ -1408,7 +2396,16 @@
 
     // Drone: sustained sine voices Sa · Pa · >S at the detected Sa. Starts lazily
     // (needs a user gesture for the AudioContext) and retunes when Sa changes.
-    const droneVolVal = () => ($('dronemute').dataset.on === '1' ? parseFloat($('dronevol').value) : 0);
+    // Audio and drone are tapered, not linear: both were loud enough at the very
+    // bottom of the slider that the useful range was the first tenth of it. The
+    // curve is fixed by one requirement -- the level that used to sit at 10% now
+    // sits at the midpoint -- which is v^k with 0.5^k = 0.1. Full level is still
+    // reachable at the top; what changes is that most of the travel is spent
+    // below it, where the adjusting actually happens.
+    const TAPER_K = Math.log(0.1) / Math.log(0.5);      // 3.3219…
+    const taper = (v) => Math.pow(Math.max(0, Math.min(1, v)), TAPER_K);
+    const audioVolVal = () => ($('audiomute').dataset.on === '1' ? taper(parseFloat($('audiovol').value)) : 0);
+    const droneVolVal = () => ($('dronemute').dataset.on === '1' ? taper(parseFloat($('dronevol').value)) : 0);
     function startDrone() {
       if (!actx || !(saRefHz > 0) || droneOsc.length) return;
       if (!droneGain) { droneGain = actx.createGain(); droneGain.connect(actx.destination); }
@@ -1495,12 +2492,17 @@
     downloadBtn.addEventListener('click', () => {
       if (pitchDataPoints.length === 0) return;
 
-      let csvContent = "data:text/csv;charset=utf-8,Time_Seconds,Frequency_Hz,Clarity\n";
+      // The FULL analysis output, ungated. Every field the detector produced:
+      // the frame store is a flat table of four scalars, so CSV expresses it
+      // exactly and loses no precision (values are already rounded at capture).
+      // It used to drop rms and blank any frequency below the clarity slider,
+      // which made the export depend on a UI setting and discarded the very
+      // frames you would want to inspect — rms is what separates silence from
+      // drone from voice, and a gated-out frequency cannot be recovered.
+      let csvContent = "data:text/csv;charset=utf-8,Time_Seconds,Frequency_Hz,Clarity,RMS\n";
 
       pitchDataPoints.forEach(row => {
-        // Reflect the current clarity gate: blank the frequency when below it.
-        const passed = row.frequency !== null && (row.clarity == null || row.clarity >= clarityThresh);
-        csvContent += `${row.time},${passed ? row.frequency : ''},${row.clarity}\n`;
+        csvContent += `${row.time},${row.frequency ?? ''},${row.clarity},${row.rms ?? ''}\n`;
       });
 
       const encodedUri = encodeURI(csvContent);
@@ -1518,7 +2520,8 @@
       get zoomX() { return zoomX; }, get zoomY() { return zoomY; },
       get raga() { return ragaSteps ? [...ragaSteps] : null; },
       get raw() { return pitchDataPoints; },   // raw detector frames — for the parity/capture harness (additive, read-only)
-      setAB(a, b) { markerA = a; markerB = b; renderFrame(player.currentTime || 0); },
+      seek(t) { player.currentTime = t; pausedAtSynth = t; renderFrame(t); },
+      setAB(a, b) { markerA = a; markerB = b; abFromSel = false; if (pitchMode) renderPitchTable(); renderFrame(player.currentTime || 0); },
       get t() { return player.currentTime; },
       get notes() { return notes; },
       get boundaries() { return boundaries; },
@@ -1531,6 +2534,13 @@
       get srgm() { return notesToSrgm(); },
       get liveNotes() { return liveOsc.length; },
       get droneVoices() { return droneOsc.length; },
+      get audioVol() { return player.volume; },
+      get droneVol() { return droneVolVal(); },
+      // Raw (post-edit, pre-clean) runs and the edit list — the selection unit
+      // for raw-curve editing, so a headless check can target real segments
+      // instead of guessing from the bridged contour.
+      rawRuns: () => rawRuns.map((r) => ({ t0: r.t0, t1: r.t1 })),
+      get rawEdits() { return rawEdits; },
       get paused() { return player.paused; },
       get hasAudio() { return hasAudio; },
       get synthPlaying() { return synthPlaying; },
@@ -1566,7 +2576,8 @@
       });
       const payload = { v: 2, url: $('audiourl').value.trim(), sa: saRefHz, dur: audioDuration,
                         raga: $('raga-sel').value || '', contour: downsampleContour(cleanedPoints, 450), bnds,
-                        audioHash: audioHash || undefined };   // lets a re-chosen file be matched to this source
+                        audioHash: audioHash || undefined,
+                        edits: rawEdits.length ? rawEdits : undefined };   // lets a re-chosen file be matched to this source
       const token = await encodeShareToken(JSON.stringify(payload));
       const link = location.origin + location.pathname + '#' + token;
       window.__lastShare = link;
@@ -1592,6 +2603,7 @@
       computeAxis(cleanedPoints, payload.sa);           // keep the shared Sa (downsampled contour's first frame may differ)
       computeCrossings(cleanedPoints); refreshSaInfo();
       // Restore the raga so swara names/tokens resolve.
+      if (Array.isArray(payload.edits)) rawEdits = payload.edits;   // manual raw-curve corrections travel with the link
       if (payload.raga) { const sel = $('raga-sel'); const opt = [...sel.options].find((o) => o.value.toLowerCase() === payload.raga.toLowerCase()); if (opt) { sel.value = opt.value; setRaga(opt.value); } }
       if (Array.isArray(payload.bnds)) {                // v2: exact model
         boundaries = payload.bnds.map((o) => ({ t: o.t, step: o.s, name: o.s != null ? swaraNameForStep(o.s) : null, gamaka: o.g || undefined }));
@@ -1599,7 +2611,7 @@
       } else { $('notation').value = payload.srgm; notationDirty = false; applyNotation(); }   // v1 fallback
       if (payload.dur > audioDuration) audioDuration = payload.dur;
       fitAxisToNotes();
-      markerA = 0; markerB = audioDuration;             // NB: not resetMarkers() — that clears the notes
+      markerA = 0; markerB = audioDuration; abFromSel = false;   // NB: not resetMarkers() — that clears the notes
       downloadBtn.disabled = false; openBtn.disabled = false; shareBtn.disabled = false;
       playBtn.disabled = false; rewindBtn.disabled = false; playBtn.textContent = '▶ Play';   // notes play via the synthetic clock
       hasAudio = false; pausedAtSynth = 0; sharedMode = true;
@@ -1636,7 +2648,7 @@
       const h1 = document.querySelector('h1');
       if (h1) h1.textContent = raga ? `Rāga ${raga}` : 'RagaM-Roll';
       const vb = $('viewerbar');
-      vb.append($('rewind-btn'), $('play-btn'), $('speed'), $('tools3'));   // reparent essentials above the grid
+      vb.append($('tools3'));   // transport + mixer travel together now
       vb.style.display = 'flex';
       $('advtoggle').style.display = '';
       // No audio in a shared/viewer session: gray the audio control and fold the
@@ -1675,6 +2687,7 @@
       if (synthPlaying) synthStop();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       objectUrl = URL.createObjectURL(file); player.src = objectUrl;
+      player.volume = audioVolVal();
       $('sharemsg').style.display = 'none';
       $('audiovol').disabled = false; $('audiomute').disabled = false;   // audio now present — ungray
       { const q = $('audioq'); if (q) q.remove(); }
@@ -1727,7 +2740,12 @@
         audioHash = hash || audioHash;
         // Re-derive the contour at full res but PRESERVE the shared Sa — the notes'
         // steps are relative to it (recompute() would re-estimate Sa and shift them).
-        cleanedPoints = cleanContour(gatePoints());
+        gatedPoints = applyRawEdits(gatePoints());
+        computeRawEnds();
+        { const octOnly = rawEdits.filter((e) => e.op === 'oct');
+          const reapply = (pts) => octOnly.length ? applyRawEditsTo(pts, octOnly) : pts;
+          octavePoints = reapply(cleanContour(gatedPoints, 0, { despike: false }));
+          cleanedPoints = reapply(cleanContour(gatedPoints)); }
         computeAxis(cleanedPoints, saRefHz);
         computeCrossings(cleanedPoints);
         refreshSaInfo(); updateNoteUI(); renderFrame(player.currentTime || 0);
@@ -1767,8 +2785,14 @@
         if (s.bridgeMs != null) { bridgeMs = s.bridgeMs; $('bridgems').value = bridgeMs; $('bridgelbl').textContent = bridgeMs + 'ms'; }
         objectUrl = URL.createObjectURL(s.blob);
         player.src = objectUrl;
+        player.volume = audioVolVal();
         resetMarkers();
+        // Before recompute(): the ops are replayed over the freshly gated
+        // contour inside it, so restoring them afterwards would leave the curve
+        // uncorrected until the next slider nudge.
+        if (Array.isArray(s.rawEdits)) rawEdits = s.rawEdits;
         recompute();
+        refreshRawButtons();
         const voiced = cleanedPoints.filter(p => p.frequency !== null).length;
         statusMsg.textContent = `Restored "${s.name}" — ${voiced} voiced frames (reload-persistent).`;
         downloadBtn.disabled = pitchDataPoints.length === 0;
