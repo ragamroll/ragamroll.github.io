@@ -184,6 +184,13 @@
     /* All viewer cards match the canvas card's outer width (440 canvas + 2px border). */
     body.viewer #headrow, body.viewer #viewerbar { width: 442px; max-width: 100%; box-sizing: border-box; }
     body.viewer:not(.editing) #notewrap { display: none; }   /* empty editor pane -> drop it so the grid centres */
+    /* The viewer is one centred column of equal-width cards. #stage is stretched
+       at desktop widths so the roll can grow into the space a collapsed notation
+       column frees — but the viewer has no notation column to collapse, so
+       stretching only made #stage span the full window while the canvas stayed
+       440px and hugged its left edge, under headrow and the bar which were
+       centred. Nothing to grow into here, so it centres with the rest. */
+    body.viewer #stage { align-self: center; }
     .chlabel { cursor: pointer; }
     .chlabel.muted { text-decoration: line-through; opacity: .5; }
     #audioq { color: #e0a53a; }
