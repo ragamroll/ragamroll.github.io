@@ -483,7 +483,7 @@ export function notesToSrgm(notes, { includeGamaka = true, ragaName, useRaga, ra
   const toks = [];
   for (const n of ns) {
     const qStart = Math.round(n.t0 * RES);
-    if (qStart > qCursor) { toks.push('z' + (qStart - qCursor)); qCursor = qStart; }   // leading rest + gaps
+    if (qStart > qCursor) { toks.push({ tok: 'z' + (qStart - qCursor) }); qCursor = qStart; }   // leading rest + gaps
     // Off-raga fidelity. A step the raga does not contain cannot be written as
     // a bare swara letter: the parser resolves letters through the raga's OWN
     // varieties, so an off-raga R3b re-reads as the raga's Ri, and a letter the
@@ -517,15 +517,21 @@ export function notesToSrgm(notes, { includeGamaka = true, ragaName, useRaga, ra
     qCursor += len;
     let tok = oct + letter + len;
     if (gam && gam.length >= 2) tok += `{gamaka:[${gam.map(([u, d]) => `[${u},${d}]`).join(',')}]}`;
-    toks.push(tok);
+    toks.push({ tok, t: n.t0 });
   }
-  // Gamaka-bearing tokens go on their own line for readability; plain notes
-  // stay grouped on shared lines.
+  // Each note is preceded by the time it starts, so a token can be found in the
+  // recording without counting lengths. Comments, so they cost nothing on the
+  // way back in: the parser drops any line beginning with % before tokenising,
+  // and the notation still round-trips with no diagnostics. Rests carry no time
+  // of their own -- the note after one says when the sound resumes.
   const lines = []; let cur = [];
-  for (const tok of toks) {
-    if (/\{gamaka:/.test(tok)) { if (cur.length) { lines.push(cur.join(' ')); cur = []; } lines.push(tok); }
-    else cur.push(tok);
+  const flush = () => { if (cur.length) { lines.push(cur.join(' ')); cur = []; } };
+  for (const { tok, t } of toks) {
+    if (t == null) { cur.push(tok); continue; }          // rest: rides with its neighbours
+    flush();
+    lines.push(`% ${t.toFixed(3)}s`);
+    lines.push(tok);
   }
-  if (cur.length) lines.push(cur.join(' '));
+  flush();
   return `T${tempo}\nRaga=${ragaName || 'c12'},0\nTala=adi,1\nO=5 L=1\n${lines.join('\n')}\n`;
 }

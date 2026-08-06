@@ -235,7 +235,11 @@
       <button class="z" id="undonote">Undo</button><button class="z" id="clearnotes">Clear</button>
     </span>
     <label class="grp noteonly"><input type="checkbox" id="snapcross" checked> snap to crossing</label>
-    <label class="grp noteonly"><input type="checkbox" id="gamakas"> gamaka from curve</label>
+    <label class="grp noteonly"><input type="checkbox" id="gamakas"> gamaka from
+      <select id="gamakasrc" title="Which contour a gamaka is traced from. Octave-corrected is the default — it fixes octave and subharmonic slips but leaves the shape alone. Raw is the untouched detector output: use it when a correction has gone wrong and the raw curve is the one that looks right.">
+        <option value="octave">octave-corrected curve</option>
+        <option value="raw">raw curve</option>
+      </select></label>
     <label class="grp noteonly"><input type="checkbox" id="snaponsets" checked> snap onsets</label>
   </div>
 
@@ -378,6 +382,23 @@
     const ctx = canvas.getContext('2d');
 
     let pitchDataPoints = [];   // raw detector output (CSV exports this, unchanged)
+    // Peak envelope of the waveform, ~1ms per bucket, built once and the decoded
+    // buffer thrown away: 33s is ~264KB here against ~5.8MB for the samples (and
+    // ~105MB for a ten-minute take). Finer than anything that can be marked by
+    // hand, and it survives long recordings.
+    let waveEnv = null;                       // { dt, min: Float32Array, max: Float32Array }
+    function buildEnvelope(ch, sampleRate) {
+      const per = Math.max(1, Math.round(sampleRate * 0.001));
+      const n = Math.ceil(ch.length / per);
+      const mn = new Float32Array(n), mx = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const a = i * per, b = Math.min(ch.length, a + per);
+        let lo = 0, hi = 0;
+        for (let j = a; j < b; j++) { const v = ch[j]; if (v < lo) lo = v; else if (v > hi) hi = v; }
+        mn[i] = lo; mx[i] = hi;
+      }
+      return { dt: per / sampleRate, min: mn, max: mx };
+    }
     let cleanedPoints = [];     // octave-corrected + smoothed + gap-bridged (canvas + srgm)
     // The same frames with ONLY the clarity gate applied — what the detector
     // actually reported, before any octave correction. Kept so the roll can show
@@ -479,6 +500,7 @@
       pitchDataPoints = [];
       cleanedPoints = [];
       audioDuration = 0;
+      waveEnv = null;
 
       objectUrl = URL.createObjectURL(file);
       player.src = objectUrl;
@@ -494,6 +516,7 @@
         statusMsg.textContent = 'Analyzing pitch contours...';
 
         const channelData = audioBuffer.getChannelData(0);
+        waveEnv = buildEnvelope(channelData, audioBuffer.sampleRate);
         const sampleRate = audioBuffer.sampleRate;
 
         const frameSize = 2048;
@@ -536,8 +559,9 @@
     // shruti lines drawn as a grid. Pitch is measured relative to the FIRST
     // voiced frame = Sa (step 0) — the same anchor buildSrgm uses — so the
     // contour reads against the shrutis exactly as it will in ragamroll.
-    const PAD = { l: 50, r: 14, t: 16, b: 16 };
     const PH_X0 = 26;      // playhead gutter column starts here; [0,PH_X0)=A/B gutter
+    const WAVE_X0 = 50, WAVE_W = 52;   // waveform lane, between the playhead column and the plot
+    const PAD = { l: WAVE_X0 + WAVE_W, r: 14, t: 16, b: 16 };   // gutter = A/B | playhead | waveform
     // The gutters are FROZEN against horizontal scroll: the canvas is one wide
     // bitmap inside a scrolling box, so anything drawn at a fixed canvas x slides
     // away with the pitch columns. Drawing them shifted by scrollLeft instead
@@ -751,8 +775,19 @@
       if (gx < PAD.l) {
         const t = Math.max(0, Math.min(audioDuration, yToTime(oy)));
         // Dragging A/B by hand takes ownership of the range back from the
-        // selection, so a later deselect leaves this loop alone.
-        if (gx < PH_X0) { dragMk = 'AB'; abDrag = t; markerA = t; markerB = audioDuration; abFromSel = false; }
+        // selection, so a later deselect leaves this loop alone. Dragging the
+        // WAVEFORM does the same: picking a slice off the trace is how a passage
+        // gets isolated to listen to while its markers are nudged, which is what
+        // the lane is there for.
+        if (gx < PH_X0 || gx >= WAVE_X0) {
+          // Grabbing a tab moves THAT marker; pressing anywhere else sweeps a new
+          // range. Without the first case there was no way to nudge one end of a
+          // range — every press threw both markers away and started over.
+          const grabbed = abTabAtY(oy);
+          if (grabbed) { dragMk = grabbed; }
+          else { dragMk = 'AB'; abDrag = t; markerA = t; markerB = audioDuration; }
+          abFromSel = false;
+        }
         else { dragMk = 'P'; player.currentTime = t; }
         tapXY = null; canvas.setPointerCapture(e.pointerId); e.preventDefault();
         renderFrame(player.currentTime || 0); return;
@@ -795,6 +830,9 @@
         const t = Math.max(0, Math.min(audioDuration, yToTime(e.offsetY)));
         if (dragMk === 'P') { player.currentTime = t; renderFrame(t); return; }
         if (dragMk === 'AB') { markerA = Math.min(abDrag, t); markerB = Math.max(abDrag, t); }
+        else if (dragMk === 'A') markerA = Math.min(t, markerB - 0.02);   // ends may not cross
+        else if (dragMk === 'B') markerB = Math.max(t, markerA + 0.02);
+        edgeScroll(e.clientY);
         renderFrame(player.currentTime || 0);
         return;
       }
@@ -885,6 +923,43 @@
       if (tapXY) { addBoundary(tapXY.x, tapXY.y); tapXY = null; }
     };
     canvas.addEventListener('pointerup', endPointer);
+    // Dragging a marker to the edge scrolls the roll, so a marker can be taken
+    // somewhere not currently on screen. Zoom the time axis in and the whole
+    // range no longer fits, which made anything past the edge unreachable
+    // without letting go, scrolling, and starting the drag again.
+    //
+    // It repeats on its own: once the pointer is held still at the edge no more
+    // pointermove events arrive, and a scroll that only advanced per event would
+    // stall exactly when it is needed. The pointer's client Y is fixed while the
+    // content moves under it, so the time is re-read each tick.
+    let edgeRaf = 0, edgeClientY = 0;
+    const EDGE_PX = 44, EDGE_MAX = 14;      // px from the edge, px per frame
+    function edgeScroll(clientY) {
+      edgeClientY = clientY;
+      if (edgeRaf) return;
+      const step = () => {
+        edgeRaf = 0;
+        if (!dragMk || dragMk === 'P') return;
+        const sc = $('scroll');
+        if (!sc) return;
+        const r = sc.getBoundingClientRect();
+        let dy = 0;
+        if (edgeClientY < r.top + EDGE_PX) dy = -Math.min(EDGE_MAX, (r.top + EDGE_PX - edgeClientY) / 3);
+        else if (edgeClientY > r.bottom - EDGE_PX) dy = Math.min(EDGE_MAX, (edgeClientY - (r.bottom - EDGE_PX)) / 3);
+        if (!dy) return;
+        const before = sc.scrollTop;
+        sc.scrollTop = Math.max(0, Math.min(sc.scrollHeight - sc.clientHeight, before + dy));
+        if (sc.scrollTop === before) return;                    // already at the end
+        const oy = edgeClientY - canvas.getBoundingClientRect().top;
+        const t = Math.max(0, Math.min(audioDuration, yToTime(oy)));
+        if (dragMk === 'AB') { markerA = Math.min(abDrag, t); markerB = Math.max(abDrag, t); }
+        else if (dragMk === 'A') markerA = Math.min(t, markerB - 0.02);
+        else if (dragMk === 'B') markerB = Math.max(t, markerA + 0.02);
+        renderFrame(nowPos());
+        edgeRaf = requestAnimationFrame(step);
+      };
+      edgeRaf = requestAnimationFrame(step);
+    }
     canvas.addEventListener('pointercancel', () => { if (previewing) { previewing = false; player.pause(); } dragMk = null; dragBoundary = null; dragNoteB = null; tapXY = null; selBox = null; paintNote = null; });
 
     // Chosen raga's swaras (53-EDO steps mod octave) to emphasize; null = none.
@@ -953,12 +1028,17 @@
     // of the sample, so a note spanning two raw gestures gets a straight line
     // across the silence between them — which is what bridging two segment ends
     // is meant to produce.
-    const gamakaForNote = (n) => D.gamakaForNote(n, octavePoints, saRefHz);
+    // Which contour a gamaka traces. Octave-corrected by default; raw when a
+    // correction has gone wrong and the untouched curve is the one that reads
+    // right -- the cleaner is a heuristic, and a note whose ornament is visibly
+    // an octave off is worse than one traced from unrepaired data.
+    const gamakaSource = () => ($('gamakasrc') && $('gamakasrc').value === 'raw' ? gatedPoints : octavePoints);
+    const gamakaForNote = (n) => D.gamakaForNote(n, gamakaSource(), saRefHz);
     // Derive the monophonic note segments from the sorted boundaries. When the
     // gamaka toggle is on, each note also carries its curve slice as a gamaka.
     function rebuildNotes() {
       boundaries.sort((a, b) => a.t - b.t);   // in place — D.notesFromBoundaries sorts a copy, so keep the original's in-place order
-      notes = D.notesFromBoundaries(boundaries, { gamakas: $('gamakas').checked, cleanedPoints: octavePoints, saRefHz });
+      notes = D.notesFromBoundaries(boundaries, { gamakas: $('gamakas').checked, cleanedPoints: gamakaSource(), saRefHz });
       updateNoteUI();
       persistModelSoon();   // every model mutation flows through here -> save the tuned notes
     }
@@ -1139,6 +1219,12 @@
     // adaptive threshold with a minimum spacing. Voiced or unvoiced, the vowel's
     // energy attack right after the consonant lands here.
     const computeOnsets = () => D.computeOnsets(pitchDataPoints);
+    // Cached: the tick overlay needs these every frame, and raw never changes.
+    let onsetCache = null, onsetCacheN = -1;
+    function onsetTimes() {
+      if (onsetCacheN !== pitchDataPoints.length) { onsetCacheN = pitchDataPoints.length; onsetCache = computeOnsets(); }
+      return onsetCache || [];
+    }
     // ---- Snap detection to a heard-syllable sequence ------------------------
     // Global-align the detected swara letters to the user's syllables, then:
     // relabel matched notes to the target swara, INSERT a note where a target
@@ -1291,6 +1377,17 @@
       rebuildNotes(); renderFrame(player.currentTime || 0);
     }
     // Nearest boundary line to a y (they span the full width) within 6px.
+    // Which A/B tab is under a press, if either. Tested against where the tab is
+    // DRAWN — clamped into the viewport — since that is what can be grabbed when
+    // a marker itself is scrolled out of sight.
+    function abTabAtY(oy) {
+      if (!(markerB > markerA)) return null;
+      const yTop = PAD.t, yBot = canvas.height - PAD.b;
+      const at = (t) => Math.max(yTop + 7, Math.min(yBot - 7, Yt(t)));
+      const dA = Math.abs(at(markerA) - oy), dB = Math.abs(at(markerB) - oy);
+      if (Math.min(dA, dB) > 9) return null;
+      return dA <= dB ? 'A' : 'B';
+    }
     function boundaryIdxAtY(oy) {
       let best = -1, bd = 6;
       for (let i = 0; i < boundaries.length; i++) { const d = Math.abs(Yt(boundaries[i].t) - oy); if (d < bd) { bd = d; best = i; } }
@@ -1515,6 +1612,7 @@
     $('showgamaka').addEventListener('change', () => { if (!notationDirty) setNotation(notesToSrgm($('showgamaka').checked)); });
     $('applynotation').addEventListener('click', applyNotation);
     $('gamakas').addEventListener('change', () => { rebuildNotes(); renderFrame(player.currentTime || 0); });
+    $('gamakasrc').addEventListener('change', () => { rebuildNotes(); renderFrame(player.currentTime || 0); });
     // Raw-curve editing. A click selects a whole run: a run is one continuous
     // gesture as the detector saw it, which is the unit these corrections
     // actually apply to. Shift-click extends across a range so join has two ends
@@ -2037,6 +2135,45 @@
       ctx.fillStyle = 'rgba(255,92,92,0.06)';  ctx.fillRect(PH_X0, yTop, PAD.l - PH_X0, yBot - yTop);
       ctx.strokeStyle = '#3a3a42'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(PH_X0 + 0.5, yTop); ctx.lineTo(PH_X0 + 0.5, yBot); ctx.stroke();
+      // The waveform, on the same time axis as the roll. Time runs DOWN here, so
+      // the trace runs down and amplitude spreads sideways from the lane's
+      // centre. One min/max pair per pixel row rather than per envelope bucket:
+      // at default zoom a row spans ~45 buckets, and drawing them individually
+      // would be 45 invisible strokes for every visible one.
+      if (waveEnv && audioDuration > 0) {
+        const mid = WAVE_X0 + WAVE_W / 2, half = WAVE_W / 2 - 2;
+        ctx.fillStyle = '#141418'; ctx.fillRect(WAVE_X0, yTop, WAVE_W, yBot - yTop);
+        ctx.strokeStyle = '#2a2a32'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(WAVE_X0 + 0.5, yTop); ctx.lineTo(WAVE_X0 + 0.5, yBot); ctx.stroke();
+        const nb = waveEnv.min.length;
+        ctx.strokeStyle = 'rgba(126,196,255,0.85)';
+        ctx.beginPath();
+        for (let y = Math.floor(yTop); y <= yBot; y++) {
+          const t0 = yToTime(y), t1 = yToTime(y + 1);
+          let a = Math.floor(t0 / waveEnv.dt), b = Math.ceil(t1 / waveEnv.dt);
+          if (b <= a) b = a + 1;
+          if (a < 0) a = 0; if (b > nb) b = nb;
+          if (a >= nb) break;
+          let lo = 0, hi = 0;
+          for (let i = a; i < b; i++) { const l = waveEnv.min[i], h = waveEnv.max[i]; if (l < lo) lo = l; if (h > hi) hi = h; }
+          if (hi === 0 && lo === 0) continue;
+          ctx.moveTo(mid + lo * half, y + 0.5);
+          ctx.lineTo(mid + hi * half, y + 0.5);
+        }
+        ctx.stroke();
+        // The detected syllable onsets, on the trace that shows them. These are
+        // what "align taps" measures against, so seeing them explains the number
+        // it reports -- and they are what a tap is aiming at in the first place.
+        const on = onsetTimes();
+        ctx.strokeStyle = 'rgba(255,180,84,0.9)'; ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (const t of on) {
+          const y = Yt(t);
+          if (y < yTop || y > yBot) continue;
+          ctx.moveTo(WAVE_X0 + WAVE_W - 9, y + 0.5); ctx.lineTo(WAVE_X0 + WAVE_W - 1, y + 0.5);
+        }
+        ctx.stroke();
+      }
       ctx.font = '10px ui-monospace, Menlo, Consolas, monospace';
       ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
       ctx.fillStyle = 'rgba(236,231,217,0.62)';
@@ -2188,9 +2325,18 @@
       ctx.stroke();
       // Playhead scrub handle in the gutter's right lane (clamped to viewport).
       const yTop = PAD.t, yBot = canvas.height - PAD.b, ty = Math.max(yTop + 6, Math.min(yBot - 6, y));
-      ctx.fillStyle = '#ff5c5c';
       ctx.save(); ctx.translate(gutOff(), 0);
-      ctx.fillRect(PH_X0, ty - 6, PAD.l - PH_X0 - 1, 12);
+      // The grab handle belongs to the playhead COLUMN, not to the whole gutter.
+      // Its width came from PAD.l, which grew from 50 to 102 when the waveform
+      // lane was added, so the handle silently grew with it and covered the
+      // trace. Bounded by the column it lives in now.
+      ctx.fillStyle = '#ff5c5c';
+      ctx.fillRect(PH_X0, ty - 6, WAVE_X0 - PH_X0 - 1, 12);
+      // Across the waveform the playhead is the same thin line it is on the
+      // grid: the position has to be readable against the trace, but a block
+      // would hide the very samples being read.
+      ctx.strokeStyle = '#ff5c5c'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(WAVE_X0, y); ctx.lineTo(PAD.l, y); ctx.stroke();
       ctx.restore();
     }
     // Sticky header: swara names aligned to the same pitch columns as the roll.
@@ -2742,6 +2888,7 @@
         statusMsg.textContent = 'Matched the shared source — upgrading to full-resolution contour…';
         const audioBuffer = await new (window.AudioContext || window.webkitAudioContext)().decodeAudioData(await file.arrayBuffer());
         const detector = PitchDetector.forFloat32Array(2048);
+        waveEnv = buildEnvelope(audioBuffer.getChannelData(0), audioBuffer.sampleRate);
         pitchDataPoints = D.contourFromPCM(audioBuffer.getChannelData(0), audioBuffer.sampleRate, detector, { frameSize: 2048, hopSize: 512 });
         audioDuration = audioBuffer.duration;
         audioHash = hash || audioHash;
@@ -2853,7 +3000,13 @@
   // unnoticed for anyone who only opens pitchy links. update() asks explicitly
   // rather than waiting for the browser's own schedule.
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').then((r) => { try { r.update(); } catch (_) {} }).catch(() => {});
+    navigator.serviceWorker.register('./sw.js').then((r) => {
+      // Only once one is already installed. Calling update() while the first
+      // install is still running rejects with InvalidStateError -- and update()
+      // REJECTS rather than throwing, so a try/catch around it catches nothing
+      // and it surfaces as an unhandled page error.
+      if (r.active) r.update().catch(() => {});
+    }).catch(() => {});
   }
 </script>
 </body>
