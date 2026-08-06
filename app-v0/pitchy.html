@@ -223,6 +223,9 @@
     <span class="grp">Raga
       <select id="raga-sel"><option value="">— none —</option></select>
     </span>
+    <button class="z" id="savework" title="Save this session to a file — notes, pitch edits, Sa, markers and every setting. The audio is NOT included; re-pick the same recording on load and it re-attaches.">⭳ save work</button>
+    <button class="z" id="loadwork" title="Load a saved session file.">⭱ load work</button>
+    <input type="file" id="loadworkinput" accept=".json,application/json" style="display:none">
     <button class="z" id="clearall" title="Discard the audio, notation, notes and every manual pitch edit, and forget the saved session. Cannot be undone.">Start afresh</button>
     <span class="grp noteonly">Notes <b id="notecount">0</b>
       <button class="z" id="detectbtn">Detect notes</button>
@@ -467,16 +470,53 @@
       clearTimeout(_persistTimer);
       _persistTimer = setTimeout(persistModel, 800);   // coalesce drag storms
     }
+    // Everything the user sets that is not the notes themselves. Collected in one
+    // place so the session and the share link cannot drift apart -- they did:
+    // markers and the clarity/bridge thresholds were saved in the session but
+    // absent from a share, and the three volume levels were saved in neither, so
+    // a deliberately balanced mix was lost on every reload.
+    function uiSettings() {
+      const num = (id, d) => { const e = $(id); const v = e ? parseFloat(e.value) : NaN; return Number.isFinite(v) ? v : d; };
+      const on = (id) => { const e = $(id); return e ? e.dataset.on : '1'; };
+      return { av: num('audiovol', 0.5), dv: num('dronevol', 0.5), nv: num('notevol', 0.5),
+               am: on('audiomute'), dm: on('dronemute'), nm: on('notemute'),
+               gs: ($('gamakasrc') || {}).value || 'octave', cw: num('curvew', 1.6),
+               ct: clarityThresh, bm: bridgeMs, zx: zoomX, zy: zoomY,
+               ma: markerA, mb: markerB };
+    }
+    function applyUiSettings(u) {
+      if (!u || typeof u !== 'object') return;
+      const set = (id, v) => { const e = $(id); if (e && v != null) e.value = v; };
+      set('audiovol', u.av); set('dronevol', u.dv); set('notevol', u.nv);
+      set('gamakasrc', u.gs); set('curvew', u.cw);
+      for (const [id, v] of [['audiomute', u.am], ['dronemute', u.dm], ['notemute', u.nm]]) {
+        const e = $(id); if (!e || v == null) continue;
+        if (e.dataset.on !== v) e.click();          // click, so the mute's own side effects run
+      }
+      if (u.ct != null) { clarityThresh = u.ct; set('claritythr', u.ct); const l = $('claritylbl'); if (l) l.textContent = (+u.ct).toFixed(2); }
+      if (u.bm != null) { bridgeMs = u.bm; set('bridgems', u.bm); const l = $('bridgelbl'); if (l) l.textContent = u.bm + 'ms'; }
+      if (u.zx > 0) zoomX = u.zx;
+      if (u.zy > 0) zoomY = u.zy;
+      if (u.ma != null) markerA = u.ma;
+      if (u.mb != null) markerB = u.mb;
+      // Volumes only reach the audio graph when their control changes, so push
+      // them once here or a restored mix would be shown but not heard.
+      try { player.volume = audioVolVal(); } catch (_) {}
+      if (droneGain) droneGain.gain.value = droneVolVal();
+      if (notesGain) notesGain.gain.value = $('notemute').dataset.on === '0' ? 0 : parseFloat($('notevol').value);
+    }
+
     async function persistModel() {
       if (sharedMode) return;
       try {
         const s = await idbGet();
         if (!s || !s.blob) return;                     // nothing to attach the model to yet
-        s.bnds = boundaries.map((b) => { const o = { t: +b.t.toFixed(3), s: b.step }; if (b.gamaka) o.g = b.gamaka; return o; });
+        s.bnds = boundsForSave();   // recovers each note's gamaka, which boundaries do not carry
         s.sa = saRefHz;
         s.raga = $('raga-sel').value || '';
         s.markerA = markerA; s.markerB = markerB;
         s.rawEdits = rawEdits;
+        s.ui = uiSettings();
         await idbPut(s);
       } catch (e) { console.warn('model persist failed', e); }
     }
@@ -658,6 +698,33 @@
     $('zyo').addEventListener('click', () => { const z = clampZ(zoomY / 1.4); if (!zoomFits(zoomX, z)) { statusMsg.textContent = 'Zoom limit — zoom out the other axis first.'; return; } zoomY = z; applyZoom(); });
     $('zyi').addEventListener('click', () => { const z = clampZ(zoomY * 1.4); if (!zoomFits(zoomX, z)) { statusMsg.textContent = 'Zoom limit — zoom out the other axis first.'; return; } zoomY = z; applyZoom(); });
     $('zreset').addEventListener('click', () => { zoomX = zoomY = 1; applyZoom(); });
+    // Save the work to a FILE. The session in IndexedDB holds one slot and Start
+    // afresh deletes it, so it cannot hold two recordings in progress or move to
+    // another machine; a file can do both. Same payload as a share link, so the
+    // two cannot describe different things.
+    $('savework').addEventListener('click', async () => {
+      if (!boundaries.length && !rawEdits.length) { statusMsg.textContent = 'Nothing to save yet — detect or draw some notes first.'; return; }
+      const bnds = boundsForSave();
+      let hash = null; try { const st = await idbGet(); hash = st && st.audioHash; } catch (_) {}
+      const payload = buildPayload(bnds, hash);
+      payload.audioName = (fileInput.files && fileInput.files[0] && fileInput.files[0].name) || undefined;
+      const name = `${payload.raga || 'pitchy'}-${payload.audioName ? payload.audioName.replace(/\.[^.]+$/, '') : 'session'}.pitchy.json`;
+      const blob = new Blob([JSON.stringify(payload, null, 1)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = name; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      statusMsg.textContent = `Saved ${name} — ${bnds.length} note(s), ${rawEdits.length} pitch edit(s). Re-pick ${payload.audioName || 'the audio'} after loading it.`;
+    });
+    $('loadwork').addEventListener('click', () => $('loadworkinput').click());
+    $('loadworkinput').addEventListener('change', async (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      let payload; try { payload = JSON.parse(await f.text()); } catch { statusMsg.textContent = 'That file is not a saved pitchy session.'; return; }
+      const ok = await applyPayload(payload);
+      if (!ok) { statusMsg.textContent = 'That file is not a saved pitchy session.'; return; }
+      statusMsg.textContent = `Loaded ${f.name}. Choose ${payload.audioName || 'the audio file'} to hear it — the notes and settings are already restored.`;
+      e.target.value = '';
+    });
     // Start afresh. Everything worth losing is named in the prompt, because the
     // saved session survives a plain reload and there was no way to get back to
     // an empty page short of clearing site data by hand. Deleting the stored
@@ -2722,15 +2789,8 @@
       // Carry the exact model (boundaries with 53-EDO steps + each note's gamaka)
       // so reconstruction needs no midi/octave round-trip — notes stay aligned to
       // the contour, and the Sa + raga come through untouched.
-      const bnds = boundaries.map((b) => {
-        const o = { t: +b.t.toFixed(3), s: b.step };
-        if (b.step != null) { const n = notes.find((nn) => Math.abs(nn.t0 - b.t) < 1e-6); if (n && n.gamaka) o.g = n.gamaka; }
-        return o;
-      });
-      const payload = { v: 2, url: $('audiourl').value.trim(), sa: saRefHz, dur: audioDuration,
-                        raga: $('raga-sel').value || '', contour: downsampleContour(cleanedPoints, 450), bnds,
-                        audioHash: audioHash || undefined,
-                        edits: rawEdits.length ? rawEdits : undefined };   // lets a re-chosen file be matched to this source
+      const bnds = boundsForSave();
+      const payload = buildPayload(bnds, audioHash);
       const token = await encodeShareToken(JSON.stringify(payload));
       const link = location.origin + location.pathname + '#' + token;
       window.__lastShare = link;
@@ -2747,8 +2807,33 @@
       m.style.display = 'block';
     }
     // Rebuild a shared session from a #pako payload. Returns true if handled.
+    // One shape for a saved session, whether it travelled as a #pako link or as a
+    // file. The link cannot carry the audio and neither can the file -- both note
+    // the audioHash so re-picking the same recording re-attaches it.
+    // Gamaka lives on the NOTES, not on the boundaries they came from, so a
+    // payload built straight off `boundaries` shipped none -- silently, for
+    // shares as well as files. Recovered by start time.
+    function boundsForSave() {
+      const gam = new Map(notes.filter((n) => n.gamaka && n.gamaka.length).map((n) => [+n.t0.toFixed(3), n.gamaka]));
+      return boundaries.map((b) => {
+        const t = +b.t.toFixed(3), o = { t, s: b.step };
+        const g = b.gamaka || gam.get(t);
+        if (g) o.g = g;
+        return o;
+      });
+    }
+    function buildPayload(bnds, audioHash) {
+      return { v: 2, url: $('audiourl').value.trim(), sa: saRefHz, dur: audioDuration,
+               raga: $('raga-sel').value || '', contour: downsampleContour(cleanedPoints, 450), bnds,
+               audioHash: audioHash || undefined,
+               edits: rawEdits.length ? rawEdits : undefined,
+               ui: uiSettings() };
+    }
     async function applySharedToken(token) {
       let payload; try { payload = JSON.parse(await decodeShareToken(token)); } catch { return false; }
+      return applyPayload(payload);
+    }
+    async function applyPayload(payload) {
       if (!payload || typeof payload !== 'object' || !(payload.bnds || payload.srgm)) return false;
       audioDuration = payload.dur || 0;
       cleanedPoints = (payload.contour || []).map(([t, f]) => ({ time: t, frequency: f }));
@@ -2765,6 +2850,7 @@
       if (payload.dur > audioDuration) audioDuration = payload.dur;
       fitAxisToNotes();
       markerA = 0; markerB = audioDuration; abFromSel = false;   // NB: not resetMarkers() — that clears the notes
+      applyUiSettings(payload.ui);   // AFTER the reset above, which would otherwise win
       downloadBtn.disabled = false; openBtn.disabled = false; shareBtn.disabled = false;
       playBtn.disabled = false; rewindBtn.disabled = false; playBtn.textContent = '▶ Play';   // notes play via the synthetic clock
       hasAudio = false; pausedAtSynth = 0; sharedMode = true;
@@ -2945,6 +3031,7 @@
         // contour inside it, so restoring them afterwards would leave the curve
         // uncorrected until the next slider nudge.
         if (Array.isArray(s.rawEdits)) rawEdits = s.rawEdits;
+        applyUiSettings(s.ui);
         recompute();
         refreshRawButtons();
         const voiced = cleanedPoints.filter(p => p.frequency !== null).length;
