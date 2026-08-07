@@ -21,11 +21,25 @@
   .btn { text-decoration: none; font-size: .85rem; padding: .35rem .7rem; border-radius: 6px; border: 1px solid rgba(128,128,128,.35); color: inherit; }
   .btn.play { border-color: rgba(120,90,220,.5); }
   .btn:hover { background: rgba(128,128,128,.12); }
+  /* Sticky: with 128 cards the box would otherwise scroll away after the
+     first screen, which is exactly when it becomes worth having. */
+  .search { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: .6rem;
+            background: Canvas; padding: .5rem 0 .6rem; border-bottom: 1px solid rgba(128,128,128,.2); }
+  .search input { flex: 1; min-width: 0; font: inherit; font-size: .95rem; padding: .45rem .7rem;
+                  border: 1px solid rgba(128,128,128,.4); border-radius: 8px; background: transparent; color: inherit; }
+  .search input:focus { outline: 2px solid rgba(120,90,220,.5); outline-offset: -1px; }
+  .count { color: #888; font-size: .8rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .empty { color: #888; font-size: .9rem; padding: 1.5rem 0; }
 </style>
 <h1>RagaM-Roll — raga notations</h1>
 <p class="note">Auto-detected Carnatic raga notations (arohana/avarohana). <b>Audio is not hosted here.</b> Open a raga in <b>pitchy</b> — it draws the roll and plays the detected notes; use its on-page prompt to download the original recording from ragasurabhi and upload it to hear the source. <b>draw</b> shows the roll only. Drafts from a native pitch-detection pipeline — expect rough spots; <span class="rev">⚠ check Sa</span> marks likely tonic/octave issues.</p>
-
-  <div class="card">
+<div class="search">
+  <input id="q" type="search" inputmode="search" autocomplete="off" autocapitalize="off" spellcheck="false"
+         placeholder="Search ragas — try ananda bhairavi" aria-label="Search ragas" aria-controls="cards">
+  <span class="count" id="count" aria-live="polite"></span>
+</div>
+<div id="cards">
+  <div class="card" data-raga="chakravakam">
     <div class="hd"><span class="raga">Chakravakam</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">30 notes · ~1.0 oct · Sa 197.4 Hz</div>
     <div class="links">
@@ -34,7 +48,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="charukesi">
     <div class="hd"><span class="raga">Charukesi</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">32 notes · ~1.0 oct · Sa 197.0 Hz</div>
     <div class="links">
@@ -43,7 +57,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="dharmavati">
     <div class="hd"><span class="raga">Dharmavati</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">34 notes · ~1.0 oct · Sa 197.2 Hz</div>
     <div class="links">
@@ -52,7 +66,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="harikambhoji">
     <div class="hd"><span class="raga">Harikambhoji</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">34 notes · ~1.0 oct · Sa 196.1 Hz</div>
     <div class="links">
@@ -61,7 +75,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="hemavati">
     <div class="hd"><span class="raga">Hemavati</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">34 notes · ~1.0 oct · Sa 196.1 Hz</div>
     <div class="links">
@@ -70,7 +84,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="keeravani">
     <div class="hd"><span class="raga">Keeravani</span><span class="kind aroha">aroha</span><span class="rev" title="doesn't start on Sa">⚠ check Sa</span><span class="draft">draft</span></div>
     <div class="meta">27 notes · ~1.4 oct · Sa 148.2 Hz</div>
     <div class="links">
@@ -79,7 +93,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="kharaharapriya">
     <div class="hd"><span class="raga">Kharaharapriya</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">31 notes · ~1.0 oct · Sa 197.3 Hz</div>
     <div class="links">
@@ -88,7 +102,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="nasikabhushani">
     <div class="hd"><span class="raga">Nasikabhushani</span><span class="kind aroha">aroha</span><span class="rev" title="doesn't start on Sa">⚠ check Sa</span><span class="draft">draft</span></div>
     <div class="meta">48 notes · ~1.4 oct · Sa 196.3 Hz</div>
     <div class="links">
@@ -97,7 +111,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="natabhairavi">
     <div class="hd"><span class="raga">Natabhairavi</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">35 notes · ~1.0 oct · Sa 197.3 Hz</div>
     <div class="links">
@@ -106,7 +120,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="ramapriya">
     <div class="hd"><span class="raga">Ramapriya</span><span class="kind aroha">aroha</span><span class="rev" title="3 octave flips">⚠ check Sa</span><span class="draft">draft</span></div>
     <div class="meta">31 notes · ~1.0 oct · Sa 197.6 Hz</div>
     <div class="links">
@@ -115,7 +129,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="rasikapriya">
     <div class="hd"><span class="raga">Rasikapriya</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">30 notes · ~1.0 oct · Sa 197.5 Hz</div>
     <div class="links">
@@ -124,7 +138,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="sarasangi">
     <div class="hd"><span class="raga">Sarasangi</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">30 notes · ~1.0 oct · Sa 195.4 Hz</div>
     <div class="links">
@@ -133,7 +147,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="shanmukhapriya">
     <div class="hd"><span class="raga">Shanmukhapriya</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">35 notes · ~1.0 oct · Sa 195.4 Hz</div>
     <div class="links">
@@ -142,7 +156,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="simhendramadhyamam">
     <div class="hd"><span class="raga">Simhendramadhyamam</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">29 notes · ~2.0 oct · Sa 197.0 Hz</div>
     <div class="links">
@@ -151,7 +165,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="vachaspati">
     <div class="hd"><span class="raga">Vachaspati</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">36 notes · ~1.0 oct · Sa 197.1 Hz</div>
     <div class="links">
@@ -160,7 +174,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="abheri">
     <div class="hd"><span class="raga">abheri</span><span class="kind aroha">aroha</span><span class="rev" title="4 octave flips">⚠ check Sa</span><span class="draft">draft</span></div>
     <div class="meta">29 notes · ~1.0 oct · Sa 197.2 Hz</div>
     <div class="links">
@@ -169,7 +183,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="abhogi">
     <div class="hd"><span class="raga">abhogi</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">26 notes · ~1.0 oct · Sa 197.7 Hz</div>
     <div class="links">
@@ -178,7 +192,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="ahiri">
     <div class="hd"><span class="raga">ahiri</span><span class="kind aroha">aroha</span><span class="rev" title="3 octave flips">⚠ check Sa</span><span class="draft">draft</span></div>
     <div class="meta">29 notes · ~1.0 oct · Sa 195.5 Hz</div>
     <div class="links">
@@ -187,7 +201,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="amrithavarshini">
     <div class="hd"><span class="raga">amrithavarshini</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">28 notes · ~1.0 oct · Sa 197.2 Hz</div>
     <div class="links">
@@ -196,7 +210,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="anandabhairavi">
     <div class="hd"><span class="raga">anandabhairavi</span><span class="kind aroha">aroha</span><span class="cur">curated ✓</span></div>
     <div class="meta">34 notes · ~1.0 oct · Sa 196.8 Hz</div>
     <div class="links">
@@ -205,7 +219,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="andolika">
     <div class="hd"><span class="raga">andolika</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">27 notes · ~1.0 oct · Sa 195.9 Hz</div>
     <div class="links">
@@ -214,7 +228,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="arabhi">
     <div class="hd"><span class="raga">arabhi</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">25 notes · ~1.0 oct · Sa 195.2 Hz</div>
     <div class="links">
@@ -223,7 +237,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="asaveri">
     <div class="hd"><span class="raga">asaveri</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">27 notes · ~1.0 oct · Sa 197.5 Hz</div>
     <div class="links">
@@ -232,7 +246,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="atana">
     <div class="hd"><span class="raga">atana</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">28 notes · ~1.0 oct · Sa 197.1 Hz</div>
     <div class="links">
@@ -241,7 +255,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="bageshri">
     <div class="hd"><span class="raga">bageshri</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">44 notes · ~1.0 oct · Sa 197.3 Hz</div>
     <div class="links">
@@ -250,7 +264,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="bahudari">
     <div class="hd"><span class="raga">bahudari</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">29 notes · ~1.0 oct · Sa 196.1 Hz</div>
     <div class="links">
@@ -259,7 +273,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="begada">
     <div class="hd"><span class="raga">begada</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">37 notes · ~1.0 oct · Sa 195.5 Hz</div>
     <div class="links">
@@ -268,7 +282,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="behag">
     <div class="hd"><span class="raga">behag</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">39 notes · ~1.1 oct · Sa 196.2 Hz</div>
     <div class="links">
@@ -277,7 +291,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="bhairavi">
     <div class="hd"><span class="raga">bhairavi</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">32 notes · ~1.0 oct · Sa 197.0 Hz</div>
     <div class="links">
@@ -286,7 +300,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="bhoopalam">
     <div class="hd"><span class="raga">bhoopalam</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">25 notes · ~1.0 oct · Sa 197.5 Hz</div>
     <div class="links">
@@ -295,7 +309,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="bilahari">
     <div class="hd"><span class="raga">bilahari</span><span class="kind aroha">aroha</span><span class="rev" title="doesn't start on Sa">⚠ check Sa</span><span class="draft">draft</span></div>
     <div class="meta">37 notes · ~1.1 oct · Sa 195.7 Hz</div>
     <div class="links">
@@ -304,7 +318,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="bowli">
     <div class="hd"><span class="raga">bowli</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">34 notes · ~1.0 oct · Sa 197.4 Hz</div>
     <div class="links">
@@ -313,7 +327,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="brindavanasaranga">
     <div class="hd"><span class="raga">brindavanasaranga</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">31 notes · ~1.0 oct · Sa 197.8 Hz</div>
     <div class="links">
@@ -322,7 +336,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="chalanattai">
     <div class="hd"><span class="raga">chalanattai</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">33 notes · ~1.2 oct · Sa 196.4 Hz</div>
     <div class="links">
@@ -331,7 +345,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="chandrajyoti">
     <div class="hd"><span class="raga">chandrajyoti</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">27 notes · ~1.0 oct · Sa 197.3 Hz</div>
     <div class="links">
@@ -340,7 +354,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="chandrakauns">
     <div class="hd"><span class="raga">chandrakauns</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">28 notes · ~1.0 oct · Sa 197.3 Hz</div>
     <div class="links">
@@ -349,7 +363,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="darbar">
     <div class="hd"><span class="raga">darbar</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">24 notes · ~1.0 oct · Sa 197.3 Hz</div>
     <div class="links">
@@ -358,7 +372,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="darbarikanada">
     <div class="hd"><span class="raga">darbarikanada</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">48 notes · ~1.0 oct · Sa 196.1 Hz</div>
     <div class="links">
@@ -367,7 +381,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="desh">
     <div class="hd"><span class="raga">desh</span><span class="kind aroha">aroha</span><span class="rev" title="5 octave flips">⚠ check Sa</span><span class="draft">draft</span></div>
     <div class="meta">37 notes · ~1.2 oct · Sa 198.6 Hz</div>
     <div class="links">
@@ -376,7 +390,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="devagandhari">
     <div class="hd"><span class="raga">devagandhari</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">40 notes · ~1.0 oct · Sa 197.8 Hz</div>
     <div class="links">
@@ -385,7 +399,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="devamanohari">
     <div class="hd"><span class="raga">devamanohari</span><span class="kind aroha">aroha</span><span class="rev" title="4 octave flips">⚠ check Sa</span><span class="draft">draft</span></div>
     <div class="meta">31 notes · ~1.0 oct · Sa 195.9 Hz</div>
     <div class="links">
@@ -394,7 +408,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="dhanyasi">
     <div class="hd"><span class="raga">dhanyasi</span><span class="kind aroha">aroha</span><span class="rev" title="3 octave flips">⚠ check Sa</span><span class="draft">draft</span></div>
     <div class="meta">19 notes · ~1.0 oct · Sa 197.2 Hz</div>
     <div class="links">
@@ -403,7 +417,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="dwijavanti">
     <div class="hd"><span class="raga">dwijavanti</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">34 notes · ~1.0 oct · Sa 197.5 Hz</div>
     <div class="links">
@@ -412,7 +426,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="gambheeranattai">
     <div class="hd"><span class="raga">gambheeranattai</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">30 notes · ~1.0 oct · Sa 197.7 Hz</div>
     <div class="links">
@@ -421,7 +435,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="ganamoorthi">
     <div class="hd"><span class="raga">ganamoorthi</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">30 notes · ~1.0 oct · Sa 196.1 Hz</div>
     <div class="links">
@@ -430,7 +444,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="gowlai">
     <div class="hd"><span class="raga">gowlai</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">35 notes · ~1.0 oct · Sa 196.8 Hz</div>
     <div class="links">
@@ -439,7 +453,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="gowrimanohari">
     <div class="hd"><span class="raga">gowrimanohari</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">31 notes · ~1.0 oct · Sa 194.3 Hz</div>
     <div class="links">
@@ -448,7 +462,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="hamirkalyani">
     <div class="hd"><span class="raga">hamirkalyani</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">32 notes · ~1.0 oct · Sa 192.8 Hz</div>
     <div class="links">
@@ -457,7 +471,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="hamsadwani">
     <div class="hd"><span class="raga">hamsadwani</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">27 notes · ~1.0 oct · Sa 195.7 Hz</div>
     <div class="links">
@@ -466,7 +480,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="hamsanadam">
     <div class="hd"><span class="raga">hamsanadam</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">19 notes · ~1.0 oct · Sa 194.6 Hz</div>
     <div class="links">
@@ -475,7 +489,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="hamsanandi">
     <div class="hd"><span class="raga">hamsanandi</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">32 notes · ~1.0 oct · Sa 197.5 Hz</div>
     <div class="links">
@@ -484,7 +498,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="hindolam">
     <div class="hd"><span class="raga">hindolam</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">27 notes · ~1.0 oct · Sa 197.4 Hz</div>
     <div class="links">
@@ -493,7 +507,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="huseni">
     <div class="hd"><span class="raga">huseni</span><span class="kind aroha">aroha</span><span class="rev" title="doesn't start on Sa">⚠ check Sa</span><span class="draft">draft</span></div>
     <div class="meta">32 notes · ~1.0 oct · Sa 196.2 Hz</div>
     <div class="links">
@@ -502,7 +516,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="jaganmohini">
     <div class="hd"><span class="raga">jaganmohini</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">24 notes · ~1.0 oct · Sa 195.8 Hz</div>
     <div class="links">
@@ -511,7 +525,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="janaranjani">
     <div class="hd"><span class="raga">janaranjani</span><span class="kind aroha">aroha</span><span class="rev" title="doesn't start on Sa">⚠ check Sa</span><span class="draft">draft</span></div>
     <div class="meta">36 notes · ~1.0 oct · Sa 206.3 Hz</div>
     <div class="links">
@@ -520,7 +534,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="jayanthashri">
     <div class="hd"><span class="raga">jayanthashri</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">34 notes · ~1.0 oct · Sa 195.4 Hz</div>
     <div class="links">
@@ -529,7 +543,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="kadanakuthoohalam">
     <div class="hd"><span class="raga">kadanakuthoohalam</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">34 notes · ~1.0 oct · Sa 196.7 Hz</div>
     <div class="links">
@@ -538,7 +552,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="kalavati">
     <div class="hd"><span class="raga">kalavati</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">35 notes · ~1.3 oct · Sa 195.9 Hz</div>
     <div class="links">
@@ -547,7 +561,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="kalyanavasantham">
     <div class="hd"><span class="raga">kalyanavasantham</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">30 notes · ~1.0 oct · Sa 195.5 Hz</div>
     <div class="links">
@@ -556,7 +570,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="kalyani">
     <div class="hd"><span class="raga">kalyani</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">46 notes · ~1.1 oct · Sa 197.6 Hz</div>
     <div class="links">
@@ -565,7 +579,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="kamalamanohari">
     <div class="hd"><span class="raga">kamalamanohari</span><span class="kind aroha">aroha</span><span class="rev" title="4 octave flips">⚠ check Sa</span><span class="draft">draft</span></div>
     <div class="meta">23 notes · ~1.0 oct · Sa 195.6 Hz</div>
     <div class="links">
@@ -574,7 +588,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="kambhoji">
     <div class="hd"><span class="raga">kambhoji</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">29 notes · ~1.0 oct · Sa 196.3 Hz</div>
     <div class="links">
@@ -583,7 +597,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="kanada">
     <div class="hd"><span class="raga">kanada</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">34 notes · ~1.4 oct · Sa 196.6 Hz</div>
     <div class="links">
@@ -592,7 +606,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="kannada">
     <div class="hd"><span class="raga">kannada</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">30 notes · ~1.0 oct · Sa 195.9 Hz</div>
     <div class="links">
@@ -601,7 +615,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="kannadagowlai">
     <div class="hd"><span class="raga">kannadagowlai</span><span class="kind aroha">aroha</span><span class="rev" title="doesn't start on Sa">⚠ check Sa</span><span class="draft">draft</span></div>
     <div class="meta">25 notes · ~1.0 oct · Sa 196.1 Hz</div>
     <div class="links">
@@ -610,7 +624,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="kapi">
     <div class="hd"><span class="raga">kapi</span><span class="kind aroha">aroha</span><span class="rev" title="4 octave flips">⚠ check Sa</span><span class="draft">draft</span></div>
     <div class="meta">27 notes · ~1.0 oct · Sa 196.9 Hz</div>
     <div class="links">
@@ -619,7 +633,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="karnaranjani">
     <div class="hd"><span class="raga">karnaranjani</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">36 notes · ~1.0 oct · Sa 195.9 Hz</div>
     <div class="links">
@@ -628,7 +642,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="kedaragowlai">
     <div class="hd"><span class="raga">kedaragowlai</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">33 notes · ~1.0 oct · Sa 195.8 Hz</div>
     <div class="links">
@@ -637,7 +651,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="kedaram">
     <div class="hd"><span class="raga">kedaram</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">22 notes · ~1.0 oct · Sa 197.3 Hz</div>
     <div class="links">
@@ -646,7 +660,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="khamas">
     <div class="hd"><span class="raga">khamas</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">31 notes · ~1.0 oct · Sa 195.8 Hz</div>
     <div class="links">
@@ -655,7 +669,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="kuntalavarali">
     <div class="hd"><span class="raga">kuntalavarali</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">26 notes · ~1.0 oct · Sa 195.7 Hz</div>
     <div class="links">
@@ -664,7 +678,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="lalitha">
     <div class="hd"><span class="raga">lalitha</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">30 notes · ~2.0 oct · Sa 196.8 Hz</div>
     <div class="links">
@@ -673,7 +687,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="lathangi">
     <div class="hd"><span class="raga">lathangi</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">35 notes · ~1.1 oct · Sa 198.6 Hz</div>
     <div class="links">
@@ -682,7 +696,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="maand">
     <div class="hd"><span class="raga">maand</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">32 notes · ~1.0 oct · Sa 197.4 Hz</div>
     <div class="links">
@@ -691,7 +705,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="madhuvanti">
     <div class="hd"><span class="raga">madhuvanti</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">32 notes · ~1.0 oct · Sa 197.0 Hz</div>
     <div class="links">
@@ -700,7 +714,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="madhyamavati">
     <div class="hd"><span class="raga">madhyamavati</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">27 notes · ~1.0 oct · Sa 197.0 Hz</div>
     <div class="links">
@@ -709,7 +723,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="malahari">
     <div class="hd"><span class="raga">malahari</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">25 notes · ~1.0 oct · Sa 196.1 Hz</div>
     <div class="links">
@@ -718,7 +732,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="malayamarutham">
     <div class="hd"><span class="raga">malayamarutham</span><span class="kind aroha">aroha</span><span class="rev" title="4 octave flips">⚠ check Sa</span><span class="draft">draft</span></div>
     <div class="meta">25 notes · ~1.0 oct · Sa 196.3 Hz</div>
     <div class="links">
@@ -727,7 +741,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="mandari">
     <div class="hd"><span class="raga">mandari</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">25 notes · ~1.0 oct · Sa 195.9 Hz</div>
     <div class="links">
@@ -736,7 +750,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="manirangu">
     <div class="hd"><span class="raga">manirangu</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">23 notes · ~1.0 oct · Sa 198.0 Hz</div>
     <div class="links">
@@ -745,7 +759,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="mayamalavagowlai">
     <div class="hd"><span class="raga">mayamalavagowlai</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">33 notes · ~1.0 oct · Sa 197.4 Hz</div>
     <div class="links">
@@ -754,7 +768,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="mohanakalyani">
     <div class="hd"><span class="raga">mohanakalyani</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">37 notes · ~1.0 oct · Sa 195.9 Hz</div>
     <div class="links">
@@ -763,7 +777,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="mohanam">
     <div class="hd"><span class="raga">mohanam</span><span class="kind aroha">aroha</span><span class="cur">curated ✓</span></div>
     <div class="meta">24 notes · ~1.0 oct · Sa 198.5 Hz</div>
     <div class="links">
@@ -772,7 +786,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="mukhari">
     <div class="hd"><span class="raga">mukhari</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">29 notes · ~1.0 oct · Sa 197.3 Hz</div>
     <div class="links">
@@ -781,7 +795,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="nagaswarali">
     <div class="hd"><span class="raga">nagaswarali</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">30 notes · ~1.0 oct · Sa 197.4 Hz</div>
     <div class="links">
@@ -790,7 +804,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="nalinakanthi">
     <div class="hd"><span class="raga">nalinakanthi</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">26 notes · ~1.0 oct · Sa 196.3 Hz</div>
     <div class="links">
@@ -799,7 +813,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="nattai">
     <div class="hd"><span class="raga">nattai</span><span class="kind aroha">aroha</span><span class="rev" title="4 octave flips">⚠ check Sa</span><span class="draft">draft</span></div>
     <div class="meta">32 notes · ~1.0 oct · Sa 197.4 Hz</div>
     <div class="links">
@@ -808,7 +822,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="nattaikurinji">
     <div class="hd"><span class="raga">nattaikurinji</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">35 notes · ~1.0 oct · Sa 197.5 Hz</div>
     <div class="links">
@@ -817,7 +831,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="navarasakanada">
     <div class="hd"><span class="raga">navarasakanada</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">24 notes · ~1.0 oct · Sa 196.0 Hz</div>
     <div class="links">
@@ -826,7 +840,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="nayaki">
     <div class="hd"><span class="raga">nayaki</span><span class="kind aroha">aroha</span><span class="rev" title="4 octave flips">⚠ check Sa</span><span class="draft">draft</span></div>
     <div class="meta">27 notes · ~1.0 oct · Sa 195.8 Hz</div>
     <div class="links">
@@ -835,7 +849,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="neelambari">
     <div class="hd"><span class="raga">neelambari</span><span class="kind aroha">aroha</span><span class="rev" title="doesn't start on Sa">⚠ check Sa</span><span class="draft">draft</span></div>
     <div class="meta">39 notes · ~1.1 oct · Sa 198.5 Hz</div>
     <div class="links">
@@ -844,7 +858,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="neethimathi">
     <div class="hd"><span class="raga">neethimathi</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">42 notes · ~1.0 oct · Sa 196.2 Hz</div>
     <div class="links">
@@ -853,7 +867,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="pantuvarali">
     <div class="hd"><span class="raga">pantuvarali</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">32 notes · ~1.0 oct · Sa 194.4 Hz</div>
     <div class="links">
@@ -862,7 +876,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="poornachandrika">
     <div class="hd"><span class="raga">poornachandrika</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">28 notes · ~1.0 oct · Sa 197.1 Hz</div>
     <div class="links">
@@ -871,7 +885,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="poorvikalyani">
     <div class="hd"><span class="raga">poorvikalyani</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">35 notes · ~1.0 oct · Sa 195.3 Hz</div>
     <div class="links">
@@ -880,7 +894,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="ranjani">
     <div class="hd"><span class="raga">ranjani</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">34 notes · ~1.0 oct · Sa 195.9 Hz</div>
     <div class="links">
@@ -889,7 +903,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="rathipathipriya">
     <div class="hd"><span class="raga">rathipathipriya</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">27 notes · ~1.0 oct · Sa 197.3 Hz</div>
     <div class="links">
@@ -898,7 +912,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="reethigowlai">
     <div class="hd"><span class="raga">reethigowlai</span><span class="kind aroha">aroha</span><span class="rev" title="4 octave flips">⚠ check Sa</span><span class="draft">draft</span></div>
     <div class="meta">46 notes · ~1.4 oct · Sa 197.3 Hz</div>
     <div class="links">
@@ -907,7 +921,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="revagupti">
     <div class="hd"><span class="raga">revagupti</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">28 notes · ~1.0 oct · Sa 197.4 Hz</div>
     <div class="links">
@@ -916,7 +930,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="revati">
     <div class="hd"><span class="raga">revati</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">28 notes · ~1.0 oct · Sa 197.3 Hz</div>
     <div class="links">
@@ -925,7 +939,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="sahana">
     <div class="hd"><span class="raga">sahana</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">34 notes · ~1.3 oct · Sa 196.3 Hz</div>
     <div class="links">
@@ -934,7 +948,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="sama">
     <div class="hd"><span class="raga">sama</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">31 notes · ~1.0 oct · Sa 197.4 Hz</div>
     <div class="links">
@@ -943,7 +957,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="saramati">
     <div class="hd"><span class="raga">saramati</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">36 notes · ~1.0 oct · Sa 195.9 Hz</div>
     <div class="links">
@@ -952,7 +966,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="saranga">
     <div class="hd"><span class="raga">saranga</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">25 notes · ~1.0 oct · Sa 196.7 Hz</div>
     <div class="links">
@@ -961,7 +975,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="saraswathi">
     <div class="hd"><span class="raga">saraswathi</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">31 notes · ~1.0 oct · Sa 196.0 Hz</div>
     <div class="links">
@@ -970,7 +984,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="saveri">
     <div class="hd"><span class="raga">saveri</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">26 notes · ~1.0 oct · Sa 196.0 Hz</div>
     <div class="links">
@@ -979,7 +993,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="shankarabaranam">
     <div class="hd"><span class="raga">shankarabaranam</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">30 notes · ~1.0 oct · Sa 197.2 Hz</div>
     <div class="links">
@@ -988,7 +1002,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="shriragam">
     <div class="hd"><span class="raga">shriragam</span><span class="kind aroha">aroha</span><span class="rev" title="3 octave flips">⚠ check Sa</span><span class="draft">draft</span></div>
     <div class="meta">30 notes · ~1.0 oct · Sa 197.9 Hz</div>
     <div class="links">
@@ -997,7 +1011,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="sindhubhairavi">
     <div class="hd"><span class="raga">sindhubhairavi</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">32 notes · ~1.0 oct · Sa 196.5 Hz</div>
     <div class="links">
@@ -1006,7 +1020,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="sivaranjani">
     <div class="hd"><span class="raga">sivaranjani</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">25 notes · ~1.0 oct · Sa 196.1 Hz</div>
     <div class="links">
@@ -1015,7 +1029,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="sowrashtram">
     <div class="hd"><span class="raga">sowrashtram</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">28 notes · ~1.0 oct · Sa 197.1 Hz</div>
     <div class="links">
@@ -1024,7 +1038,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="sriranjani">
     <div class="hd"><span class="raga">sriranjani</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">22 notes · ~1.0 oct · Sa 198.0 Hz</div>
     <div class="links">
@@ -1033,7 +1047,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="subhapantuvarali">
     <div class="hd"><span class="raga">subhapantuvarali</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">32 notes · ~1.0 oct · Sa 196.9 Hz</div>
     <div class="links">
@@ -1042,7 +1056,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="suddhadhanyasi">
     <div class="hd"><span class="raga">suddhadhanyasi</span><span class="kind aroha">aroha</span><span class="rev" title="4 octave flips">⚠ check Sa</span><span class="draft">draft</span></div>
     <div class="meta">25 notes · ~1.0 oct · Sa 197.3 Hz</div>
     <div class="links">
@@ -1051,7 +1065,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="suddhasaveri">
     <div class="hd"><span class="raga">suddhasaveri</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">27 notes · ~1.0 oct · Sa 196.1 Hz</div>
     <div class="links">
@@ -1060,7 +1074,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="sumanesaranjani">
     <div class="hd"><span class="raga">sumanesaranjani</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">27 notes · ~1.0 oct · Sa 197.3 Hz</div>
     <div class="links">
@@ -1069,7 +1083,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="sunadavinodini">
     <div class="hd"><span class="raga">sunadavinodini</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">30 notes · ~1.0 oct · Sa 197.4 Hz</div>
     <div class="links">
@@ -1078,7 +1092,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="surutti">
     <div class="hd"><span class="raga">surutti</span><span class="kind aroha">aroha</span><span class="rev" title="4 octave flips">⚠ check Sa</span><span class="draft">draft</span></div>
     <div class="meta">27 notes · ~1.0 oct · Sa 198.9 Hz</div>
     <div class="links">
@@ -1087,7 +1101,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="surya">
     <div class="hd"><span class="raga">surya</span><span class="kind aroha">aroha</span><span class="rev" title="4 octave flips">⚠ check Sa</span><span class="draft">draft</span></div>
     <div class="meta">27 notes · ~2.0 oct · Sa 130.4 Hz</div>
     <div class="links">
@@ -1096,7 +1110,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="thilang">
     <div class="hd"><span class="raga">thilang</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">28 notes · ~1.0 oct · Sa 197.4 Hz</div>
     <div class="links">
@@ -1105,7 +1119,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="thodi">
     <div class="hd"><span class="raga">thodi</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">29 notes · ~1.4 oct · Sa 196.8 Hz</div>
     <div class="links">
@@ -1114,7 +1128,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="valaji">
     <div class="hd"><span class="raga">valaji</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">26 notes · ~1.0 oct · Sa 197.4 Hz</div>
     <div class="links">
@@ -1123,7 +1137,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="varali">
     <div class="hd"><span class="raga">varali</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">25 notes · ~1.0 oct · Sa 196.2 Hz</div>
     <div class="links">
@@ -1132,7 +1146,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="varamu">
     <div class="hd"><span class="raga">varamu</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">30 notes · ~1.0 oct · Sa 197.1 Hz</div>
     <div class="links">
@@ -1141,7 +1155,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="vasantha">
     <div class="hd"><span class="raga">vasantha</span><span class="kind aroha">aroha</span><span class="cur">curated ✓</span></div>
     <div class="meta">29 notes · ~1.0 oct · Sa 197.5 Hz</div>
     <div class="links">
@@ -1150,7 +1164,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="vasanthi">
     <div class="hd"><span class="raga">vasanthi</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">31 notes · ~1.0 oct · Sa 197.3 Hz</div>
     <div class="links">
@@ -1159,7 +1173,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="vijayanagari">
     <div class="hd"><span class="raga">vijayanagari</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">35 notes · ~1.0 oct · Sa 196.3 Hz</div>
     <div class="links">
@@ -1168,7 +1182,7 @@
       
     </div>
   </div>
-  <div class="card">
+  <div class="card" data-raga="yadukulakambhoji">
     <div class="hd"><span class="raga">yadukulakambhoji</span><span class="kind aroha">aroha</span><span class="draft">draft</span></div>
     <div class="meta">31 notes · ~1.0 oct · Sa 197.4 Hz</div>
     <div class="links">
@@ -1177,3 +1191,28 @@
       
     </div>
   </div>
+</div>
+<p class="empty" id="empty" hidden>No raga matches that.</p>
+<script>
+(() => {
+  // Same normalisation the cards were stamped with: transliterations differ in
+  // spacing, hyphens and capitals, so none of those should have to be guessed.
+  const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const cards = [...document.querySelectorAll('.card')];
+  const q = document.getElementById('q'), count = document.getElementById('count'), empty = document.getElementById('empty');
+  const apply = () => {
+    const n = norm(q.value);
+    let shown = 0;
+    for (const c of cards) {
+      const hit = !n || c.dataset.raga.includes(n);
+      c.hidden = !hit;
+      if (hit) shown++;
+    }
+    empty.hidden = shown > 0;
+    count.textContent = n ? shown + ' of ' + cards.length : cards.length + ' notations';
+  };
+  q.addEventListener('input', apply);
+  q.addEventListener('keydown', (e) => { if (e.key === 'Escape') { q.value = ''; apply(); } });
+  apply();
+})();
+</script>
