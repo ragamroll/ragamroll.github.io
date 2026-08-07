@@ -12,7 +12,7 @@ import { BOXES, EDO, stepFreq, defaultShrutiStep } from './core/shruti.js';
 import { encodeShareToken, decodeShareToken } from './core/share.js';
 import { VERSION, BUILD_DATE } from './version.js';
 import { midiToName } from './core/tuning.js';
-import { serializeInline } from './core/gamaka-inline.js';
+import { serializeInline, sampleCurve, GAMAKA_SAMPLES } from './core/gamaka-inline.js';
 import { extractAnchors, pointsToAnchors, addAnchor, removeAnchor, moveAnchor } from './core/gamaka-curve.js';
 import { buildSequence } from './core/midi/sequence.js';
 import { writeSMF } from './core/midi/smf.js';
@@ -366,9 +366,9 @@ function startHandleDrag(which,e){ const {x}=evtPos(e);
 function positionHandles(){ const g=$('gutter'); if (mode!=='roll'){ g.style.display='none'; return; } g.style.display='';
   $('mkA').style.top=yVirt(markerA)+'px'; $('mkB').style.top=yVirt(markerB)+'px'; }
 function roundRect(x,y,w,h,r){ r=Math.min(r,w/2,h/2); ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
-function sampleCurve(c,u){ if (c.length===1) return c[0][1];
-  for (let k=1;k<c.length;k++){ if (u<=c[k][0]){ const [u0,s0]=c[k-1],[u1,s1]=c[k]; let t=(u-u0)/Math.max(1e-6,u1-u0); t=t*t*(3-2*t); return s0+(s1-s0)*t; } }
-  return c[c.length-1][1]; }
+// sampleCurve was a byte-identical second copy of core/gamaka-inline.js's. Two
+// copies of the interpolator are two chances for the roll and the players to
+// disagree about what a gamaka means, which is exactly the bug being closed here.
 function drawCurve(nn,t0,t1,color,wd){ const c=nn.curve; if (!c||!c.length) return;
   ctx.strokeStyle=color; ctx.lineWidth=wd; ctx.lineJoin='round'; ctx.lineCap='round'; ctx.beginPath();
   const N=Math.max(24,c.length*10);
@@ -900,7 +900,7 @@ function voice(a,dest,when,dur,nn,uStart=0,uEnd=1){ const o=a.createOscillator()
   const atk=Math.min(0.012,dur*0.35), rel=Math.min(0.035,dur*0.45), hold=Math.max(when+atk, when+dur-rel);
   const g=a.createGain(); g.gain.setValueAtTime(0.0001,when); g.gain.linearRampToValueAtTime(0.2,when+atk);
   g.gain.setValueAtTime(0.2,hold); g.gain.linearRampToValueAtTime(0.0001,when+dur);
-  if (nn.curve&&nn.curve.length>=2){ const N=64,arr=new Float32Array(N); for (let k=0;k<N;k++) arr[k]=freqOf(sampleCurve(nn.curve,uStart+(uEnd-uStart)*k/(N-1))); o.frequency.setValueCurveAtTime(arr,when,dur); }
+  if (nn.curve&&nn.curve.length>=2){ const N=GAMAKA_SAMPLES,arr=new Float32Array(N); for (let k=0;k<N;k++) arr[k]=freqOf(sampleCurve(nn.curve,uStart+(uEnd-uStart)*k/(N-1))); o.frequency.setValueCurveAtTime(arr,when,dur); }
   else o.frequency.setValueAtTime(freqOf(nn.step),when);
   o.connect(g); g.connect(dest); o.start(when); o.stop(when+dur+0.05); if (session) session.oscs.push(o); }
 function playNote(i){ const a=ensureAudio(); if (!a) return; const dest=newSession(a), now=a.currentTime+0.03, dur=Math.max(0.5,NOTES[i].dur*secPerUnit());

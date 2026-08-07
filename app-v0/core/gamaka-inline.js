@@ -75,6 +75,17 @@ export function sampleCurve(c, u) {
   return c[c.length - 1][1];
 }
 
+// How many points every player resamples a curve to before ramping through it.
+// Shared, because the density IS audible: a player interpolates linearly between
+// its samples, so a coarse grid flattens the smoothstep's curvature. Measured
+// against the exact curve over the 87 gamakas in curated/, worst case across all
+// of them: 48 points 18.3 cents, 64 -> 11.9, 96 -> 5.3, 192 -> 3.3, 384 -> 1.1.
+// 192 puts the worst case under the ~5 cent JND (median note 0.5c) at a cost of
+// one Float32Array or one automation event per sample per note, which is nothing.
+// Two players used to differ here (48 and 64) and rendered the same notation up to
+// 11 cents apart.
+export const GAMAKA_SAMPLES = 192;
+
 const isWs = (c) => c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === '\f' || c === '\v';
 
 // Re-emit inline attributes into the srgm text. `curves` is keyed by the note

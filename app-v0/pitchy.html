@@ -356,6 +356,12 @@
     import { BOXES, EDO, nameForSlot, defaultShrutiStep, stepFreq, P_STEP } from './core/shruti.js';
     // Parse pasted srgm back into notes (two-way notation).
     import { parse } from './core/parser.js';
+    // The one interpolator every player and roll reads a gamaka through. Pitchy
+    // used to draw straight lines between the anchors and ramp straight between
+    // them too — self-consistent, but a different melody from the one draw and the
+    // app produced out of the same notation (median 5 cents apart on the curated
+    // corpus, worst 60).
+    import { sampleCurve, GAMAKA_SAMPLES } from './core/gamaka-inline.js';
     // Raga data — to emphasize a chosen raga's swaras among the 22 lines and
     // name each by the LETTER the raga assigns (a shared shruti like step 14 is
     // R3b or G2b depending on whether the raga uses it as Ri or Ga).
@@ -1110,12 +1116,23 @@
       persistModelSoon();   // every model mutation flows through here -> save the tuned notes
     }
     // Expand the pitch axis to include every note's step (pasted notes may sit
-    // outside the audio-derived range).
+    // outside the audio-derived range) AND everywhere its gamaka reaches. Fitting
+    // to the steps alone left an ornament taller than the 4-step margin drawn off
+    // the canvas: the note sat on screen, its curve ran off the edge, and nothing
+    // said so. A curve-derived gamaka is inside the contour the axis came from, so
+    // this only ever mattered for a notated one — pasted, shared or restored, which
+    // is every path that reaches here.
+    // The anchors bound the drawn curve: smoothstep is monotone between two
+    // anchors, so it never overshoots them and there is nothing beyond them to fit.
     function fitAxisToNotes() {
       if (!notes.length) return;
-      const ps = notes.map((n) => n.step);
-      stepMin = Math.min(stepMin, Math.min(...ps) - 4);
-      stepMax = Math.max(stepMax, Math.max(...ps) + 4);
+      let lo = Infinity, hi = -Infinity;
+      for (const n of notes) {
+        lo = Math.min(lo, n.step); hi = Math.max(hi, n.step);
+        if (n.gamaka) for (const [, d] of n.gamaka) { lo = Math.min(lo, n.step + d); hi = Math.max(hi, n.step + d); }
+      }
+      stepMin = Math.min(stepMin, lo - 4);
+      stepMax = Math.max(stepMax, hi + 4);
       rebuildLines();
     }
     // The axis is derived from the CLEANED contour, but the raw overlay draws
@@ -2161,9 +2178,13 @@
         ctx.lineWidth = derived ? 1.2 : 1.8;
         if (derived) ctx.setLineDash([3, 3]);
         ctx.beginPath();
-        for (let k = 0; k < g.length; k++) {
-          const u = Math.min(1, Math.max(0, g[k][0]));
-          const x = Xs(n.step + g[k][1]), y = Yt(n.t0 + u * dur);
+        // Sampled, not anchor-to-anchor: the anchors are what is stored, but the
+        // smoothstep between them is what every player sounds, and the roll has to
+        // show the pitch that will be heard. Same density draw's roll uses.
+        const N = Math.max(24, g.length * 10);
+        for (let k = 0; k <= N; k++) {
+          const u = k / N;
+          const x = Xs(n.step + sampleCurve(g, u)), y = Yt(n.t0 + u * dur);
           if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
         ctx.stroke();
@@ -2555,9 +2576,14 @@
         const osc = actx.createOscillator(); osc.type = 'triangle';
         const f0 = noteFreq(n.step);
         if (n.gamaka && n.gamaka.length >= 2) {          // bend along the note's curve
-          const dur = end - start;
-          osc.frequency.setValueAtTime(f0 * Math.pow(2, n.gamaka[0][1] / EDO), start);
-          for (const [u, d] of n.gamaka) osc.frequency.linearRampToValueAtTime(f0 * Math.pow(2, d / EDO), start + Math.max(0, Math.min(1, u)) * dur);
+          // Ramp through the SAMPLED curve, not anchor to anchor. Ramping between
+          // the anchors plays straight lines where every other player plays the
+          // smoothstep, and the same notation came out as a different melody here.
+          const dur = end - start, N = GAMAKA_SAMPLES;
+          osc.frequency.setValueAtTime(f0 * Math.pow(2, sampleCurve(n.gamaka, 0) / EDO), start);
+          for (let k = 1; k < N; k++) {
+            osc.frequency.linearRampToValueAtTime(f0 * Math.pow(2, sampleCurve(n.gamaka, k / (N - 1)) / EDO), start + dur * k / (N - 1));
+          }
         } else {
           osc.frequency.value = f0;
         }
