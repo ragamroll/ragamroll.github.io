@@ -969,11 +969,19 @@ function syncEditor(){ const t=$('editor'); if (t && document.activeElement!==t)
 // is what gets saved, shared and reloaded. If it emits something the parser
 // cannot read back, whatever it mangled is already lost -- so it is read back
 // here, where it was written, rather than by whoever opens the link.
+// What a share link carries: the notation, plus the mixer levels ONLY when they
+// are not the defaults. Otherwise every ordinary link would change shape for a
+// setting nobody touched. Both places that build a link go through here — a link
+// opened with the tala silenced must not lose that on the first edit, and editing
+// is exactly what the other builder runs on.
+const shareBody = (src) => (droneVol!==DEFAULT_MIX.dv || talaVol!==DEFAULT_MIX.tv)
+  ? JSON.stringify({ v:2, srgm:src, mix:{ dv:droneVol, tv:talaVol } })
+  : src;
 async function rebuildShare(){ srcText=inlineSrc(); syncEditor();
   try { reportDiagnostics(parse(srcText), true); }
   catch(_){ reportDiagnostics({ diagnostics:[{ message:'the generated notation could not be parsed at all' }] }, true); }
   try{ localStorage.setItem(LS_KEY, srcText); }catch(_){}
-  try{ shareLink=location.origin+location.pathname+'#'+await encodeShareToken(srcText); }catch(e){ shareLink=''; } }
+  try{ shareLink=location.origin+location.pathname+'#'+await encodeShareToken(shareBody(srcText)); }catch(e){ shareLink=''; } }
 function scheduleShare(){ clearTimeout(shareTimer); shareTimer=setTimeout(rebuildShare,150); }
 // Editor edits: reparse the srgm the user typed (debounced), rebuild the roll.
 let editTimer=null;
@@ -981,7 +989,7 @@ async function onEditorInput(){ hideToast(); if (mode==='draw') $('back').click(
   srcText=$('editor').value; buildModel(srcText);
   syncControls(); resizeCanvas(); render();
   try{ localStorage.setItem(LS_KEY, srcText); }catch(_){}
-  try{ shareLink=location.origin+location.pathname+'#'+await encodeShareToken(srcText); }catch(e){ shareLink=''; } }
+  try{ shareLink=location.origin+location.pathname+'#'+await encodeShareToken(shareBody(srcText)); }catch(e){ shareLink=''; } }
 $('share').onclick=()=>{ const url=shareLink; if (!url){ rebuildShare(); return; }
   const b=$('share'), orig=b.textContent, done=m=>{ b.textContent=m; setTimeout(()=>b.textContent=orig,1800); };
   if (navigator.share){ navigator.share({ title:'RagamRoll gamakas', url }).then(()=>done('Shared ✓')).catch(()=>{}); return; }
@@ -993,17 +1001,36 @@ $('share').onclick=()=>{ const url=shareLink; if (!url){ rebuildShare(); return;
 function logNotes(tag){ try{ console.log(`[draw] ${tag} — idx:tok swara [pts]:`,
   NOTES.map((n,i)=>`${i}:t${n.tok} ${n.swara}${n.octave}${n.curve?` [${n.curve.length}]`:''}`).join('   ')); }catch(_){}
 }
-// A share hash is pako(srgm text). Legacy links were pako(JSON {v,src,g}); detect
-// and convert those once (apply the index-keyed curves; they re-emit inline).
+// The mixer levels a link can carry. Kept to what a link should be allowed to set
+// on someone else's page: how loud the accompaniment is, nothing about the piece.
+// Absent keys keep the page's current value, so a link may set one and leave the
+// other alone.
+const DEFAULT_MIX={ dv:0.5, tv:0.5 };
+function applyMix(u){
+  if (!u || typeof u!=='object') return;
+  const set=(k,v)=>{ if (!(typeof v==='number') || !isFinite(v)) return; const c=Math.max(0,Math.min(1,v));
+    if (k==='dv'){ droneVol=c; if ($('dronevol')) $('dronevol').value=String(c); if (session&&session.dBus&&AC) session.dBus.gain.setTargetAtTime(c,AC.currentTime,0.02); }
+    else { talaVol=c; if ($('talavol')) $('talavol').value=String(c); if (session&&session.tBus&&AC) session.tBus.gain.setTargetAtTime(c,AC.currentTime,0.02); } };
+  set('dv',u.dv); set('tv',u.tv);
+}
+// A share hash is pako(srgm text), or pako(JSON {v:2, srgm, mix}) when the link
+// carries mixer levels — the /ragas links do, to open with the tala strums at zero:
+// those recordings are free-rhythm arohana/avarohana and signature phrases, so
+// veena accents on a cycle nobody sang are noise. Legacy links were
+// pako(JSON {v,src,g}); detect and convert those once (apply the index-keyed
+// curves; they re-emit inline).
 function applyShared(decoded){
   hideToast();
   userGridMin = userGridMax = userGridBottom = null;   // new composition: start at auto/seed bounds, not a stale stretch
-  let legacy=null;
-  try{ const o=JSON.parse(decoded); if (o&&typeof o.src==='string') legacy=o; }catch(_){}
-  console.log(`[draw] pako decoded — ${legacy?'LEGACY {v,src,g}':'raw srgm text'} (${decoded.length} chars):\n%s`,
-    legacy ? JSON.stringify(legacy, null, 1) : decoded);
+  let legacy=null, carried=null;
+  try{ const o=JSON.parse(decoded);
+    if (o&&typeof o.src==='string') legacy=o;
+    else if (o&&typeof o.srgm==='string') carried=o; }catch(_){}
+  console.log(`[draw] pako decoded — ${legacy?'LEGACY {v,src,g}':carried?'{v:2, srgm, mix}':'raw srgm text'} (${decoded.length} chars):\n%s`,
+    legacy||carried ? JSON.stringify(legacy||carried, null, 1) : decoded);
   if (legacy){ buildModel(legacy.src);
     if (legacy.g) for (const k in legacy.g){ const i=+k; if (NOTES[i]) NOTES[i].curve=legacy.g[k].map(p=>[p[0],p[1]]); } }
+  else if (carried){ applyMix(carried.mix); buildModel(carried.srgm); }
   else buildModel(decoded);   // raw srgm text; inline gamaka decoded in buildModel
   logNotes('after applyShared');
 }

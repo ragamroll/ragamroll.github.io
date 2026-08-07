@@ -54,9 +54,17 @@ function decodeInt(s) {
   return Number.isNaN(n) ? NaN : Math.trunc(n);
 }
 
+// A piece with no tala: alapana, and the arohana/avarohana and signature phrases
+// the detector notates, which are sung free of any cycle. measure 0 is already the
+// "no cycle" case everywhere downstream — buildTalaTrack emits no track, draw draws
+// no tala grid and schedules no accent strums — so naming it is all that was
+// missing. `alapana` is the same thing under the name a musician would use.
+export const NO_TALA = new Set(['none', 'nil', 'alapana']);
+
 // tala_elem(v) where v = [name, beat]
 function talaElem(v) {
   const name = (v && v[0] != null) ? v[0] : 'adi';
+  if (NO_TALA.has(String(name).toLowerCase())) return { tala: [0, []], beat: 0, measure: 0, accents: [] };
   const tala = TALA_MAP[name] ?? TALA_MAP['adi'];   // unknown tala -> adi (no crash)
   let beat;
   const b = decodeInt(v && v[1]);
@@ -189,6 +197,12 @@ export function parse(input) {
         }
         case 'Tala': case 'tala': {
           const parts = val.split(',');
+          // `none` is a declaration, not a misspelling — no diagnostic, no fallback
+          // to adi, and no beat to validate.
+          if (NO_TALA.has(String(parts[0]).toLowerCase())) {
+            events.push({ type: 'tala', props: talaElem(['none']) });
+            break;
+          }
           if (!Object.prototype.hasOwnProperty.call(TALA_MAP, parts[0])) {
             const lower = String(parts[0]).toLowerCase();     // case-insensitive tala name
             if (Object.prototype.hasOwnProperty.call(TALA_MAP, lower)) {
