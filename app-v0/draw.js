@@ -927,7 +927,9 @@ $('stop').onclick=()=>{ stopPlayback(); paused=false; playPos=null; setPlayBtn('
 let shareLink='', shareTimer=null;
 // The composition text with the drawn curves inline, each NOTE-RELATIVE (delta).
 function inlineSrc(){ const curves={};
-  NOTES.forEach((n)=>{ if (n.curve) curves[n.tok]=n.curve.map(([u,s])=>[Math.round(u*100)/100, Math.round(s-n.step)]); });
+  // 2dp on the delta as well as on u -- rounding it to a whole step here would
+  // undo the precision detect.js keeps, every time draw re-serialised.
+  NOTES.forEach((n)=>{ if (n.curve) curves[n.tok]=n.curve.map(([u,s])=>[Math.round(u*100)/100, Math.round((s-n.step)*100)/100]); });
   return serializeInline(srcText, curves); }
 
 // ---------- model<->srgm edit glue (note-edit core wiring) ----------

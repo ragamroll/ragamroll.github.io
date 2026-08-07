@@ -108,6 +108,10 @@ const REF_WIN = 9;
 // fixtures caught. Dropping the noise is enough — the bad frame never becomes
 // the reference in the first place, so continuity needs no special case.
 const MAX_OCTAVE_FIX = 2;
+// Two readings within FLAT of each other count as the same pitch: 0.2 of a step
+// is 4.5 cents, just under the ~5 cent just-noticeable difference, so collapsing
+// them throws away nothing anyone can hear.
+const FLAT = 0.2;
 const CLAMP = 60;          // draw's max gamaka span (± steps); EDO imported from shruti.js
 const TARGET = 120;        // downsample the ~86 fps contour to this many points
 
@@ -344,7 +348,12 @@ export function gamakaForNote(n, cleanedPoints, saRefHz) {
   let pts = [];
   for (const p of cleanedPoints) {
     if (p.frequency == null || p.time < n.t0 - 1e-6 || p.time > n.t1 + 1e-6) continue;
-    pts.push([(p.time - n.t0) / dur, Math.round(stepOf(p.frequency, saRefHz) - n.step)]);
+    // Fractional shrutis, 2dp. One 53-EDO step is 22.6 cents, so rounding to a
+    // whole step discarded up to 11 cents -- twice the ~5 cent JND -- and a note
+    // sung half a step off its anchor came back as a staircase. 2dp is 0.23
+    // cents, far finer than that, and `-2` still means what it always meant so
+    // every existing gamaka reads unchanged.
+    pts.push([(p.time - n.t0) / dur, Math.round((stepOf(p.frequency, saRefHz) - n.step) * 100) / 100]);
   }
   if (pts.length < 2) return null;
   const N = 24;
@@ -361,9 +370,9 @@ export function gamakaForNote(n, cleanedPoints, saRefHz) {
       // code kept only the first (the assignment it made was a no-op), so a
       // sustained segment shrank to a single sample and whatever came next
       // ramped away from the hold's START instead of from where it let go.
-      if (d === pv[1]) {
+      if (Math.abs(d - pv[1]) <= FLAT) {
         const pv2 = clean[clean.length - 2];
-        if (pv2 && pv2[1] === d) clean[clean.length - 1] = [u, d];   // extend the run
+        if (pv2 && Math.abs(pv2[1] - d) <= FLAT) clean[clean.length - 1] = [u, d];   // extend the run
         else clean.push([u, d]);                                     // open it: this is its end so far
         continue;
       }
@@ -372,7 +381,10 @@ export function gamakaForNote(n, cleanedPoints, saRefHz) {
   }
   if (clean.length < 2) return null;
   clean[clean.length - 1][0] = 1;
-  if (clean.every((p) => p[1] === 0)) return null;   // steady swara -> no gamaka
+  // Steady within a hair's breadth is steady. Exact equality was enough while
+  // deltas were whole steps; with fractions nothing is ever exactly equal.
+  const lo = Math.min(...clean.map((p) => p[1])), hi = Math.max(...clean.map((p) => p[1]));
+  if (hi - lo <= FLAT && Math.abs(hi) <= FLAT) return null;   // steady swara -> no gamaka
   return clean;
 }
 
