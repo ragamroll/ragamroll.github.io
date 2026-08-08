@@ -182,7 +182,13 @@
       border-radius: 8px; background: #17171b; }
     body.viewer #headrow h1 { text-align: center; font-size: 1.35rem; }
     /* All viewer cards match the canvas card's outer width (440 canvas + 2px border). */
-    body.viewer #headrow, body.viewer #viewerbar { width: 442px; max-width: 100%; box-sizing: border-box; }
+    /* The viewer column is as wide as the raga needs, not a fixed 442px. A recording
+       spanning more than an octave was squeezed into that column inside a 1500px
+       window, so the pitch axis -- the thing the page exists to show -- was the most
+       cramped part of it. sizeViewer() sets --vieww from the axis; the 442px here is
+       only the fallback before it runs. */
+    body.viewer { --vieww: 442px; }
+    body.viewer #headrow, body.viewer #viewerbar { width: var(--vieww); max-width: 100%; box-sizing: border-box; }
     body.viewer:not(.editing) #notewrap { display: none; }   /* empty editor pane -> drop it so the grid centres */
     /* The viewer is one centred column of equal-width cards. #stage is stretched
        at desktop widths so the roll can grow into the space a collapsed notation
@@ -190,7 +196,12 @@
        stretching only made #stage span the full window while the canvas stayed
        440px and hugged its left edge, under headrow and the bar which were
        centred. Nothing to grow into here, so it centres with the rest. */
-    body.viewer #stage { align-self: center; }
+    /* The stage takes the column width too, or the roll stays at BASE_W_MIN while the
+       header widens around it: baseW() reads the scroller, and a content-sized
+       scroller is whatever the canvas already was — circular, and it settles at the
+       minimum. */
+    body.viewer #stage { align-self: center; width: var(--vieww); max-width: 100%; }
+    body.viewer #stage > #scroll { width: 100%; }
     .chlabel { cursor: pointer; }
     .chlabel.muted { text-decoration: line-through; opacity: .5; }
     #audioq { color: #e0a53a; }
@@ -1124,6 +1135,21 @@
     // is every path that reaches here.
     // The anchors bound the drawn curve: smoothstep is monotone between two
     // anchors, so it never overshoots them and there is nothing beyond them to fit.
+    // How wide the viewer column has to be for the pitch range to be legible. The
+    // canvas maps [stepMin,stepMax] across its width, so a wide raga in a narrow
+    // column simply squashes every shruti together; give each step a few pixels and
+    // let the window cap it.
+    const PX_PER_STEP = 8;
+    function sizeViewer() {
+      if (!document.body.classList.contains('viewer')) return;
+      const span = Math.max(1, stepMax - stepMin);
+      const room = Math.max(320, Math.floor(window.innerWidth - 24));
+      const want = Math.min(room, Math.max(442, Math.round(span * PX_PER_STEP)));
+      document.body.style.setProperty('--vieww', want + 'px');
+      applyZoom(true);                       // the canvas takes its base width from the column
+    }
+    window.addEventListener('resize', sizeViewer);
+
     function fitAxisToNotes() {
       if (!notes.length) return;
       let lo = Infinity, hi = -Infinity;
@@ -1134,6 +1160,7 @@
       stepMin = Math.min(stepMin, lo - 4);
       stepMax = Math.max(stepMax, hi + 4);
       rebuildLines();
+      sizeViewer();
     }
     // The axis is derived from the CLEANED contour, but the raw overlay draws
     // frames at their true pitch — and cleaning is exactly what pulls an outlier
@@ -2910,6 +2937,8 @@
     // toggled. Additive to the share-open path.
     function enterViewer(raga) {
       document.body.classList.add('viewer');
+      sizeViewer();          // the axis is already known here; the class was not, so
+                             // the sizing call made while fitting it did nothing
       const h1 = document.querySelector('h1');
       if (h1) h1.textContent = raga ? `Rāga ${raga}` : 'RagaM-Roll';
       const vb = $('viewerbar');

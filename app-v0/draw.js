@@ -127,11 +127,15 @@ function recomputeGridBounds(){
   const ps = NOTES.map(n => n.step);
   let notesMin, notesMax, autoMin, autoMax;
   if (ps.length){ notesMin = Math.min(...ps); notesMax = Math.max(...ps); autoMin = notesMin - 9; autoMax = notesMax + 9; }
-  else { notesMin = 0; notesMax = EDO; autoMin = -9; autoMax = EDO + 9; }   // blank piece: seed a sensible one-octave-ish pitch range
+  // Blank piece: the middle octave, with HALF an octave either side. Nine steps of
+  // margin (a sixth of an octave) left barely anywhere to put a note outside S..S,
+  // and the first thing anyone does on a blank roll is reach past the tonic.
+  else { notesMin = 0; notesMax = EDO; autoMin = -Math.round(EDO / 2); autoMax = EDO + Math.round(EDO / 2); }
   stepMin = userGridMin != null ? Math.min(userGridMin, notesMin) : autoMin;
   stepMax = userGridMax != null ? Math.max(userGridMax, notesMax) : autoMax;
   if (!(stepMax > stepMin)) { stepMin = -26; stepMax = 66; }
   gridPitches = buildGridPitches();
+  PAD.t = labelDepth(gridPitches);
 }
 // Pitch-header rows: the raga's swara rows spanning the current [stepMin,stepMax], plus any
 // out-of-raga note pitches. So the full scale shows across the visible range (blank or not) and
@@ -183,7 +187,19 @@ let playing=false, paused=false, playStart=0, rafId=0, playPos=null;   // playhe
 let playFromU=0, playToU=0, pausedAt=0, pausedTo=0;                    // playback range + pause point
 let markerA=0, markerB=0, ctxTime=0, markerDrag=null;                 // A–B segment markers (length-units) + drag state
 const cssvar = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+// t is not fixed: the pitch labels stand upright (parallel to their own grid lines),
+// so the header has to be as deep as the LONGEST label is long. Horizontal chips
+// collided with each other on a narrow screen — a name like G2b/N1a is wider than the
+// gap between two shrutis — and rotating them trades that width for header depth.
 const PAD = { l:40, r:12, t:24, b:12 };
+const PAD_T_MIN = 24, LABEL_CHIP_H = 14;
+function labelDepth(gp) {
+  if (!gp || !gp.length) return PAD_T_MIN;
+  ctx.save(); ctx.font = 'bold 10px ' + cssvar('--mono');
+  let w = 0; for (const g of gp) w = Math.max(w, ctx.measureText(g.label).width);
+  ctx.restore();
+  return Math.max(PAD_T_MIN, Math.round(w + 8) + 12);
+}
 const plot = () => ({ x:PAD.l, y:PAD.t, w:CSSW-PAD.l-PAD.r, h:CSSH-PAD.t-PAD.b });
 function xRange(){ if (mode==='draw'){ const c=NOTES[sel].step; return [c-drawSpan, c+drawSpan]; } return [stepMin, stepMax]; }
 function X(s){ const [a,b]=xRange(), p=plot(); return p.x + (s-a)/(b-a)*p.w; }
@@ -237,11 +253,17 @@ function render(){
     ctx.strokeStyle=hair; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x,p.y); ctx.lineTo(x,p.y+p.h); ctx.stroke();
     // Header label as a piano-key chip: dark = black key, light = white key
     // (nearest 12-EDO semitone to the chosen Sa).
+    // Upright, running along its own grid line. Rotated, a chip is only LABEL_CHIP_H
+    // wide however long its name, so two shrutis a few pixels apart no longer print
+    // over each other.
     const black=keyIsBlack(g.step); ctx.font='bold 10px '+cssvar('--mono');
-    const cw=ctx.measureText(g.label).width+8, ch=14, cx=x-cw/2, cy=p.y-19;
-    ctx.fillStyle=black?'#20242b':'#efe6d0'; roundRect(cx,cy,cw,ch,4); ctx.fill();
+    const cw=ctx.measureText(g.label).width+8, ch=LABEL_CHIP_H;
+    ctx.save(); ctx.translate(x, p.y-6-cw/2); ctx.rotate(-Math.PI/2);
+    ctx.fillStyle=black?'#20242b':'#efe6d0'; roundRect(-cw/2,-ch/2,cw,ch,4); ctx.fill();
     ctx.strokeStyle='rgba(0,0,0,.25)'; ctx.lineWidth=.5; ctx.stroke();
-    ctx.fillStyle=black?'#efe6d0':'#20242b'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(g.label, x, cy+ch/2+.5); ctx.textBaseline='alphabetic';
+    ctx.fillStyle=black?'#efe6d0':'#20242b'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(g.label, 0, .5);
+    ctx.restore(); ctx.textBaseline='alphabetic';
     ctx.font='11px '+cssvar('--mono'); }
   const [ta,tb]=yStartEnd();
   // Visible time window (roll: only the scrolled slice; draw: the whole note).
@@ -922,6 +944,18 @@ $('play').onclick=()=>{ if (mode==='draw'){ playNote(sel); return; }
   if (paused){ playFrom(pausedAt,pausedTo); return; }
   const [lo,hi]=segRange(); playFrom(lo,hi); };
 $('stop').onclick=()=>{ stopPlayback(); paused=false; playPos=null; setPlayBtn('▶',playLabel()); if (mode==='roll') render(); };
+// Back to the start of what Play would play -- marker A when a segment is set, the
+// top of the piece otherwise. Distinct from Stop, which ends playback and takes the
+// playhead off the roll entirely: rewinding PARKS the playhead at the start, so you
+// can see where the next Play begins.
+//
+// It has to clear `paused`. Pause remembers where it stopped and Play resumes there,
+// so rewinding a paused piece without clearing it would move the playhead to the top
+// and then resume from the middle anyway -- the one bug this button invites.
+$('rewind').onclick=()=>{ const [lo,hi]=segRange();
+  if (playing){ stopPlayback(); playFrom(lo,hi); return; }   // restart from the top, still playing
+  paused=false; pausedAt=lo; pausedTo=hi; playPos=lo;
+  setPlayBtn('▶',playLabel()); if (mode==='roll') render(); };
 
 // ---------- source text (inline gamaka) + share ----------
 let shareLink='', shareTimer=null;
@@ -1071,7 +1105,7 @@ $('fileinput').onchange=async e=>{ const f=e.target.files[0]; e.target.value='';
 function download(name, data, type){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([data],{type})); a.download=name; a.click(); URL.revokeObjectURL(a.href); }
 $('save').onclick=()=>download(docName+'.srgm', srcText, 'text/plain');
 $('exportmidi').onclick=()=>{ try{ download(docName+'.mid', writeSMF(buildSequence(parse(srcText))), 'audio/midi'); }catch(e){ window.alert('MIDI export failed: '+e.message); } };
-window.__rr = { notes:()=>NOTES, X, Y, starts:()=>starts, get shareLink(){ return shareLink; }, get playPos(){ return playPos; }, get markerA(){ return markerA; }, get markerB(){ return markerB; }, get talaMeasure(){ return talaMeasure; }, get talaAccents(){ return talaAccents; }, get droneVol(){ return droneVol; }, get talaVol(){ return talaVol; }, inlineSrc:()=>inlineSrc(), rebuild:()=>rebuildShare(), get src(){ return srcText; } };
+window.__rr = { notes:()=>NOTES, X, Y, starts:()=>starts, get playing(){ return playing; }, get paused(){ return paused; }, get stepMin(){ return stepMin; }, get stepMax(){ return stepMax; }, get padTop(){ return PAD.t; }, gridSteps:()=>gridPitches.map(g=>g.step), labelChipW:()=>LABEL_CHIP_H, get shareLink(){ return shareLink; }, get playPos(){ return playPos; }, get markerA(){ return markerA; }, get markerB(){ return markerB; }, get talaMeasure(){ return talaMeasure; }, get talaAccents(){ return talaAccents; }, get droneVol(){ return droneVol; }, get talaVol(){ return talaVol; }, inlineSrc:()=>inlineSrc(), rebuild:()=>rebuildShare(), get src(){ return srcText; } };
 // Populate the examples dropdown from the manifest (same source as the app).
 fetch('./examples/index.json').then(r=>r.json()).then(list=>{
   const sel=$('exsel'); for (const n of list){ const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); }
