@@ -86,19 +86,35 @@ export function headerColumns(ragas, name, ab) {
   });
 }
 
-// The set of box indices a raga occupies (one per present swara, at its
-// just-intonation comma) — the per-row X strip.
-export function ragaFootprint(ragas, name) {
+// The boxes a given set of swara LETTERS occupies, each at its just-intonation
+// comma. Split out because a raga's ascent and descent need not use the same
+// swaras — abheri ascends S G M P N and descends S N D P M G R S — so drawing them
+// separately means asking for one direction's letters at a time. The comma choice
+// stays here rather than at the call site: two copies of it would eventually
+// disagree about which Ri a raga takes, and nothing downstream could tell.
+// letter -> box index. Which BOX a raga's Ri lands in is the comma decision, and
+// the letter has to survive it: a diagram that draws the swaras needs to know that
+// this box is the Ga, not merely that it is occupied.
+export function boxForLetters(ragas, name, letters) {
   const { varieties } = ragaVarieties(ragas, name);
-  const present = presentLetters(ragas, name);
   const ab = defaultAb(varieties);
-  const idx = new Set();
-  if (present.has('S')) idx.add(boxIndexOfStep(S_STEP));
-  if (present.has('P')) idx.add(boxIndexOfStep(P_STEP));
+  const m = new Map();
+  if (letters.has('S')) m.set('S', boxIndexOfStep(S_STEP));
+  if (letters.has('P')) m.set('P', boxIndexOfStep(P_STEP));
   for (const L of ['R', 'G', 'M', 'D', 'N']) {
-    if (!present.has(L) || varieties[L] == null) continue;
+    if (!letters.has(L) || varieties[L] == null) continue;
     const i = boxIndexOfStep(stepForVariety(L, varieties[L], ab[L]));
-    if (i >= 0) idx.add(i);
+    if (i >= 0) m.set(L, i);
   }
-  return idx;
+  return m;
+}
+
+export function footprintForLetters(ragas, name, letters) {
+  return new Set(boxForLetters(ragas, name, letters).values());
+}
+
+// The set of box indices a raga occupies (one per present swara, at its
+// just-intonation comma) — the per-row X strip. Both directions together.
+export function ragaFootprint(ragas, name) {
+  return footprintForLetters(ragas, name, presentLetters(ragas, name));
 }
