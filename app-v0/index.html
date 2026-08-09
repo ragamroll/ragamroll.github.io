@@ -219,9 +219,13 @@
     .split-v { width:6px; background:#333; cursor:col-resize; border-radius:3px; touch-action:none; }
     .split-h { height:6px; margin:.15rem .5rem; background:#333; cursor:row-resize; border-radius:3px; touch-action:none; }
     .split-v:hover, .split-h:hover { background:#66c; }
-    .pane.roll { white-space:normal; } /* container is a div-of-divs; lines carry pre */
-    .roll-line { white-space:pre; }    /* keep ascii columns aligned */
-    .roll-line.active { background:#2b4; color:#111; }
+    /* The roll is a canvas now, so the pane holds no text and does its own scrolling:
+       the inner holder is the scroll window, and the canvas inside it stays
+       viewport-sized however long the piece is. */
+    .pane.roll { white-space:normal; overflow:hidden; padding:0; display:flex; }
+    .roll-holder { flex:1 1 auto; min-width:0; overflow-y:auto; overflow-x:hidden; }
+    .roll-holder > div { position:relative; width:100%; }
+    .roll-holder canvas { display:block; position:sticky; top:0; width:100%; }
     .footer { display:flex; gap:.6rem; align-items:center; padding:.35rem .6rem; border-top:1px solid #333; font-size:.75rem; opacity:.7; }
     .footer .build { margin-left:auto; }  /* build timestamp + version, pushed right */
     .footer .ver { color:#9cf; font-family:ui-monospace,monospace; }

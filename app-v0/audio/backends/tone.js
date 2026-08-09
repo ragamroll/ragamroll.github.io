@@ -77,12 +77,22 @@ function makeTala(timbre) {
               envelope: { attack: 0.008, decay: 0.32, sustain: 0, release: 0.32 } });
       return s;
     }
-    case 'veena': {      // plucked string — the composition's sparse accent strum.
-      // PluckSynth isn't Monophonic-based (no PolySynth); the composition tala is
-      // sparse accent strums, so mono is fine.
-      const s = new Tone.PluckSynth().toDestination();
-      s.set({ attackNoise: 0.6, dampening: 2200, resonance: 0.9 });
-      return s;
+    case 'veena': {      // plucked string — the composition's accent strum.
+      // The strum is a DYAD: buildSequence puts Sa and Pa on the SAME tick, the way a
+      // veena is struck. PluckSynth is monophonic and cannot be wrapped in PolySynth
+      // (it isn't Monophonic-based), so a single one took the first note and threw
+      // "Start time must be strictly greater than previous start time" on the second
+      // — half of every strum, silently, for as long as this voice has existed.
+      // Two voices, taken in turn, so both notes of a strum sound.
+      const out = new Tone.Volume(0).toDestination();
+      const voices = [new Tone.PluckSynth(), new Tone.PluckSynth()];
+      for (const v of voices) { v.set({ attackNoise: 0.6, dampening: 2200, resonance: 0.9 }); v.connect(out); }
+      let next = 0;
+      return {
+        volume: out.volume,
+        triggerAttackRelease(...a) { const v = voices[next]; next = (next + 1) % voices.length; v.triggerAttackRelease(...a); },
+        dispose() { for (const v of voices) v.dispose(); out.dispose(); },
+      };
     }
   }
 }

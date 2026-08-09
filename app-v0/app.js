@@ -20,8 +20,7 @@ import { droneFreqs } from './audio/drone.js';
 import { melaOfScale } from './core/melakarta.js';
 import { saBaseOf, applyPlaybackPitch } from './core/retune.js';
 import { shareUrl, readSharedSource, sourceFromShareInput } from './core/share.js';
-import { scrollPos, playheadScroll } from './audio/scroll.js';
-import { buildRowTimes, rowAt } from './audio/rowtimes.js';
+import { scrollPos } from './audio/scroll.js';
 import { Transport } from './components/Transport.js';
 import { Splitter } from './components/Splitter.js';
 import { Footer } from './components/Footer.js';
@@ -59,16 +58,16 @@ function App({ examples }) {
   // Parse + the heavy ascii renderers run in a web worker, so a large or
   // malformed composition can never block the UI thread. The worker returns the
   // parsed model (used by the playback / export path on the main thread) plus
-  // the notation + roll strings. Stale replies are dropped by request id.
+  // the notation string. Stale replies are dropped by request id.
   const [compiled, setCompiled] = useState({
-    model: { events: [], seqProps: {}, meta: {}, diagnostics: [] }, notation: '', roll: '',
+    model: { events: [], seqProps: {}, meta: {}, diagnostics: [] }, notation: '',
   });
   const workerRef = useRef(null);
   const reqRef = useRef(0);
   useEffect(() => {
     const w = new Worker('./worker.js', { type: 'module' });
     w.onmessage = (e) => {
-      if (e.data.id === reqRef.current) setCompiled({ model: e.data.model, notation: e.data.notation, roll: e.data.roll });
+      if (e.data.id === reqRef.current) setCompiled({ model: e.data.model, notation: e.data.notation });
     };
     workerRef.current = w;
     return () => w.terminate();
@@ -79,10 +78,9 @@ function App({ examples }) {
   }, [debounced]);
   const model = compiled.model;
   const notation = compiled.notation;
-  const roll = compiled.roll;
   // Tempo override (null = the composition's T directive, else 120). Applied by
   // cloning the model with meta.tempo replaced, so audio (buildSequence) and the
-  // playhead (buildRowTimes) both use it and stay in sync.
+  // playhead both use it and stay in sync.
   const compositionTempo = useMemo(() => (model.meta?.tempo > 0 ? model.meta.tempo : 120), [model]);
   const [tempoOverride, setTempoOverride] = useState(null);
   const onTempo = useCallback((v) => { if (v >= 20 && v <= 400) setTempoOverride(v); }, []);
@@ -90,10 +88,6 @@ function App({ examples }) {
   const effModel = useMemo(
     () => (tempoOverride ? { ...model, meta: { ...model.meta, tempo: tempoOverride } } : model),
     [model, tempoOverride]);
-
-  // Exact audio start-second of each roll row (rests included) — the playhead's
-  // row->time map. Same (tempo-effective) model as the audio, so the two can't drift.
-  const rowTimes = useMemo(() => { try { return buildRowTimes(effModel); } catch { return []; } }, [effModel]);
 
   const raga = useMemo(() => { const e = [...model.events].reverse().find(e => e.type === 'raga'); return e ? e.key.join(',') : ''; }, [model]);
   const ragaName = useMemo(() => { const e = [...model.events].reverse().find(e => e.type === 'raga'); return e ? e.key[0] : ''; }, [model]);
@@ -163,18 +157,16 @@ function App({ examples }) {
   // --- Playback: player instance, scroll refs, rAF loop, transport handlers ---
   const playerRef = useRef(null);
   if (!playerRef.current) playerRef.current = createPlayer('tone');
-  const rollRef = useRef(null);
+  const rollApiRef = useRef(null);   // the roll instance, driven imperatively (see RollPane)
+  const playheadRef = useRef(null);
   const notationRef = useRef(null);
   const rafRef = useRef(0);
-  // Index of the roll line currently carrying the .active highlight (-1 = none).
-  // Updated imperatively per frame — never via re-render.
-  const activeRowRef = useRef(-1);
-  // Snapshots taken when a sequence is LOADED (Play from stopped): total seconds
-  // and the row->time map of what is actually playing. Editing mid-play rebuilds
-  // the live `rowTimes`, but the audio keeps playing the loaded sequence — these
-  // refs keep the highlight in sync with the sound, not with the edit.
+  // Snapshots taken when a sequence is LOADED (Play from stopped): the seconds and
+  // the tempo of what is actually playing. Editing mid-play rebuilds the model, but
+  // the audio keeps playing the loaded sequence — these keep the playhead in sync
+  // with the sound rather than with the edit.
   const loadedTotalRef = useRef(0);
-  const loadedRowTimesRef = useRef([]);
+  const loadedTempoRef = useRef(120);   // tempo of the LOADED audio: the playhead follows what is playing, not a mid-playback edit
   const [playState, setPlayState] = useState('stopped');
   // Playback-only: drops tala events from the player schedule on the next
   // Play-from-stopped. Does not affect MIDI export, rendering, or timeline
@@ -228,34 +220,21 @@ function App({ examples }) {
 
   const noteCount = useMemo(() => model.events.filter(e => e.type === 'note' && !e.rest).length, [model]);
 
-  // Roll text change re-renders the line divs (Preact may reuse nodes, which
-  // would keep an imperatively-added .active class): drop any lingering
-  // highlight and forget the index so a stale row isn't left marked. If
-  // playback is running, the next rAF frame re-applies the highlight.
-  useEffect(() => {
-    rollRef.current?.children[activeRowRef.current]?.classList.remove('active');
-    activeRowRef.current = -1;
-  }, [roll]);
-
   const applyScroll = useCallback(() => {
     const pos = playerRef.current.position();
-    // Roll: highlight the row whose exact start time has been reached at the
-    // AUDIBLE instant (transport seconds minus output latency), and keep it
-    // centered (clamped at the ends).
-    const el = rollRef.current;
-    const rt = loadedRowTimesRef.current;
-    if (el && rt && rt.length) {
-      const rows = el.children;
-      const totalRows = rows.length;
-      const rowH = rows[0] ? rows[0].offsetHeight : 0;
+    // The roll draws the playhead; this decides where it is. Transport seconds minus
+    // output latency is the AUDIBLE instant, and the roll's axis is length-units, so
+    // the two meet at 30/tempo — the same seconds-per-unit buildRowTimes uses for the
+    // audio, which is what keeps the line on the note you are hearing.
+    const r = rollApiRef.current;
+    if (r) {
       const t = pos * loadedTotalRef.current - playerRef.current.latency();
-      const activeRow = Math.min(totalRows - 1, Math.max(0, rowAt(rt, t)));
-      if (activeRowRef.current !== activeRow) {
-        rows[activeRowRef.current]?.classList.remove('active');
-        rows[activeRow]?.classList.add('active');
-        activeRowRef.current = activeRow;
-      }
-      el.scrollTop = playheadScroll(activeRow, rowH, el.scrollHeight, el.clientHeight);
+      const units = Math.max(0, t) / (30 / (loadedTempoRef.current || 120));
+      playheadRef.current = units;
+      r.setPlayhead(units).render();
+      const hd = r.canvas.parentElement.parentElement;
+      hd.scrollTop = Math.max(0, Math.min(Math.max(0, r.virtH() - hd.clientHeight),
+        r.yVirt(units) - hd.clientHeight * 0.4));
     }
     // Notation: keeps its linear position-proportional scroll.
     const n = notationRef.current;
@@ -269,10 +248,10 @@ function App({ examples }) {
     cancelAnimationFrame(rafRef.current);
     playerRef.current.stop();
     setPlayState('stopped');
-    const el = rollRef.current;
-    if (el) el.children[activeRowRef.current]?.classList.remove('active');
-    activeRowRef.current = -1;
-    for (const r of [rollRef.current, notationRef.current]) { if (r) r.scrollTop = 0; }
+    playheadRef.current = null;
+    rollApiRef.current?.setPlayhead(null).render();
+    const hd = rollApiRef.current && rollApiRef.current.canvas.parentElement.parentElement;
+    for (const r of [hd, notationRef.current]) { if (r) r.scrollTop = 0; }
   }, []);
   stopRef.current = onStop;   // let onOpen/onExample (defined earlier) stop playback on a content swap
 
@@ -294,9 +273,9 @@ function App({ examples }) {
         // (even at 0) so raising the slider mid-playback brings the tala in.
         player.load(scheduleEvents(seq), totalSeconds(seq), { talaGain: talaLevel });
         // Snapshot what was loaded: the playhead must follow the PLAYING audio
-        // even if the user edits (and rowTimes rebuilds) mid-playback.
+        // even if the user edits mid-playback.
         loadedTotalRef.current = totalSeconds(seq);
-        loadedRowTimesRef.current = rowTimes;
+        loadedTempoRef.current = effModel.meta?.tempo > 0 ? effModel.meta.tempo : 120;
       }
       await player.play();
       setPlayState('playing');
@@ -308,7 +287,7 @@ function App({ examples }) {
       console.error('playback failed', e);
       onStop();
     }
-  }, [effModel, rowTimes, playState, loop, onStop, talaLevel, scale, saBase, shift]);
+  }, [effModel, playState, loop, onStop, talaLevel, scale, saBase, shift]);
 
   const onPause = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
@@ -358,6 +337,19 @@ function App({ examples }) {
     setTopFrac(Math.max(0.15, Math.min(0.85, (clientY - r.top) / r.height)));
   }, []);
 
+  // Headless-guard surface, mirroring draw's window.__rr and pitchy's window.__pv:
+  // what the roll is showing and where its playhead is, without scraping pixels.
+  useEffect(() => {
+    window.__app = {
+      roll: () => rollApiRef.current,
+      notes: () => (rollApiRef.current ? rollApiRef.current.model().notes.length : 0),
+      bounds: () => (rollApiRef.current ? rollApiRef.current.bounds() : null),
+      get playhead() { return playheadRef.current; },
+      get playState() { return playState; },
+      get tempo() { return loadedTempoRef.current; },
+    };
+  }, [playState]);
+
   return html`
     <${Toolbar} raga=${raga} tala=${tala} examples=${examples} exampleValue=${exampleValue}
                 onOpen=${onOpen} onExample=${onExample} onOpenLink=${onOpenLink}
@@ -387,7 +379,7 @@ function App({ examples }) {
            style=${`flex:${topFrac} 1 0; grid-template-columns:${leftPct}fr 6px ${100 - leftPct}fr`}>
         <${Editor} value=${text} onInput=${setText} />
         <${Splitter} orientation="v" onResize=${onVDrag} />
-        <${RollPane} text=${roll} scrollRef=${rollRef} />
+        <${RollPane} model=${effModel} api=${rollApiRef} />
       </div>
       <${Splitter} orientation="h" onResize=${onHDrag} />
       <${NotationPane} text=${notation} scrollRef=${notationRef} style=${`flex:${1 - topFrac} 1 0`} />

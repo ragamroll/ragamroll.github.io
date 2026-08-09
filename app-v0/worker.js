@@ -1,13 +1,12 @@
-// Compilation worker: parse + the heavy ascii renderers run OFF the main thread
-// so a large or pathological composition can never block the UI. Posts back the
-// parsed model (the main thread needs it for playback / MIDI export) plus the
-// notation and roll strings.
+// Compilation worker: parse + the notation renderer run OFF the main thread so a
+// large or pathological composition can never block the UI. Posts back the parsed
+// model (the main thread needs it for playback, MIDI export and the roll) plus the
+// notation string.
 //
 // A module worker (new Worker(url, {type:'module'})) so it can import the same
 // ESM modules the app uses — no build step, no duplication.
 import { parse } from './core/parser.js';
 import { seqToLine } from './core/renderers/notation.js';
-import { seqToRoll } from './core/renderers/roll.js';
 import { setRagas } from './core/raga-base.js';
 
 // The worker has its own module instances, so it must load the raga data itself
@@ -33,8 +32,6 @@ function handle({ id, text }) {
   try { model = parse(text); }
   catch { model = { events: [], seqProps: {}, meta: {}, diagnostics: [] }; }
   let notation = '';
-  let roll = '';
   try { notation = seqToLine(model.events, 1, 3, true); } catch { /* keep '' */ }
-  try { roll = seqToRoll(model.events, model.seqProps); } catch { /* keep '' */ }
-  self.postMessage({ id, model, notation, roll });
+  self.postMessage({ id, model, notation });
 }
