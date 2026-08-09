@@ -8,21 +8,22 @@ import { setRagas, getRagas, resolveRagaName } from './core/raga-base.js';
 import { setRagaExt, getRagaExt } from './core/raga-ext.js';
 import { chooseSeed } from './core/raga-seed.js';
 import { midiToFreq } from './audio/schedule.js';
-import { BOXES, EDO, stepFreq, defaultShrutiStep } from './core/shruti.js';
+import { BOXES, EDO, stepFreq } from './core/shruti.js';
 import { encodeShareToken, decodeShareToken } from './core/share.js';
 import { VERSION, BUILD_DATE } from './version.js';
 import { midiToName } from './core/tuning.js';
-import { serializeInline, sampleCurve, GAMAKA_SAMPLES } from './core/gamaka-inline.js';
-import { rollGeometry } from './core/roll-geometry.js';
-import { renderRoll } from './core/roll-render.js';
+import { serializeInline, sampleCurve } from './core/gamaka-inline.js';
+import { buildRollModel } from './core/roll-model.js';
+import { createRagamRoll } from './core/ragamroll.js';
+import { createRollAudio } from './core/roll-audio.js';
 import { extractAnchors, pointsToAnchors, addAnchor, removeAnchor, moveAnchor } from './core/gamaka-curve.js';
 import { buildSequence } from './core/midi/sequence.js';
 import { writeSMF } from './core/midi/smf.js';
-import { serializeModel, snapToRagaRow, snapToAkshara, placePaint, splitSpans, ragaRowsInRange, octMarks } from './core/note-edit.js';
+import { serializeModel, snapToRagaRow, snapToAkshara, placePaint, splitSpans, octMarks } from './core/note-edit.js';
 import { buildRagaSteps } from './core/detect-raga-helper.js';
 // Aliased: shruti.js exports a DIFFERENT stepForLetter(scale, letter). This one
 // is (letter, approxStep, ragaSwaraName) -> the raga's own step for that letter.
-import { stepToSwara, stepForLetter as stepForRagaLetter } from './core/detect.js';
+import { stepToSwara } from './core/detect.js';
 
 const LS_KEY = 'ragamroll.srgm';
 const SHRUTI = [...new Set(BOXES.map(b => b.step))].sort((a, b) => a - b);   // 22 steps in an octave
@@ -41,7 +42,6 @@ let curRaga = '', curTala = '', curTalaName = 'adi';   // readout + current tala
 let defaultRaga = 'c12';                                 // set at boot to the first raga in the picker list
 const blankSrc = () => `Raga=${defaultRaga},0\nTala=adi,4\nO=5 L=1\n`;   // Blank/New skeleton (no notes)
 
-function stepOfSemitone(semi){ const oct = Math.floor(semi / 12), pc = semi - oct * 12; return oct * EDO + defaultShrutiStep(pc); }
 // Everything the parser could not honour, shown where the piece is. The parser
 // has always recorded these -- a dropped gamaka arrives as "malformed attributes
 // ... playing the plain note" -- but only index.html ever displayed them, so in
@@ -62,54 +62,25 @@ function reportDiagnostics(model, generated){
   el.style.display = '';
 }
 
+// Notation in, roll out. The derivation itself lives in core/roll-model.js so the
+// library page and the app read a piece the same way draw does; what stays here is
+// draw's own state around it — the tempo slider's baseline, the Sa override, the
+// segment markers, the name the tala dialog shows.
 function buildModel(src){
   srcText = src || '';
   const model = parse(srcText);
   reportDiagnostics(model);
-  // Keep the ordinal of each in-model note among ALL note tokens (rests included),
-  // so serialization lands the gamaka on the exact source token (rests + out-of-raga
-  // swaras are note events too and must be counted). `tok` = that ordinal.
-  const allNotes = model.events.filter(e => e.type === 'note');
-  const keep = []; allNotes.forEach((e, ord) => { if (!e.rest && e.absLen > 0) keep.push(ord); });
-  const notes = keep.map(ord => allNotes[ord]);
-  compTempo = (model.meta && model.meta.tempo > 0) ? model.meta.tempo : 120;
+  const m = buildRollModel(model);
+  roll.setModel(m);
+  NOTES = m.notes; starts = m.starts; contentEnd = m.contentEnd;
+  compTempo = m.tempo;
   tempoBpm = compTempo;   // reset to the composition tempo on (re)load; the slider re-applies its multiplier
-  const sNote = notes.find(n => n.swara === 'S' || n.swara === 's');
-  saRef = sNote ? sNote.midi - (sNote.octave - 5) * 12 : (notes.length ? Math.min(...notes.map(n => n.midi)) : 60);
+  saRef = m.saRef;
   saPlay = null;          // reset Sa override to auto on a new composition
   saFreq = midiToFreq(saRef);   // saRef is the LAYOUT anchor (steps); saPlay only retunes playback
-  // The raga has to be resolved BEFORE the notes: each note's step is read back
-  // through the raga's own shruti for its letter, not just the 12-EDO
-  // reconstruction. stepOfSemitone puts every semitone on its default JI-12
-  // shruti, which is wrong wherever the raga assigns that letter a different
-  // comma (mela_1's G1 is step 8; semitone 2 defaults to 9), so a piece written
-  // out and read back moved by a comma. The notation already names the raga, so
-  // nothing extra is needed in it — the reader just has to ask. stepForRagaLetter
-  // falls through to the reconstruction when the raga has no such letter, and
-  // when there is no raga at all.
-  const rk = [...model.events].reverse().find(e => e.type === 'raga');
-  curRaga = rk ? String(rk.key[0]) : '';
-  const { ragaSwaraName: readBackNames } = buildRagaSteps(curRaga || '');
-  NOTES = notes.map((n, i) => {
-    const step = stepForRagaLetter(n.swara.toUpperCase(), stepOfSemitone(n.midi - saRef), readBackNames);
-    // Inline gamaka is stored NOTE-RELATIVE (delta); the roll model is absolute.
-    const curve = (Array.isArray(n.gamaka) && n.gamaka.length) ? n.gamaka.map(([u, d]) => [u, step + d]) : null;
-    return { step, dur: n.absLen, swara: n.swara.toUpperCase(), octave: n.octave, curve, tok: keep[i] };
-  });
-  // True composition time: advance the cursor over rests too (silent gaps, no box),
-  // so the roll's time axis matches the audio and the tala grid — a leading/interior
-  // rest shows as empty time instead of being compressed out.
-  starts = []; let t = 0, ki = 0;
-  for (let o = 0; o < allNotes.length; o++){
-    if (ki < keep.length && keep[ki] === o){ starts.push(t); ki++; }
-    if (allNotes[o].absLen > 0) t += allNotes[o].absLen;
-  }
-  contentEnd = t;   // true content end (rests included) — see recomputeGridBounds()
-  const tp = [...model.events].reverse().find(e => e.type === 'tala');   // accent strums (veena) at tala accents
-  talaMeasure = (tp && tp.props && tp.props.measure > 0) ? tp.props.measure : 0;
-  talaAccents = (tp && tp.props && Array.isArray(tp.props.accents)) ? tp.props.accents : [];
-  talaBeat = (tp && tp.props && tp.props.beat > 0) ? tp.props.beat : 0;
-  curTala = tp ? `beat ${tp.props.beat}` : '';
+  curRaga = m.raga;
+  talaMeasure = m.tala.measure; talaAccents = m.tala.accents; talaBeat = m.tala.beat;
+  curTala = m.talaProps ? `beat ${m.talaProps.beat}` : '';
   curTalaName = (srcText.match(/(?:^|\s)Tala=([A-Za-z0-9]+)/) || [])[1] || 'adi';
   recomputeGridBounds();
   markerA = 0; markerB = TOTAL;   // segment bounds default to the whole piece; draggable in the gutter
@@ -120,49 +91,19 @@ function buildModel(src){
 // bounds without re-running the parser. Does NOT touch userGrid* itself — only
 // loadSrc/applyShared reset those (new composition), same invariant as before.
 function recomputeGridBounds(){
-  const notesEnd = contentEnd;   // real content end, rests included (0 for a blank piece) — set in buildModel from the starts-loop cursor
-  let autoTotal = notesEnd || 1;
-  // Blank piece: seed ~2 tala cycles of empty time grid (or 8 units with no tala),
-  // instead of a single unit of grid that renders as no usable canvas.
-  if (NOTES.length === 0) autoTotal = talaMeasure > 0 ? talaMeasure * 2 : 8;
-  TOTAL = userGridBottom != null ? Math.max(userGridBottom, notesEnd, 1) : autoTotal;
-  const ps = NOTES.map(n => n.step);
-  let notesMin, notesMax, autoMin, autoMax;
-  if (ps.length){ notesMin = Math.min(...ps); notesMax = Math.max(...ps); autoMin = notesMin - 9; autoMax = notesMax + 9; }
-  // Blank piece: the middle octave, with HALF an octave either side. Nine steps of
-  // margin (a sixth of an octave) left barely anywhere to put a note outside S..S,
-  // and the first thing anyone does on a blank roll is reach past the tonic.
-  else { notesMin = 0; notesMax = EDO; autoMin = -Math.round(EDO / 2); autoMax = EDO + Math.round(EDO / 2); }
-  stepMin = userGridMin != null ? Math.min(userGridMin, notesMin) : autoMin;
-  stepMax = userGridMax != null ? Math.max(userGridMax, notesMax) : autoMax;
-  if (!(stepMax > stepMin)) { stepMin = -26; stepMax = 66; }
-  gridPitches = buildGridPitches();
-  PAD.t = labelDepth(gridPitches);
-}
-// Pitch-header rows: the raga's swara rows spanning the current [stepMin,stepMax], plus any
-// out-of-raga note pitches. So the full scale shows across the visible range (blank or not) and
-// stretching the pitch handles reveals new rows to paint on. No raga (c12) -> note pitches only.
-function buildGridPitches(){
-  const { ragaSteps, ragaSwaraName } = ragaCtx();
-  const rows=new Map();
-  if (ragaSteps) for (const s of ragaRowsInRange(ragaSteps, stepMin, stepMax))
-    rows.set(s, { step:s, label:(ragaSwaraName.get(((s%EDO)+EDO)%EDO)||'') + (Math.floor(s/EDO)+5) });
-  for (const n of NOTES) if (!rows.has(n.step)) rows.set(n.step, { step:n.step, label:n.swara+n.octave });
-  return [...rows.values()].sort((a,b)=>a.step-b.step);
+  roll.setUser({ min:userGridMin, max:userGridMax, bottom:userGridBottom });
+  const b = roll.bounds();
+  TOTAL = b.total; stepMin = b.stepMin; stepMax = b.stepMax; gridPitches = b.gridPitches;
 }
 const freqOf = step => stepFreq(saFreq, step);
-// Is a swara (53-EDO step from Sa) nearest a black piano key, given the chosen Sa?
-// 53-EDO shrutis don't align exactly with 12-EDO — this snaps to the nearest semitone.
-const BLACK_PC = new Set([1,3,6,8,10]);
-function keyIsBlack(step){ const saMidi=(saPlay==null?saRef:saPlay); const m=Math.round(saMidi+12*step/EDO); return BLACK_PC.has(((m%12)+12)%12); }
 const secPerUnit = () => 30 / tempoBpm;
 function snapStep(s){ const oct = Math.floor(s / EDO), base = s - oct * EDO; let best = SHRUTI[0], bd = Infinity;
   for (const sh of [...SHRUTI, EDO]){ const d = Math.abs(base - sh); if (d < bd){ bd = d; best = sh; } }
   return oct * EDO + best; }
 
 // ---------- canvas ----------
-const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
-let CSSW=0, CSSH=0, dpr=1, mode='roll', sel=-1, drawing=false, drawSpan=22, dragIdx=-1;
+const cv = document.getElementById('cv');
+let mode='roll', sel=-1, drawing=false, drawSpan=22, dragIdx=-1;
 // Roll-mode long-press grab (move/resize a note). paintMode is wired to the
 // `+ note` toolbar toggle below; grab and paint gestures are mutually exclusive.
 let grab=null, pressTimer=0, pressXY=null, justGrabbed=false, paintMode=false, gamakaMode=false;   // grab: {idx, kind:'move'|'resize', oldStep, oldDur, pid}
@@ -176,38 +117,28 @@ const ROLL_TOUCH_ACTION='pan-y';   // touchAction roll mode uses when idle (matc
 const GRIP_THICK=14, GRIP_LEN=HANDLE_PX*2.6;
 let handleDrag=null;   // {which:'pmin'|'pmax'|'tbottom', pid}
 // TEMP DEBUG (grid-handle grab diagnosis) — remove after diagnosing.
-// Roll is always fully expanded: scale time so the SHORTEST note cell is at least
-// CELL_PX tall — enough to render its swara glyph, mobile portrait included.
-const CELL_PX = 24;
-let zoom = 1;   // expand multiplier (1 = fully expanded: shortest cell = CELL_PX)
-function pxPerUnit(){ if (!NOTES.length) return CELL_PX; const minDur=Math.min(...NOTES.map(n=>n.dur)); return CELL_PX/Math.max(0.25,minDur); }
-function pxU(){ return pxPerUnit()*zoom; }                          // pixels per length-unit (virtual roll space)
-function virtH(){ return Math.round(PAD.t + TOTAL*pxU() + PAD.b); } // full virtual scroll height (roll)
-const yVirt = t => PAD.t + t*pxU();                                // roll virtual y (content coords, pre-scroll)
-const sTop = () => (mode==='roll' ? document.getElementById('holder').scrollTop : 0);
+let zoom = 1;   // expand multiplier the roll scales time by (1 = shortest note cell at its minimum readable height)
+const yVirt = t => { syncView(); return roll.yVirt(t); };   // roll virtual y (content coords, pre-scroll) — the gutter handles sit at these
+const pxU = () => { syncView(); return roll.pxPerUnit(); };   // pixels per length-unit
+const virtH = () => { syncView(); return roll.virtH(); };     // full scroll height of the roll
 let playing=false, paused=false, playStart=0, rafId=0, playPos=null;   // playhead (length-units)
 let playFromU=0, playToU=0, pausedAt=0, pausedTo=0;                    // playback range + pause point
 let markerA=0, markerB=0, ctxTime=0, markerDrag=null;                 // A–B segment markers (length-units) + drag state
 const cssvar = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
-// t is not fixed: the pitch labels stand upright (parallel to their own grid lines),
-// so the header has to be as deep as the LONGEST label is long. Horizontal chips
-// collided with each other on a narrow screen — a name like G2b/N1a is wider than the
-// gap between two shrutis — and rotating them trades that width for header depth.
-const PAD = { l:40, r:12, t:24, b:12 };
-const PAD_T_MIN = 24, LABEL_CHIP_H = 14;
-function labelDepth(gp) {
-  if (!gp || !gp.length) return PAD_T_MIN;
-  ctx.save(); ctx.font = 'bold 10px ' + cssvar('--mono');
-  let w = 0; for (const g of gp) w = Math.max(w, ctx.measureText(g.label).width);
-  ctx.restore();
-  return Math.max(PAD_T_MIN, Math.round(w + 8) + 12);
-}
-// The coordinate maps live in core/roll-geometry.js, so whatever draws the roll and
-// whatever hit-tests it cannot disagree. Rebuilt per call because every input to it
-// changes: the canvas size, the scroll offset, the selection, the zoom.
-// Built from the same model and view the renderer is given, so hit-testing reads the
-// roll's own coordinates rather than a second description of them.
-function geo(){ const m=rollModel(); return rollGeometry({ ...rollView(), stepMin:m.stepMin, stepMax:m.stepMax, total:m.total }); }
+// The roll itself — canvas, sizing, the scroll window, the grid it derives. draw
+// supplies the palette and its editing chrome and keeps everything else: the audio,
+// the transport, the notation, and every gesture that changes a note.
+const roll = createRagamRoll({ holder: document.getElementById('holder'), content: document.getElementById('content'), canvas: cv }, {
+  touchAction: ROLL_TOUCH_ACTION,
+  palette: () => ({ amber:cssvar('--amber'), amberS:cssvar('--amberSoft'), teal:cssvar('--teal'),
+    terra:cssvar('--terra'), hair:cssvar('--hair2'), muted:cssvar('--muted'),
+    panel2:cssvar('--panel2'), mono:cssvar('--mono') }),
+  hooks: { underGrid: drawRestGutter, overNotes: drawEditChrome, top: drawHandles },
+});
+const ctx = roll.ctx, PAD = roll.pad;
+// Hit-testing reads the coordinates the roll actually drew with, so a note cannot be
+// visible in one place and grabbable in another.
+function geo(){ syncView(); return roll.geometry(); }
 const plot = () => geo().plot;
 function X(s){ return geo().X(s); }
 function stepAtX(px){ return geo().stepAtX(px); }
@@ -217,76 +148,52 @@ function tAtY(py){ return geo().tAtY(py); }
 
 function fit(){ const h=(window.visualViewport&&window.visualViewport.height)||window.innerHeight;
   document.getElementById('wrap').style.height=h+'px'; requestAnimationFrame(resizeCanvas); }
-function resizeCanvas(){ const hd=document.getElementById('holder'); const baseH=Math.max(150,hd.clientHeight);
-  dpr=Math.min(2,window.devicePixelRatio||1);
-  CSSW=hd.clientWidth; CSSH=baseH;   // canvas is always viewport-sized (windowed) — never overflows the browser limit
-  const content=document.getElementById('content');
-  if (mode==='roll'){ content.style.height=virtH()+'px'; }   // a tall empty div gives the scrollbar its range
-  else { content.style.height=baseH+'px'; hd.scrollTop=0; }   // draw mode: one note fills the viewport, no scroll
-  cv.width=CSSW*dpr; cv.height=CSSH*dpr; cv.style.width=CSSW+'px'; cv.style.height=CSSH+'px';
-  cv.style.touchAction = mode==='draw' ? 'none' : ROLL_TOUCH_ACTION;   // draw: no scroll; roll: allow vertical scroll
-  ctx.setTransform(dpr,0,0,dpr,0,0); render(); }
+function resizeCanvas(){ syncView(); roll.resize(); positionHandles(); }
 
-// The roll itself is drawn by core/roll-render.js — the same code /ragas and the app
-// use, so a piece looks the same wherever it is shown. What stays here is the editing
-// chrome, which no reader needs: the rest gutter, the paint preview, the gamaka
-// anchors and the stretch handles. Those are interleaved with the roll's own layers
-// rather than sitting on top of them, so they go in through the render hooks and
-// share its geometry — the note you see and the note you can grab cannot drift apart.
-function rollModel(){
-  return { notes:NOTES, starts, total:TOTAL, gridPitches, stepMin, stepMax,
-    tala:{ measure:talaMeasure, beat:talaBeat, accents:talaAccents }, isBlack:keyIsBlack };
+// draw's state, pushed into the roll before anything reads or draws it. The roll is
+// told what to show; it never reaches back for it.
+function syncView(){
+  roll.setView({ mode, sel, drawSpan, zoom, playPos, markerA, markerB,
+    saMidi: saPlay==null ? saRef : saPlay, grabIdx: grab?grab.idx:-1 });
 }
-function rollView(){
-  return { w:CSSW, h:CSSH, pad:PAD, mode,
-    pxPerUnit:pxU(), scrollTop:sTop(),
-    selStep: mode==='draw' ? NOTES[sel].step : 0, drawSpan,
-    tStart: mode==='draw' ? starts[sel] : 0,
-    tEnd: mode==='draw' ? starts[sel]+NOTES[sel].dur : TOTAL,
-    palette:{ amber:cssvar('--amber'), amberS:cssvar('--amberSoft'), teal:cssvar('--teal'),
-      terra:cssvar('--terra'), hair:cssvar('--hair2'), muted:cssvar('--muted'),
-      panel2:cssvar('--panel2'), mono:cssvar('--mono') },
-    sel, grabIdx: grab?grab.idx:-1, playPos, markerA, markerB,
-    chipH:LABEL_CHIP_H, sample:sampleCurve };
+// ---- editing chrome ----
+// Painted through the roll's hooks, because it is interleaved with the roll's own
+// layers rather than sitting on top: the rest gutter goes under the pitch lines, the
+// gamaka anchors over the notes but under the segment markers. Each hook is handed
+// the geometry, so the chrome and the roll cannot disagree about where anything is.
+function drawRestGutter(g){ const p=g.plot, [sa,sb]=g.xRange, C=roll.ctx;
+  // A faint band at the left edge, paint mode only — pressing inside it paints a rest
+  // (a silent gap) instead of a note. Same REST_LANE_PX as the pointerdown check.
+  if (mode==='roll' && paintMode){ C.fillStyle='rgba(216,161,63,.09)'; C.fillRect(p.x,p.y,REST_LANE_PX,p.h);
+    C.strokeStyle=cssvar('--hair2'); C.lineWidth=1; C.beginPath(); C.moveTo(p.x+REST_LANE_PX,p.y); C.lineTo(p.x+REST_LANE_PX,p.y+p.h); C.stroke();
+    C.fillStyle=cssvar('--muted'); C.globalAlpha=.8; C.textAlign='center'; C.font='bold 11px '+cssvar('--mono');
+    C.fillText('z', p.x+REST_LANE_PX/2, p.y+13); C.globalAlpha=1; C.font='11px '+cssvar('--mono'); }
+  // Draw mode zooms onto one note and shows every shruti — you are placing a pitch by
+  // hand there, not reading a raga.
+  if (mode==='draw'){ for (let oct=Math.floor(sa/EDO)-1; oct<=Math.floor(sb/EDO)+1; oct++) for (const sh of SHRUTI){ const s=oct*EDO+sh;
+    if (s<sa||s>sb) continue; const x=g.X(s); C.strokeStyle=cssvar('--hair2'); C.globalAlpha=.5; C.beginPath(); C.moveTo(x,p.y); C.lineTo(x,p.y+p.h); C.stroke(); C.globalAlpha=1; } }
 }
-function render(){
-  const C=rollView().palette, teal=C.teal, muted=C.muted, hair=C.hair;
-  renderRoll(ctx, rollModel(), rollView(), {
-    underGrid(g){ const p=g.plot, [sa,sb]=g.xRange;
-      // Rest gutter: a faint band at the left edge of the plot area, paint mode only —
-      // pressing inside it paints a rest (silent gap) instead of a note (see the paint
-      // pointerdown listener's `restLane` check, same REST_LANE_PX).
-      if (mode==='roll' && paintMode){ ctx.fillStyle='rgba(216,161,63,.09)'; ctx.fillRect(p.x,p.y,REST_LANE_PX,p.h);
-        ctx.strokeStyle=hair; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(p.x+REST_LANE_PX,p.y); ctx.lineTo(p.x+REST_LANE_PX,p.y+p.h); ctx.stroke();
-        ctx.fillStyle=muted; ctx.globalAlpha=.8; ctx.textAlign='center'; ctx.font='bold 11px '+C.mono;
-        ctx.fillText('z', p.x+REST_LANE_PX/2, p.y+13); ctx.globalAlpha=1; ctx.font='11px '+C.mono; }
-      // Draw mode zooms onto one note, so it shows every shruti — you are placing a
-      // pitch by hand, not reading a raga.
-      if (mode==='draw'){ for (let oct=Math.floor(sa/EDO)-1; oct<=Math.floor(sb/EDO)+1; oct++) for (const sh of SHRUTI){ const s=oct*EDO+sh;
-        if (s<sa||s>sb) continue; const x=g.X(s); ctx.strokeStyle=hair; ctx.globalAlpha=.5; ctx.beginPath(); ctx.moveTo(x,p.y); ctx.lineTo(x,p.y+p.h); ctx.stroke(); ctx.globalAlpha=1; } }
-    },
-    overNotes(g){ const p=g.plot, X=g.X, Y=g.Y;
-      if (mode==='roll' && gamakaMode) for (let i=0;i<NOTES.length;i++){ const c=NOTES[i].curve; if (!c) continue;
-        const t0=starts[i], t1=t0+NOTES[i].dur;
-        for (const [u,st] of c){ const cx=X(st), cy=Y(t0+(t1-t0)*u);
-          ctx.fillStyle=teal; ctx.globalAlpha=.9; ctx.beginPath(); ctx.arc(cx,cy,4,0,6.283); ctx.fill(); ctx.globalAlpha=1;
-          ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.lineWidth=.7; ctx.stroke(); } }
-      if (paint){ const y0=Y(paint.ts), y1=Y(paint.ts+paint.dur);
-        if (paint.rest){ const xc=p.x+REST_LANE_PX/2;
-          ctx.fillStyle='#999'; ctx.globalAlpha=0.4; roundRect(xc-8,y0,16,Math.max(4,y1-y0),4); ctx.fill(); ctx.globalAlpha=1; }
-        else { const xc=X(paint.step);
-          ctx.fillStyle='#9fc'; ctx.globalAlpha=0.35; roundRect(xc-8,y0,16,Math.max(4,y1-y0),4); ctx.fill(); ctx.globalAlpha=1; } }
-      if (mode==='draw'&&!NOTES[sel].curve){ ctx.fillStyle=muted; ctx.textAlign='center'; ctx.font='13px '+cssvar('--sans');
-        ctx.fillText('drag top→bottom to draw the pitch', p.x+p.w/2, p.y+p.h/2); }
-      if (mode==='draw'&&NOTES[sel].curve&&!drawing){ const c=NOTES[sel].curve,[t0,t1]=g.yRange;
-        for (let k=0;k<c.length;k++){ const cx=X(c[k][1]),cy=Y(t0+(t1-t0)*c[k][0]);
-          ctx.beginPath();ctx.arc(cx,cy,6.5,0,7);ctx.fillStyle=cssvar('--bg');ctx.fill();
-          ctx.lineWidth=2;ctx.strokeStyle=teal;ctx.stroke(); ctx.beginPath();ctx.arc(cx,cy,2.4,0,7);ctx.fillStyle=teal;ctx.fill(); } }
-    },
-    top(){ if (mode==='roll') drawGridHandles(teal); },
-  });
-  positionHandles();
+function drawEditChrome(g){ const p=g.plot, X=g.X, Y=g.Y, C=roll.ctx, teal=cssvar('--teal');
+  if (mode==='roll' && gamakaMode) for (let i=0;i<NOTES.length;i++){ const c=NOTES[i].curve; if (!c) continue;
+    const t0=starts[i], t1=t0+NOTES[i].dur;
+    for (const [u,st] of c){ const cx=X(st), cy=Y(t0+(t1-t0)*u);
+      C.fillStyle=teal; C.globalAlpha=.9; C.beginPath(); C.arc(cx,cy,4,0,6.283); C.fill(); C.globalAlpha=1;
+      C.strokeStyle='rgba(0,0,0,.35)'; C.lineWidth=.7; C.stroke(); } }
+  if (paint){ const y0=Y(paint.ts), y1=Y(paint.ts+paint.dur);
+    if (paint.rest){ const xc=p.x+REST_LANE_PX/2;
+      C.fillStyle='#999'; C.globalAlpha=0.4; roundRect(xc-8,y0,16,Math.max(4,y1-y0),4); C.fill(); C.globalAlpha=1; }
+    else { const xc=X(paint.step);
+      C.fillStyle='#9fc'; C.globalAlpha=0.35; roundRect(xc-8,y0,16,Math.max(4,y1-y0),4); C.fill(); C.globalAlpha=1; } }
+  if (mode==='draw'&&!NOTES[sel].curve){ C.fillStyle=cssvar('--muted'); C.textAlign='center'; C.font='13px '+cssvar('--sans');
+    C.fillText('drag top→bottom to draw the pitch', p.x+p.w/2, p.y+p.h/2); }
+  if (mode==='draw'&&NOTES[sel].curve&&!drawing){ const c=NOTES[sel].curve,[t0,t1]=g.yRange;
+    for (let k=0;k<c.length;k++){ const cx=X(c[k][1]),cy=Y(t0+(t1-t0)*c[k][0]);
+      C.beginPath();C.arc(cx,cy,6.5,0,7);C.fillStyle=cssvar('--bg');C.fill();
+      C.lineWidth=2;C.strokeStyle=teal;C.stroke(); C.beginPath();C.arc(cx,cy,2.4,0,7);C.fillStyle=teal;C.fill(); } }
 }
+function drawHandles(){ if (mode==='roll') drawGridHandles(cssvar('--teal')); }
+
+function render(){ syncView(); roll.render(); positionHandles(); }
 // Grip dots inside a handle tab, perpendicular to its drag axis (a row of dots
 // along the axis you CAN'T drag hints "grab and slide the other way").
 function gripDots(cx,cy,axis){ ctx.fillStyle='#08110d';
@@ -305,7 +212,7 @@ function drawGridHandles(teal){ const p=plot();
   drawTab(X(stepMax), yMid, GRIP_THICK, GRIP_LEN, 'h');
   // time-bottom: a STICKY '+ time' button pinned to the bottom of the viewport (always
   // visible; click-to-extend — no scrolling to find it). Drawn last so it sits on top.
-  const yBot=CSSH-GRIP_THICK/2-6;
+  const yBot=roll.size().h-GRIP_THICK/2-6;
   drawTab(p.x+p.w/2, yBot, GRIP_LEN, GRIP_THICK, 'v');
   ctx.fillStyle='#031'; ctx.font='bold 12px '+cssvar('--mono'); ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillText('+ time', p.x+p.w/2, yBot); ctx.textBaseline='alphabetic'; ctx.font='11px '+cssvar('--mono');
@@ -316,7 +223,7 @@ function hitGridHandle(x,y){ if (mode!=='roll') return null; const p=plot();
   const yMid=p.y+p.h/2, halfLen=GRIP_LEN/2+HANDLE_PX*0.4, halfThick=GRIP_THICK/2+HANDLE_PX;
   const xLo=Math.max(p.x+GRIP_THICK/2+3, X(stepMin));
   const xHi=X(stepMax);
-  const yBot=CSSH-GRIP_THICK/2-6;   // STICKY: pinned to the viewport bottom, always present
+  const yBot=roll.size().h-GRIP_THICK/2-6;   // STICKY: pinned to the viewport bottom, always present
   if (Math.abs(x-xLo)<=halfThick && Math.abs(y-yMid)<=halfLen) return 'pmin';
   if (Math.abs(x-xHi)<=halfThick && Math.abs(y-yMid)<=halfLen) return 'pmax';
   if (Math.abs(y-yBot)<=halfThick && Math.abs(x-(p.x+p.w/2))<=halfLen) return 'tbottom';
@@ -727,8 +634,8 @@ function showToast(msg, actionLabel, onAction){ const t=$('toast'); t.innerHTML=
 function hideToast(){ $('toast').style.display='none'; }
 // Drone/tala levels are LIVE: each routes through a per-session gain bus, so a
 // slider change scales the currently-playing drone / accent strums immediately.
-$('dronevol').oninput=e=>{ droneVol=Number(e.target.value); if (session&&session.dBus&&AC) session.dBus.gain.setTargetAtTime(droneVol,AC.currentTime,0.02); };
-$('talavol').oninput=e=>{ talaVol=Number(e.target.value); if (session&&session.tBus&&AC) session.tBus.gain.setTargetAtTime(talaVol,AC.currentTime,0.02); };
+$('dronevol').oninput=e=>{ droneVol=Number(e.target.value); if (audio) audio.setMix({ drone:droneVol }); };
+$('talavol').oninput=e=>{ talaVol=Number(e.target.value); if (audio) audio.setMix({ tala:talaVol }); };
 // Footer build/version — mirrors the app's Footer component (build-app-v0.sh stamps both).
 $('footbuild').innerHTML=(BUILD_DATE?`built ${BUILD_DATE} · `:'')+`<span class="ver">${VERSION}</span>`;
 
@@ -820,15 +727,14 @@ function liveOn(){ ensureAudio(); if (!live) return; const now=AC.currentTime;
   live.gain.gain.cancelScheduledValues(now); live.gain.gain.setTargetAtTime(0.20,now,0.008); live.dgain.gain.setTargetAtTime(0.05,now,0.03); }
 function liveSet(step){ if (live&&AC) live.osc.frequency.setTargetAtTime(freqOf(step),AC.currentTime,0.006); }
 function liveOff(){ if (!live) return; const now=AC.currentTime; live.gain.gain.setTargetAtTime(0,now,0.03); live.dgain.gain.setTargetAtTime(0,now,0.05); }
-// Playback session — all voices + drone route through one gain so a new Play
-// (or Stop) can cut the previous one instead of stacking melodies over each other.
-let session=null;
-function newSession(a){ stopPlayback(); const g=a.createGain(); g.gain.value=1; g.connect(a.destination); session={gain:g,oscs:[]}; return g; }
+// The voice, drone and strums live in core/roll-audio.js so the library page sounds
+// a phrase exactly as the draw link it replaces does — same gamaka interpolation,
+// same envelopes. draw keeps the transport: the audio module schedules and says when
+// it starts, and the playhead below counts from there.
+let audio=null;
+function rollAudio(){ const a=ensureAudio(); if (!a) return null; if (!audio){ audio=createRollAudio(a, freqOf); audio.setMix({ drone:droneVol, tala:talaVol }); } return audio; }
 function stopPlayback(){ playing=false; playPos=null; if (rafId){ cancelAnimationFrame(rafId); rafId=0; }
-  if (session&&AC){ const a=AC, now=a.currentTime, s=session;
-    s.gain.gain.cancelScheduledValues(now); s.gain.gain.setTargetAtTime(0.0001,now,0.02);
-    setTimeout(()=>{ for (const o of s.oscs){ try{ o.stop(); o.disconnect(); }catch(e){} } try{ s.dBus&&s.dBus.disconnect(); }catch(e){} try{ s.tBus&&s.tBus.disconnect(); }catch(e){} try{ s.gain.disconnect(); }catch(e){} }, 90);
-    session=null; }
+  if (audio) audio.stop();
   if (mode==='roll') render(); }
 // playhead loop — advance a line down the roll and scroll so it stays in view ("rolls up")
 function tick(){ if (!playing||!AC) return; const el=Math.max(0, AC.currentTime-playStart);
@@ -841,45 +747,14 @@ function tick(){ if (!playing||!AC) return; const el=Math.max(0, AC.currentTime-
   render();
   rafId=requestAnimationFrame(tick); }
 function playLabel(){ const lo=Math.min(markerA,markerB), hi=Math.max(markerA,markerB); return (lo>0.01||hi<TOTAL-0.01) ? 'Play A–B' : 'Play phrase'; }
-// Per-session drone/tala gain buses (live volume). Created lazily on the current
-// session; drone()/strum() feed them at a FIXED nominal level and the bus gain
-// (= droneVol / talaVol) scales it live from the sliders.
-function droneBus(a,dest){ if (!session) return dest; if (!session.dBus){ const g=a.createGain(); g.gain.value=droneVol; g.connect(dest); session.dBus=g; } return session.dBus; }
-function talaBus(a,dest){ if (!session) return dest; if (!session.tBus){ const g=a.createGain(); g.gain.value=talaVol; g.connect(dest); session.tBus=g; } return session.tBus; }
-// sustained S–P–S drone (53-EDO): mandra Sa, Sa, Pa. Volume is the dBus gain (live).
-function drone(a,dest,now,dur){ const bus=droneBus(a,dest), pk=0.09; for (const st of [-EDO,0,31]){ const o=a.createOscillator(); o.type='sine'; o.frequency.value=freqOf(st);
-  const g=a.createGain(); g.gain.setValueAtTime(0,now); g.gain.linearRampToValueAtTime(pk,now+0.12); g.gain.setValueAtTime(pk,now+dur-0.2); g.gain.linearRampToValueAtTime(0,now+dur);
-  o.connect(g); g.connect(bus); o.start(now); o.stop(now+dur+0.05); if (session) session.oscs.push(o); } }
-// Tala accent strum (veena-like pluck): S + P plucked on each accent slot of the
-// cycle that falls inside [from,to]. Volume is the tBus gain (live).
-function strum(a,bus,when){ const pk=0.24; for (const st of [0,31]){ const o=a.createOscillator(); o.type='triangle'; o.frequency.value=freqOf(st);
-  const g=a.createGain(); g.gain.setValueAtTime(0.0001,when); g.gain.exponentialRampToValueAtTime(pk,when+0.006); g.gain.exponentialRampToValueAtTime(0.0008,when+0.34);
-  o.connect(g); g.connect(bus); o.start(when); o.stop(when+0.4); if (session) session.oscs.push(o); } }
-// Schedule strums regardless of talaVol (0 just means the bus is silent) so raising
-// the slider mid-play brings them in.
-function tala(a,dest,from,to,start,spu){ if (!talaMeasure||!talaAccents.length) return; const bus=talaBus(a,dest);
-  for (let cyc=0; cyc<to; cyc+=talaMeasure){ for (const acc of talaAccents){ const u=cyc+(acc-1);
-    if (u<from-1e-6||u>=to) continue; strum(a,bus,start+(u-from)*spu); } } }
-// play note nn from when for dur, sounding the sub-range [uStart,uEnd] of its curve
-function voice(a,dest,when,dur,nn,uStart=0,uEnd=1){ const o=a.createOscillator(); o.type='triangle';
-  // Attack/release scale with the note so a rapid note never has its hold point
-  // land before the attack peak (that produced click/pop on fast passages).
-  const atk=Math.min(0.012,dur*0.35), rel=Math.min(0.035,dur*0.45), hold=Math.max(when+atk, when+dur-rel);
-  const g=a.createGain(); g.gain.setValueAtTime(0.0001,when); g.gain.linearRampToValueAtTime(0.2,when+atk);
-  g.gain.setValueAtTime(0.2,hold); g.gain.linearRampToValueAtTime(0.0001,when+dur);
-  if (nn.curve&&nn.curve.length>=2){ const N=GAMAKA_SAMPLES,arr=new Float32Array(N); for (let k=0;k<N;k++) arr[k]=freqOf(sampleCurve(nn.curve,uStart+(uEnd-uStart)*k/(N-1))); o.frequency.setValueCurveAtTime(arr,when,dur); }
-  else o.frequency.setValueAtTime(freqOf(nn.step),when);
-  o.connect(g); g.connect(dest); o.start(when); o.stop(when+dur+0.05); if (session) session.oscs.push(o); }
-function playNote(i){ const a=ensureAudio(); if (!a) return; const dest=newSession(a), now=a.currentTime+0.03, dur=Math.max(0.5,NOTES[i].dur*secPerUnit());
-  drone(a,dest,now,dur+0.4); voice(a,dest,now,dur,NOTES[i]); }
+function playNote(i){ const au=rollAudio(); if (!au) return; stopPlayback();
+  au.note(NOTES[i], Math.max(0.5, NOTES[i].dur*secPerUnit())); }
 function autoPlay(){ if (sel>=0&&NOTES[sel].curve) playNote(sel); }
 // play the roll from `from` to `to` length-units (partial notes at the ends sound their portion)
-function playFrom(from,to){ const a=ensureAudio(); if (!a) return; from=Math.max(0,from); to=Math.min(TOTAL,to); if (to<=from) return;
-  const dest=newSession(a), spu=secPerUnit(), start=a.currentTime+0.06;
-  drone(a,dest,start,(to-from)*spu+0.4);
-  tala(a,dest,from,to,start,spu);
-  for (let i=0;i<NOTES.length;i++){ const s0=starts[i], s1=s0+NOTES[i].dur; const aU=Math.max(from,s0), bU=Math.min(to,s1);
-    if (bU<=aU) continue; voice(a,dest,start+(aU-from)*spu, (bU-aU)*spu, NOTES[i], (aU-s0)/NOTES[i].dur, (bU-s0)/NOTES[i].dur); }
+function playFrom(from,to){ const au=rollAudio(); if (!au) return; from=Math.max(0,from); to=Math.min(TOTAL,to); if (to<=from) return;
+  stopPlayback();
+  const start=au.phrase({ notes:NOTES, starts, from, to, secPerUnit:secPerUnit(),
+    tala:{ measure:talaMeasure, accents:talaAccents } });
   playing=true; paused=false; playStart=start; playFromU=from; playToU=to; playPos=from;
   setPlayBtn('⏸','Pause'); if (rafId) cancelAnimationFrame(rafId); rafId=requestAnimationFrame(tick); }
 function pausePlayback(){ if (!playing) return; pausedAt=playPos; pausedTo=playToU; stopPlayback(); paused=true; playPos=pausedAt; setPlayBtn('▶','Resume'); render(); }
@@ -988,8 +863,8 @@ const DEFAULT_MIX={ dv:0.5, tv:0.5 };
 function applyMix(u){
   if (!u || typeof u!=='object') return;
   const set=(k,v)=>{ if (!(typeof v==='number') || !isFinite(v)) return; const c=Math.max(0,Math.min(1,v));
-    if (k==='dv'){ droneVol=c; if ($('dronevol')) $('dronevol').value=String(c); if (session&&session.dBus&&AC) session.dBus.gain.setTargetAtTime(c,AC.currentTime,0.02); }
-    else { talaVol=c; if ($('talavol')) $('talavol').value=String(c); if (session&&session.tBus&&AC) session.tBus.gain.setTargetAtTime(c,AC.currentTime,0.02); } };
+    if (k==='dv'){ droneVol=c; if ($('dronevol')) $('dronevol').value=String(c); if (audio) audio.setMix({ drone:c }); }
+    else { talaVol=c; if ($('talavol')) $('talavol').value=String(c); if (audio) audio.setMix({ tala:c }); } };
   set('dv',u.dv); set('tv',u.tv);
 }
 // A share hash is pako(srgm text), or pako(JSON {v:2, srgm, mix}) when the link
@@ -1050,7 +925,7 @@ $('fileinput').onchange=async e=>{ const f=e.target.files[0]; e.target.value='';
 function download(name, data, type){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([data],{type})); a.download=name; a.click(); URL.revokeObjectURL(a.href); }
 $('save').onclick=()=>download(docName+'.srgm', srcText, 'text/plain');
 $('exportmidi').onclick=()=>{ try{ download(docName+'.mid', writeSMF(buildSequence(parse(srcText))), 'audio/midi'); }catch(e){ window.alert('MIDI export failed: '+e.message); } };
-window.__rr = { notes:()=>NOTES, X, Y, starts:()=>starts, get playing(){ return playing; }, get paused(){ return paused; }, get stepMin(){ return stepMin; }, get stepMax(){ return stepMax; }, get padTop(){ return PAD.t; }, gridSteps:()=>gridPitches.map(g=>g.step), labelChipW:()=>LABEL_CHIP_H, get shareLink(){ return shareLink; }, get playPos(){ return playPos; }, get markerA(){ return markerA; }, get markerB(){ return markerB; }, get talaMeasure(){ return talaMeasure; }, get talaAccents(){ return talaAccents; }, get droneVol(){ return droneVol; }, get talaVol(){ return talaVol; }, inlineSrc:()=>inlineSrc(), rebuild:()=>rebuildShare(), get src(){ return srcText; } };
+window.__rr = { notes:()=>NOTES, X, Y, starts:()=>starts, get playing(){ return playing; }, get paused(){ return paused; }, get stepMin(){ return stepMin; }, get stepMax(){ return stepMax; }, get padTop(){ return PAD.t; }, gridSteps:()=>gridPitches.map(g=>g.step), labelChipW:()=>14, get shareLink(){ return shareLink; }, get playPos(){ return playPos; }, get markerA(){ return markerA; }, get markerB(){ return markerB; }, get talaMeasure(){ return talaMeasure; }, get talaAccents(){ return talaAccents; }, get droneVol(){ return droneVol; }, get talaVol(){ return talaVol; }, inlineSrc:()=>inlineSrc(), rebuild:()=>rebuildShare(), get src(){ return srcText; } };
 // Populate the examples dropdown from the manifest (same source as the app).
 fetch('./examples/index.json').then(r=>r.json()).then(list=>{
   const sel=$('exsel'); for (const n of list){ const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); }
