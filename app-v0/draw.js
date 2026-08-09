@@ -13,6 +13,8 @@ import { encodeShareToken, decodeShareToken } from './core/share.js';
 import { VERSION, BUILD_DATE } from './version.js';
 import { midiToName } from './core/tuning.js';
 import { serializeInline, sampleCurve, GAMAKA_SAMPLES } from './core/gamaka-inline.js';
+import { rollGeometry } from './core/roll-geometry.js';
+import { renderRoll } from './core/roll-render.js';
 import { extractAnchors, pointsToAnchors, addAnchor, removeAnchor, moveAnchor } from './core/gamaka-curve.js';
 import { buildSequence } from './core/midi/sequence.js';
 import { writeSMF } from './core/midi/smf.js';
@@ -200,18 +202,18 @@ function labelDepth(gp) {
   ctx.restore();
   return Math.max(PAD_T_MIN, Math.round(w + 8) + 12);
 }
-const plot = () => ({ x:PAD.l, y:PAD.t, w:CSSW-PAD.l-PAD.r, h:CSSH-PAD.t-PAD.b });
-function xRange(){ if (mode==='draw'){ const c=NOTES[sel].step; return [c-drawSpan, c+drawSpan]; } return [stepMin, stepMax]; }
-function X(s){ const [a,b]=xRange(), p=plot(); return p.x + (s-a)/(b-a)*p.w; }
-function stepAtX(px){ const [a,b]=xRange(), p=plot(); return a + (px-p.x)/p.w*(b-a); }
-function yStartEnd(){ if (mode==='draw') return [starts[sel], starts[sel]+NOTES[sel].dur]; return [0, TOTAL]; }
-// Draw mode fits the single note to the viewport. Roll mode is WINDOWED: time maps
-// to a virtual space (PAD.t + t*pxU) taller than the canvas; only the slice under
-// the scroll offset (sTop) is drawn, so a long piece never needs a giant canvas.
-function Y(t){ if (mode==='draw'){ const [a,b]=yStartEnd(), p=plot(); return p.y + (t-a)/(b-a)*p.h; }
-  return PAD.t + t*pxU() - sTop(); }
-function tAtY(py){ if (mode==='draw'){ const [a,b]=yStartEnd(), p=plot(); return a + (py-p.y)/p.h*(b-a); }
-  return (py + sTop() - PAD.t)/pxU(); }
+// The coordinate maps live in core/roll-geometry.js, so whatever draws the roll and
+// whatever hit-tests it cannot disagree. Rebuilt per call because every input to it
+// changes: the canvas size, the scroll offset, the selection, the zoom.
+// Built from the same model and view the renderer is given, so hit-testing reads the
+// roll's own coordinates rather than a second description of them.
+function geo(){ const m=rollModel(); return rollGeometry({ ...rollView(), stepMin:m.stepMin, stepMax:m.stepMax, total:m.total }); }
+const plot = () => geo().plot;
+function X(s){ return geo().X(s); }
+function stepAtX(px){ return geo().stepAtX(px); }
+function yStartEnd(){ return geo().yRange; }
+function Y(t){ return geo().Y(t); }
+function tAtY(py){ return geo().tAtY(py); }
 
 function fit(){ const h=(window.visualViewport&&window.visualViewport.height)||window.innerHeight;
   document.getElementById('wrap').style.height=h+'px'; requestAnimationFrame(resizeCanvas); }
@@ -225,113 +227,64 @@ function resizeCanvas(){ const hd=document.getElementById('holder'); const baseH
   cv.style.touchAction = mode==='draw' ? 'none' : ROLL_TOUCH_ACTION;   // draw: no scroll; roll: allow vertical scroll
   ctx.setTransform(dpr,0,0,dpr,0,0); render(); }
 
+// The roll itself is drawn by core/roll-render.js — the same code /ragas and the app
+// use, so a piece looks the same wherever it is shown. What stays here is the editing
+// chrome, which no reader needs: the rest gutter, the paint preview, the gamaka
+// anchors and the stretch handles. Those are interleaved with the roll's own layers
+// rather than sitting on top of them, so they go in through the render hooks and
+// share its geometry — the note you see and the note you can grab cannot drift apart.
+function rollModel(){
+  return { notes:NOTES, starts, total:TOTAL, gridPitches, stepMin, stepMax,
+    tala:{ measure:talaMeasure, beat:talaBeat, accents:talaAccents }, isBlack:keyIsBlack };
+}
+function rollView(){
+  return { w:CSSW, h:CSSH, pad:PAD, mode,
+    pxPerUnit:pxU(), scrollTop:sTop(),
+    selStep: mode==='draw' ? NOTES[sel].step : 0, drawSpan,
+    tStart: mode==='draw' ? starts[sel] : 0,
+    tEnd: mode==='draw' ? starts[sel]+NOTES[sel].dur : TOTAL,
+    palette:{ amber:cssvar('--amber'), amberS:cssvar('--amberSoft'), teal:cssvar('--teal'),
+      terra:cssvar('--terra'), hair:cssvar('--hair2'), muted:cssvar('--muted'),
+      panel2:cssvar('--panel2'), mono:cssvar('--mono') },
+    sel, grabIdx: grab?grab.idx:-1, playPos, markerA, markerB,
+    chipH:LABEL_CHIP_H, sample:sampleCurve };
+}
 function render(){
-  const p=plot(); ctx.clearRect(0,0,CSSW,CSSH);
-  const amber=cssvar('--amber'),amberS=cssvar('--amberSoft'),teal=cssvar('--teal'),terra=cssvar('--terra'),hair=cssvar('--hair2'),muted=cssvar('--muted');
-  ctx.font='11px '+cssvar('--mono'); const [sa,sb]=xRange();
-  // Octave bands (pitch axis): alternate shade per octave (53-EDO); Sa lines at
-  // multiples of EDO, with the MIDDLE Sa (step 0) drawn distinctly.
-  { const oLo=Math.floor(sa/EDO), oHi=Math.ceil(sb/EDO);
-    for (let k=oLo;k<oHi;k++){ if ((((k%2)+2)%2)!==0) continue; const x0=Math.max(p.x,X(k*EDO)), x1=Math.min(p.x+p.w,X((k+1)*EDO));
-      if (x1>x0){ ctx.fillStyle='rgba(216,161,63,.05)'; ctx.fillRect(x0,p.y,x1-x0,p.h); } }
-    for (let k=oLo;k<=oHi;k++){ const s=k*EDO; if (s<sa-1||s>sb+1) continue; const x=X(s);
-      ctx.strokeStyle=(k===0)?terra:amberS; ctx.lineWidth=(k===0)?2:1; ctx.globalAlpha=(k===0)?.5:.28;
-      ctx.beginPath(); ctx.moveTo(x,p.y); ctx.lineTo(x,p.y+p.h); ctx.stroke(); ctx.globalAlpha=1; } }
-  // Left gutter (holds the draggable A/B segment handles).
-  ctx.fillStyle=cssvar('--panel2'); ctx.globalAlpha=.55; ctx.fillRect(0,0,PAD.l,CSSH); ctx.globalAlpha=1;
-  ctx.strokeStyle=hair; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(PAD.l,0); ctx.lineTo(PAD.l,CSSH); ctx.stroke();
-  // Rest gutter: a faint band at the left edge of the plot area, paint mode only —
-  // pressing inside it paints a rest (silent gap) instead of a note (see the paint
-  // pointerdown listener's `restLane` check, same REST_LANE_PX).
-  if (mode==='roll' && paintMode){ ctx.fillStyle='rgba(216,161,63,.09)'; ctx.fillRect(p.x,p.y,REST_LANE_PX,p.h);
-    ctx.strokeStyle=hair; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(p.x+REST_LANE_PX,p.y); ctx.lineTo(p.x+REST_LANE_PX,p.y+p.h); ctx.stroke();
-    ctx.fillStyle=muted; ctx.globalAlpha=.8; ctx.textAlign='center'; ctx.font='bold 11px '+cssvar('--mono');
-    ctx.fillText('z', p.x+REST_LANE_PX/2, p.y+13); ctx.globalAlpha=1; ctx.font='11px '+cssvar('--mono'); }
-  if (mode==='draw'){ for (let oct=Math.floor(sa/EDO)-1; oct<=Math.floor(sb/EDO)+1; oct++) for (const sh of SHRUTI){ const s=oct*EDO+sh;
-    if (s<sa||s>sb) continue; const x=X(s); ctx.strokeStyle=hair; ctx.globalAlpha=.5; ctx.beginPath(); ctx.moveTo(x,p.y); ctx.lineTo(x,p.y+p.h); ctx.stroke(); ctx.globalAlpha=1; } }
-  for (const g of gridPitches){ if (g.step<sa-1||g.step>sb+1) continue; const x=X(g.step);
-    ctx.strokeStyle=hair; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x,p.y); ctx.lineTo(x,p.y+p.h); ctx.stroke();
-    // Header label as a piano-key chip: dark = black key, light = white key
-    // (nearest 12-EDO semitone to the chosen Sa).
-    // Upright, running along its own grid line. Rotated, a chip is only LABEL_CHIP_H
-    // wide however long its name, so two shrutis a few pixels apart no longer print
-    // over each other.
-    const black=keyIsBlack(g.step); ctx.font='bold 10px '+cssvar('--mono');
-    const cw=ctx.measureText(g.label).width+8, ch=LABEL_CHIP_H;
-    ctx.save(); ctx.translate(x, p.y-6-cw/2); ctx.rotate(-Math.PI/2);
-    ctx.fillStyle=black?'#20242b':'#efe6d0'; roundRect(-cw/2,-ch/2,cw,ch,4); ctx.fill();
-    ctx.strokeStyle='rgba(0,0,0,.25)'; ctx.lineWidth=.5; ctx.stroke();
-    ctx.fillStyle=black?'#efe6d0':'#20242b'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(g.label, 0, .5);
-    ctx.restore(); ctx.textBaseline='alphabetic';
-    ctx.font='11px '+cssvar('--mono'); }
-  const [ta,tb]=yStartEnd();
-  // Visible time window (roll: only the scrolled slice; draw: the whole note).
-  const vLo = mode==='roll' ? (sTop()-PAD.t)/pxU()-1 : ta-1e-6;
-  const vHi = mode==='roll' ? (sTop()+CSSH-PAD.t)/pxU()+1 : tb+1e-6;
-  // Tala grid (time axis): akshara pulse (faint), anga/accent starts (amber),
-  // avartana cycle boundaries (terra, bold) with a cycle number.
-  if (mode==='roll' && talaMeasure>0){
-    const angOff=talaAccents.map(a=>a-1);                                   // 0-based anga-start offsets in a cycle
-    const angs=angOff.map((o,i)=>[o, i+1<angOff.length?angOff[i+1]:talaMeasure]);   // [start,end) per anga
-    const glyphOf=(s,e)=>{ const k=talaBeat>0?Math.round((e-s)/talaBeat):0; return k===2?'O':(k===1?'U':'I'); };  // O drutam · U anudrutam · I laghu
-    const gline=(t,col,w,al)=>{ if (t<vLo||t>vHi||t<-1e-6||t>TOTAL+1e-6) return; const y=Y(t);
-      ctx.strokeStyle=col; ctx.lineWidth=w; ctx.globalAlpha=al; ctx.beginPath(); ctx.moveTo(p.x,y); ctx.lineTo(p.x+p.w,y); ctx.stroke(); ctx.globalAlpha=1; };
-    const c0=Math.floor(Math.max(0,vLo)/talaMeasure)*talaMeasure;
-    // Anga part bands — alternate shade, like the octave bands but on the time axis.
-    for (let c=c0; c<vHi && c<TOTAL; c+=talaMeasure){ angs.forEach(([s,e],i)=>{ if (i%2!==0) return;
-      const y0=Math.max(p.y,Y(c+s)), y1=Math.min(p.y+p.h,Y(Math.min(c+e,TOTAL))); if (y1>y0){ ctx.fillStyle='rgba(70,195,154,.05)'; ctx.fillRect(p.x,y0,p.w,y1-y0); } }); }
-    if (talaBeat>0){ for (let t=Math.max(0,Math.floor(vLo/talaBeat)*talaBeat); t<=Math.min(TOTAL,vHi); t+=talaBeat) gline(t,muted,0.6,.13); }  // akshara pulse
-    // Anga starts (accent lines) + I/O/U glyph.
-    for (let c=c0; c<vHi && c<TOTAL; c+=talaMeasure){ angs.forEach(([s,e])=>{ const t=c+s; if (t>TOTAL) return; gline(t,amber,1,.3);
-      if (t>=vLo&&t<=vHi){ const y=Y(t); ctx.fillStyle=amber; ctx.globalAlpha=.8; ctx.textAlign='left'; ctx.font='bold 10px '+cssvar('--mono'); ctx.fillText(glyphOf(s,e), PAD.l+3, y-4); ctx.globalAlpha=1; ctx.font='11px '+cssvar('--mono'); } }); }
-    // Avartana (cycle) boundaries + number.
-    for (let t=Math.max(0,Math.floor(vLo/talaMeasure)*talaMeasure); t<=Math.min(TOTAL,vHi); t+=talaMeasure){ gline(t,terra,1.8,.5);
-      if (t<TOTAL-1e-6){ const y=Y(t); ctx.fillStyle=terra; ctx.globalAlpha=.75; ctx.textAlign='left'; ctx.font='bold 10px '+cssvar('--mono'); ctx.fillText(String(Math.round(t/talaMeasure)+1), PAD.l+3, y+12); ctx.globalAlpha=1; ctx.font='11px '+cssvar('--mono'); } }
-  }
-  // Note onsets (irregular) — kept faint so the tala grid reads as the metric guide.
-  for (let i=0;i<=NOTES.length;i++){ const t=(i<NOTES.length)?starts[i]:TOTAL; if (t<vLo||t>vHi) continue; const y=Y(t);
-    ctx.strokeStyle=terra; ctx.globalAlpha=(talaMeasure>0)?.12:.22; ctx.lineWidth=.7;
-    ctx.beginPath(); ctx.moveTo(p.x,y); ctx.lineTo(p.x+p.w,y); ctx.stroke(); ctx.globalAlpha=1; }
-  const colW = mode==='draw' ? 0 : Math.max(9, p.w/(stepMax-stepMin)*4);
-  for (let i=0;i<NOTES.length;i++){ if (mode==='draw'&&i!==sel) continue;
-    if (mode==='roll'){ const s0=starts[i], s1=s0+NOTES[i].dur; if (s1<vLo||s0>vHi) continue; }   // cull off-screen notes
-    const nn=NOTES[i], y0=Y(starts[i]), y1=Y(starts[i]+nn.dur), x=X(nn.step), selNow=i===sel;
-    const w = mode==='draw' ? Math.max(30,p.w*0.14) : colW;
-    // Roll note boxes are piano-key colored (dark = black key, light = white key);
-    // draw mode keeps the amber highlight for the note being edited.
-    const black = mode==='roll' && keyIsBlack(nn.step);
-    ctx.fillStyle = mode==='draw' ? (selNow?'rgba(216,161,63,.16)':'rgba(216,161,63,.07)') : (black?'rgba(32,36,43,.82)':'rgba(239,230,208,.85)');
-    ctx.strokeStyle = selNow?amber:amberS; ctx.lineWidth=selNow?2:1.3; ctx.setLineDash(mode==='draw'?[5,4]:[]);
-    roundRect(x-w/2, y0+1, w, Math.max(3,y1-y0-2), 5); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
-    if (nn.curve) drawCurve(nn, starts[i], starts[i]+nn.dur, teal, mode==='draw'?3:2);
-    if (mode!=='draw'){ ctx.fillStyle = black?'#efe6d0':'#20242b'; ctx.textAlign='center'; ctx.fillText(nn.swara, x, y0+13); }
-    if (grab && grab.idx===i){ ctx.fillStyle='#9fc'; ctx.globalAlpha=0.9; ctx.fillRect(x-10, y1-4, 20, 8); ctx.globalAlpha=1; } }
-  if (mode==='roll' && gamakaMode) for (let i=0;i<NOTES.length;i++){ const c=NOTES[i].curve; if (!c) continue;
-    const t0=starts[i], t1=t0+NOTES[i].dur;
-    for (const [u,st] of c){ const cx=X(st), cy=Y(t0+(t1-t0)*u);
-      ctx.fillStyle=teal; ctx.globalAlpha=.9; ctx.beginPath(); ctx.arc(cx,cy,4,0,6.283); ctx.fill(); ctx.globalAlpha=1;
-      ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.lineWidth=.7; ctx.stroke(); } }
-  if (paint){ const y0=Y(paint.ts), y1=Y(paint.ts+paint.dur);
-    if (paint.rest){ const xc=p.x+REST_LANE_PX/2;
-      ctx.fillStyle='#999'; ctx.globalAlpha=0.4; roundRect(xc-8,y0,16,Math.max(4,y1-y0),4); ctx.fill(); ctx.globalAlpha=1; }
-    else { const xc=X(paint.step);
-      ctx.fillStyle='#9fc'; ctx.globalAlpha=0.35; roundRect(xc-8,y0,16,Math.max(4,y1-y0),4); ctx.fill(); ctx.globalAlpha=1; } }
-  if (mode==='draw'&&!NOTES[sel].curve){ ctx.fillStyle=muted; ctx.textAlign='center'; ctx.font='13px '+cssvar('--sans');
-    ctx.fillText('drag top→bottom to draw the pitch', p.x+p.w/2, p.y+p.h/2); }
-  if (mode==='draw'&&NOTES[sel].curve&&!drawing){ const c=NOTES[sel].curve,[t0,t1]=yStartEnd();
-    for (let k=0;k<c.length;k++){ const cx=X(c[k][1]),cy=Y(t0+(t1-t0)*c[k][0]);
-      ctx.beginPath();ctx.arc(cx,cy,6.5,0,7);ctx.fillStyle=cssvar('--bg');ctx.fill();
-      ctx.lineWidth=2;ctx.strokeStyle=teal;ctx.stroke(); ctx.beginPath();ctx.arc(cx,cy,2.4,0,7);ctx.fillStyle=teal;ctx.fill(); } }
-  if (mode==='roll'){   // A–B segment: dashed bounds + shaded region (handles live in the gutter)
-    const lo=Math.min(markerA,markerB), hi=Math.max(markerA,markerB);
-    if (lo>0.01||hi<TOTAL-0.01){ const y0=Y(lo),y1=Y(hi); ctx.fillStyle='rgba(216,161,63,.07)'; ctx.fillRect(p.x,y0,p.w,y1-y0); }
-    const mk=(m)=>{ const y=Y(m); if (y<p.y-2||y>CSSH) return; ctx.strokeStyle=amber; ctx.globalAlpha=.8; ctx.setLineDash([6,4]); ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(PAD.l,y); ctx.lineTo(p.x+p.w,y); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha=1; };
-    mk(markerA); mk(markerB); }
-  if (mode==='roll'&&playPos!=null){ const y=Y(playPos);   // playhead sweeps down as the roll plays
-    ctx.strokeStyle=teal; ctx.globalAlpha=.95; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(p.x,y); ctx.lineTo(p.x+p.w,y); ctx.stroke(); ctx.globalAlpha=1;
-    ctx.fillStyle=teal; ctx.beginPath(); ctx.moveTo(p.x,y-4); ctx.lineTo(p.x+7,y); ctx.lineTo(p.x,y+4); ctx.closePath(); ctx.fill(); }
-  if (mode==='roll') drawGridHandles(teal);
+  const C=rollView().palette, teal=C.teal, muted=C.muted, hair=C.hair;
+  renderRoll(ctx, rollModel(), rollView(), {
+    underGrid(g){ const p=g.plot, [sa,sb]=g.xRange;
+      // Rest gutter: a faint band at the left edge of the plot area, paint mode only —
+      // pressing inside it paints a rest (silent gap) instead of a note (see the paint
+      // pointerdown listener's `restLane` check, same REST_LANE_PX).
+      if (mode==='roll' && paintMode){ ctx.fillStyle='rgba(216,161,63,.09)'; ctx.fillRect(p.x,p.y,REST_LANE_PX,p.h);
+        ctx.strokeStyle=hair; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(p.x+REST_LANE_PX,p.y); ctx.lineTo(p.x+REST_LANE_PX,p.y+p.h); ctx.stroke();
+        ctx.fillStyle=muted; ctx.globalAlpha=.8; ctx.textAlign='center'; ctx.font='bold 11px '+C.mono;
+        ctx.fillText('z', p.x+REST_LANE_PX/2, p.y+13); ctx.globalAlpha=1; ctx.font='11px '+C.mono; }
+      // Draw mode zooms onto one note, so it shows every shruti — you are placing a
+      // pitch by hand, not reading a raga.
+      if (mode==='draw'){ for (let oct=Math.floor(sa/EDO)-1; oct<=Math.floor(sb/EDO)+1; oct++) for (const sh of SHRUTI){ const s=oct*EDO+sh;
+        if (s<sa||s>sb) continue; const x=g.X(s); ctx.strokeStyle=hair; ctx.globalAlpha=.5; ctx.beginPath(); ctx.moveTo(x,p.y); ctx.lineTo(x,p.y+p.h); ctx.stroke(); ctx.globalAlpha=1; } }
+    },
+    overNotes(g){ const p=g.plot, X=g.X, Y=g.Y;
+      if (mode==='roll' && gamakaMode) for (let i=0;i<NOTES.length;i++){ const c=NOTES[i].curve; if (!c) continue;
+        const t0=starts[i], t1=t0+NOTES[i].dur;
+        for (const [u,st] of c){ const cx=X(st), cy=Y(t0+(t1-t0)*u);
+          ctx.fillStyle=teal; ctx.globalAlpha=.9; ctx.beginPath(); ctx.arc(cx,cy,4,0,6.283); ctx.fill(); ctx.globalAlpha=1;
+          ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.lineWidth=.7; ctx.stroke(); } }
+      if (paint){ const y0=Y(paint.ts), y1=Y(paint.ts+paint.dur);
+        if (paint.rest){ const xc=p.x+REST_LANE_PX/2;
+          ctx.fillStyle='#999'; ctx.globalAlpha=0.4; roundRect(xc-8,y0,16,Math.max(4,y1-y0),4); ctx.fill(); ctx.globalAlpha=1; }
+        else { const xc=X(paint.step);
+          ctx.fillStyle='#9fc'; ctx.globalAlpha=0.35; roundRect(xc-8,y0,16,Math.max(4,y1-y0),4); ctx.fill(); ctx.globalAlpha=1; } }
+      if (mode==='draw'&&!NOTES[sel].curve){ ctx.fillStyle=muted; ctx.textAlign='center'; ctx.font='13px '+cssvar('--sans');
+        ctx.fillText('drag top→bottom to draw the pitch', p.x+p.w/2, p.y+p.h/2); }
+      if (mode==='draw'&&NOTES[sel].curve&&!drawing){ const c=NOTES[sel].curve,[t0,t1]=g.yRange;
+        for (let k=0;k<c.length;k++){ const cx=X(c[k][1]),cy=Y(t0+(t1-t0)*c[k][0]);
+          ctx.beginPath();ctx.arc(cx,cy,6.5,0,7);ctx.fillStyle=cssvar('--bg');ctx.fill();
+          ctx.lineWidth=2;ctx.strokeStyle=teal;ctx.stroke(); ctx.beginPath();ctx.arc(cx,cy,2.4,0,7);ctx.fillStyle=teal;ctx.fill(); } }
+    },
+    top(){ if (mode==='roll') drawGridHandles(teal); },
+  });
   positionHandles();
 }
 // Grip dots inside a handle tab, perpendicular to its drag axis (a row of dots
@@ -388,14 +341,6 @@ function startHandleDrag(which,e){ const {x}=evtPos(e);
 function positionHandles(){ const g=$('gutter'); if (mode!=='roll'){ g.style.display='none'; return; } g.style.display='';
   $('mkA').style.top=yVirt(markerA)+'px'; $('mkB').style.top=yVirt(markerB)+'px'; }
 function roundRect(x,y,w,h,r){ r=Math.min(r,w/2,h/2); ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
-// sampleCurve was a byte-identical second copy of core/gamaka-inline.js's. Two
-// copies of the interpolator are two chances for the roll and the players to
-// disagree about what a gamaka means, which is exactly the bug being closed here.
-function drawCurve(nn,t0,t1,color,wd){ const c=nn.curve; if (!c||!c.length) return;
-  ctx.strokeStyle=color; ctx.lineWidth=wd; ctx.lineJoin='round'; ctx.lineCap='round'; ctx.beginPath();
-  const N=Math.max(24,c.length*10);
-  for (let k=0;k<=N;k++){ const u=k/N,st=sampleCurve(c,u),y=Y(t0+(t1-t0)*u),x=X(st); k?ctx.lineTo(x,y):ctx.moveTo(x,y); }
-  ctx.stroke(); }
 
 // ---------- interaction ----------
 function evtPos(e){ const r=cv.getBoundingClientRect(); return { x:e.clientX-r.left, y:e.clientY-r.top }; }
