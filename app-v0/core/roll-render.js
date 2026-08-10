@@ -79,13 +79,45 @@ export function renderRoll(ctx, m, v, hooks = {}) {
 
   hooks.underGrid && hooks.underGrid(g);
 
+  // The pitch grid, in three weights. All 53 steps of the octave are drawn, because
+  // the 53-EDO grid is what a pitch actually sits on and a gamaka wanders freely
+  // across it — hiding the steps between the shrutis makes an ornament look like it
+  // is floating over nothing.
+  //
+  // The three tiers differ in KIND, not only in degree — dotted against solid reads
+  // instantly, where three shades of the same faint ink do not, and the palette's
+  // faintest colour leaves no room below itself anyway:
+  //   every step   dotted — the 53-EDO lattice a pitch can land anywhere on
+  //   the 22       solid  — shrutis: the named places a pitch rests
+  //   the raga's   solid, heavier — the notes this piece is made of
+  // Weakest first, so the stronger lines land on top.
+  const shrutiSet = new Set(m.shrutiMods || []);
+  const ragaSet = new Set(m.gridPitches.map((gp) => gp.step));
+  {
+    const lo = Math.floor(sa), hi = Math.ceil(sb);
+    for (let step = lo; step <= hi; step++) {
+      if (ragaSet.has(step)) continue;                       // drawn below, at full weight
+      const mod = ((step % EDO) + EDO) % EDO;
+      const isShruti = shrutiSet.has(mod);
+      const x = X(step);
+      ctx.strokeStyle = C.muted;
+      ctx.lineWidth = 1;
+      ctx.setLineDash(isShruti ? [] : [1, 3]);
+      ctx.globalAlpha = isShruti ? 0.34 : 0.30;
+      ctx.beginPath(); ctx.moveTo(x, p.y); ctx.lineTo(x, p.y + p.h); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.globalAlpha = 1;
+  }
+
   // The raga's own pitch lines, each named by an upright chip: dark for a black key,
   // light for a white one, by the nearest semitone to this Sa.
   for (const gp of m.gridPitches) {
     if (gp.step < sa - 1 || gp.step > sb + 1) continue;
     const x = X(gp.step);
-    ctx.strokeStyle = C.hair; ctx.lineWidth = 1;
+    ctx.strokeStyle = C.muted; ctx.lineWidth = 1.4; ctx.globalAlpha = 0.75;
     ctx.beginPath(); ctx.moveTo(x, p.y); ctx.lineTo(x, p.y + p.h); ctx.stroke();
+    ctx.globalAlpha = 1;
     if (v.labels === false) continue;
     const black = m.isBlack(gp.step);
     ctx.font = 'bold 10px ' + mono;
@@ -136,6 +168,46 @@ export function renderRoll(ctx, m, v, hooks = {}) {
     }
   }
 
+  // Rests: silence has duration but no pitch, so it is drawn as a band across the
+  // WHOLE width rather than a box on some line. Nothing about it points at a swara,
+  // which is exactly what it means. Drawn under the notes so a note that overlaps a
+  // rest still reads as the note.
+  if (mode === 'roll') for (const r of (m.rests || [])) {
+    // Culled in TIME, like the notes below. Comparing the pixel y against the
+    // visible-time window mixed two different units, so whether a rest survived
+    // depended on where the scroll happened to put it — it came and went.
+    if (r.t0 + r.dur < vLo || r.t0 > vHi) continue;
+    const y0 = Y(r.t0), y1 = Y(r.t0 + r.dur);
+    const selNow = v.selRest === r.tok;
+    const h = Math.max(2, y1 - y0);
+    ctx.fillStyle = selNow ? 'rgba(216,161,63,.20)' : 'rgba(154,146,128,.16)';
+    ctx.fillRect(p.x, y0, p.w, h);
+    // Hatched, not just tinted. A flat wash of this weight reads as one more grid
+    // band among the tala's own; diagonals read as "nothing here", which is what a
+    // rest is, and cannot be confused with a note however faint the tint.
+    ctx.save();
+    ctx.beginPath(); ctx.rect(p.x, y0, p.w, h); ctx.clip();
+    ctx.strokeStyle = selNow ? C.amber : C.muted;
+    ctx.globalAlpha = selNow ? .35 : .22; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let d = -h; d < p.w; d += 9) { ctx.moveTo(p.x + d, y1); ctx.lineTo(p.x + d + h, y0); }
+    ctx.stroke(); ctx.restore(); ctx.globalAlpha = 1;
+    ctx.strokeStyle = selNow ? C.amber : C.muted;
+    ctx.globalAlpha = selNow ? .9 : .35; ctx.lineWidth = selNow ? 1.6 : 1;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(p.x, y0); ctx.lineTo(p.x + p.w, y0);
+    ctx.moveTo(p.x, y1); ctx.lineTo(p.x + p.w, y1); ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    if (h > 11) {
+      // The marker sits in the left gutter lane, where the rest-paint band is, so a
+      // rest always reads from the same edge whether you are painting or reading.
+      ctx.fillStyle = selNow ? C.amber : C.muted; ctx.globalAlpha = 1;
+      ctx.textAlign = 'center'; ctx.font = 'bold 11px ' + mono;
+      ctx.fillText('z', p.x + 11, (y0 + y1) / 2 + 4);
+      ctx.font = '11px ' + mono; ctx.textAlign = 'left';
+    }
+  }
+
   // Where each note begins — faint, so the tala grid stays the metric guide.
   for (let i = 0; i <= notes.length; i++) {
     const t = (i < notes.length) ? starts[i] : TOTAL;
@@ -161,7 +233,16 @@ export function renderRoll(ctx, m, v, hooks = {}) {
     roundRect(ctx, x - w / 2, y0 + 1, w, Math.max(3, y1 - y0 - 2), 5); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
     if (nn.curve) drawCurve(ctx, g, nn.curve, starts[i], starts[i] + nn.dur, C.teal, mode === 'draw' ? 3 : 2, v.sample);
     if (mode !== 'draw') { ctx.fillStyle = black ? '#efe6d0' : '#20242b'; ctx.textAlign = 'center'; ctx.fillText(nn.swara, x, y0 + 13); }
-    if (v.grabIdx === i) { ctx.fillStyle = '#9fc'; ctx.globalAlpha = 0.9; ctx.fillRect(x - 10, y1 - 4, 20, 8); ctx.globalAlpha = 1; }
+    // Resize caps at BOTH ends of the note being edited: the far edge sets how long
+    // it lasts, the near edge moves the boundary it shares with whatever came before.
+    // Drawn only for the note in hand, so a roll being read is not covered in handles.
+    if (v.grabIdx === i || v.sel === i) {
+      const zone = Math.min(10, Math.max(3, (y1 - y0) / 3));   // matches roll-edit's grab zone
+      ctx.fillStyle = '#9fc'; ctx.globalAlpha = v.grabIdx === i ? 0.9 : 0.55;
+      ctx.fillRect(x - 10, y0 - zone / 2, 20, zone);
+      ctx.fillRect(x - 10, y1 - zone / 2, 20, zone);
+      ctx.globalAlpha = 1;
+    }
   }
 
   hooks.overNotes && hooks.overNotes(g);

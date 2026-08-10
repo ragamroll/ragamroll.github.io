@@ -1,4 +1,4 @@
-const CACHE = 'ragamroll-d98b5cb';
+const CACHE = 'ragamroll-c5c4cc4';
 const ASSETS = [
   './', './index.html', './help.html', './draw.html', './draw.js', './pitchy.html', './app.js', './worker.js', './version.js', './manifest.webmanifest',
   './vendor/preact.module.js', './vendor/hooks.module.js', './vendor/htm.module.js', './vendor/htm-preact.js',
@@ -14,7 +14,7 @@ const ASSETS = [
   './core/shruti.js', './core/melakarta.js', './core/tala-preview.js', './core/raga-shruti.js', './core/share.js',
   './core/raga-ext.js', './core/raga-preview.js', './core/retune.js',
   './core/detect.js', './core/detect-raga-helper.js', './core/note-edit.js', './core/raga-seed.js',
-  './core/roll-geometry.js', './core/roll-render.js', './core/roll-model.js', './core/ragamroll.js', './core/roll-audio.js',
+  './core/roll-geometry.js', './core/roll-render.js', './core/roll-model.js', './core/ragamroll.js', './core/roll-audio.js', './core/marks.js', './core/roll-edit.js', './core/note-split.js',
   './core/renderers/notation.js', './core/renderers/roll.js',
   './core/midi/gm.js', './core/midi/smf.js', './core/midi/sequence.js', './core/midi/tala.js',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png',

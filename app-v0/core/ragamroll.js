@@ -14,6 +14,7 @@
 // its own chrome (see roll-render.js) and reads `geometry()` to hit-test against the
 // exact coordinates that were drawn.
 import { buildRollModel, gridBounds, gridPitches, isBlackKey } from './roll-model.js';
+import { BOXES } from './shruti.js';
 import { rollGeometry } from './roll-geometry.js';
 import { renderRoll } from './roll-render.js';
 import { sampleCurve } from './gamaka-inline.js';
@@ -22,7 +23,7 @@ const PAD_T_MIN = 24, LABEL_CHIP_H = 14;
 // Time is scaled so the SHORTEST note is at least this tall — below it there is no
 // room to print the swara inside the box, mobile portrait included.
 const CELL_PX = 24;
-const EMPTY = { notes: [], starts: [], contentEnd: 0, saRef: 60, raga: '', tempo: 120,
+const EMPTY = { notes: [], starts: [], rests: [], contentEnd: 0, saRef: 60, raga: '', tempo: 120,
   tala: { measure: 0, accents: [], beat: 0 }, talaProps: null };
 
 export function createRagamRoll(el, opts = {}) {
@@ -34,7 +35,7 @@ export function createRagamRoll(el, opts = {}) {
 
   let model = EMPTY;
   let user = { min: null, max: null, bottom: null };
-  let view = { mode: 'roll', sel: -1, drawSpan: 22, zoom: 1, playPos: null,
+  let view = { mode: 'roll', sel: -1, selRest: -1, drawSpan: 22, zoom: 1, playPos: null,
     markerA: 0, markerB: 0, saMidi: null, grabIdx: -1, labels: true };
   let bounds = { total: 1, stepMin: -26, stepMax: 66, gridPitches: [] };
   const pad = { l: 40, r: 12, t: PAD_T_MIN, b: 12 };
@@ -66,7 +67,11 @@ export function createRagamRoll(el, opts = {}) {
   const yVirt = (t) => pad.t + t * pxU();
   const saMidi = () => (view.saMidi == null ? model.saRef : view.saMidi);
 
-  const asModel = () => ({ notes: model.notes, starts: model.starts, total: bounds.total,
+  // The 22 shrutis as single-octave positions, for the grid's middle weight.
+  const SHRUTI_MODS = [...new Set(BOXES.map((b) => b.step))].sort((a, b) => a - b);
+
+  const asModel = () => ({ notes: model.notes, starts: model.starts, rests: model.rests || [], total: bounds.total,
+    shrutiMods: SHRUTI_MODS,
     gridPitches: bounds.gridPitches, stepMin: bounds.stepMin, stepMax: bounds.stepMax,
     tala: model.tala, isBlack: (s) => isBlackKey(s, saMidi()) });
 
@@ -76,7 +81,7 @@ export function createRagamRoll(el, opts = {}) {
       selStep: draw ? model.notes[view.sel].step : 0, drawSpan: view.drawSpan,
       tStart: draw ? model.starts[view.sel] : 0,
       tEnd: draw ? model.starts[view.sel] + model.notes[view.sel].dur : bounds.total,
-      palette: palette(), sel: view.sel, grabIdx: view.grabIdx, playPos: view.playPos,
+      palette: palette(), sel: view.sel, selRest: view.selRest, grabIdx: view.grabIdx, playPos: view.playPos,
       markerA: view.markerA, markerB: view.markerB, labels: view.labels,
       chipH: LABEL_CHIP_H, sample: sampleCurve };
   };

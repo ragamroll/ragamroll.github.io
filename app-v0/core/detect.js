@@ -1,4 +1,5 @@
 import { BOXES, EDO, defaultShrutiStep } from './shruti.js';
+import { formatMark } from './marks.js';
 
 // Sa reference pitch -> MIDI note name. Ragamroll convention: MIDI 60 = C5
 // (the O=5 middle octave), so octave = floor(midi/12).
@@ -489,6 +490,10 @@ export function notesToSrgm(notes, { includeGamaka = true, ragaName, useRaga, ra
   // times, so rounding errors never accumulate. A leading `z` rest preserves
   // the silence before the first note, so the timeline stays audio-aligned.
   const RES = 16;                    // units per second
+  // One avartana of adi in length-units — the tala written into the header below.
+  // With RES, this is what turns a second of audio into a position a musician would
+  // recognise, so the mark can carry all three without the reader knowing the tempo.
+  const MEASURE_UNITS = 32;
   const tempo = 30 * RES;            // 1 length-unit = 1/RES seconds (parser: unit = 30/tempo s)
   let qCursor = 0;                   // quantized cursor position, in units
   let curOct = 5;                    // matches O=5; parser octave marks are RELATIVE + persistent
@@ -525,23 +530,34 @@ export function notesToSrgm(notes, { includeGamaka = true, ragaName, useRaga, ra
     const dOct = targetOct - curOct;
     const oct = dOct > 0 ? '>'.repeat(dOct) : (dOct < 0 ? '<'.repeat(-dOct) : '');
     curOct = targetOct;
+    const uStart = qCursor;                     // this note's start, in length-units
     const len = Math.max(1, Math.round(n.t1 * RES) - qCursor);
     qCursor += len;
     let tok = oct + letter + len;
     if (gam && gam.length >= 2) tok += `{gamaka:[${gam.map(([u, d]) => `[${u},${d}]`).join(',')}]}`;
-    toks.push({ tok, t: n.t0 });
+    toks.push({ tok, t: n.t0, u: uStart });
   }
-  // Each note is preceded by the time it starts, so a token can be found in the
-  // recording without counting lengths. Comments, so they cost nothing on the
-  // way back in: the parser drops any line beginning with % before tokenising,
-  // and the notation still round-trips with no diagnostics. Rests carry no time
-  // of their own -- the note after one says when the sound resumes.
+  // Each note is preceded by where it starts — written in every unit that matters,
+  // not just this tool's. A `%%` mark belongs to the app rather than to a reader
+  // (core/marks.js), so it can be read back without guessing at the format and a
+  // person's own `%` comments stay theirs. It is still a comment, so the parser
+  // drops it and the notation round-trips with no diagnostics.
+  //
+  //   t  the second of the recording it was heard at   — this tool's axis
+  //   u  length-units from the start                   — draw's axis
+  //   m  measures, fractional                          — what a musician counts
+  //
+  // pitchy measures seconds and draw counts units against a tala. Writing one and
+  // making the other convert means knowing the tempo at read time, and the tempo can
+  // be changed after this was written. Rests carry no time of their own — the note
+  // after one says when the sound resumes.
+  const measure = MEASURE_UNITS;
   const lines = []; let cur = [];
   const flush = () => { if (cur.length) { lines.push(cur.join(' ')); cur = []; } };
-  for (const { tok, t } of toks) {
+  for (const { tok, t, u } of toks) {
     if (t == null) { cur.push(tok); continue; }          // rest: rides with its neighbours
     flush();
-    lines.push(`% ${t.toFixed(3)}s`);
+    lines.push(formatMark({ t, u, m: measure > 0 ? u / measure : null }));
     lines.push(tok);
   }
   flush();

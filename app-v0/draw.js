@@ -16,6 +16,8 @@ import { serializeInline, sampleCurve } from './core/gamaka-inline.js';
 import { buildRollModel } from './core/roll-model.js';
 import { createRagamRoll } from './core/ragamroll.js';
 import { createRollAudio } from './core/roll-audio.js';
+import { createRollEdit } from './core/roll-edit.js';
+import { anchorsOf, resplitAt } from './core/note-split.js';
 import { extractAnchors, pointsToAnchors, addAnchor, removeAnchor, moveAnchor } from './core/gamaka-curve.js';
 import { buildSequence } from './core/midi/sequence.js';
 import { writeSMF } from './core/midi/smf.js';
@@ -33,7 +35,7 @@ let NOTES = [];        // [{step, dur, swara, octave, curve:null|[[u,step]...]}]
 let saRef = 60, saFreq = midiToFreq(60), tempoBpm = 120, TOTAL = 0;
 let saPlay = null;     // Sa reference-pitch override (midi); null = auto (= saRef, the layout anchor)
 let compTempo = 120;   // the composition's own tempo; the tempo slider is a multiplier of this
-let starts = [], gridPitches = [], stepMin = -26, stepMax = 66, srcText = '';
+let starts = [], RESTS = [], selRest = -1, gridPitches = [], stepMin = -26, stepMax = 66, srcText = '';
 let contentEnd = 0;   // true content end from buildModel's starts-loop cursor `t` (rests included; 0 for a blank piece)
 let userGridMin = null, userGridMax = null, userGridBottom = null;  // handle-stretched roll bounds (view-state, NOT saved)
 let talaMeasure = 0, talaAccents = [], talaBeat = 0;   // cycle length + 1-based accent slots + akshara length (length-units)
@@ -72,7 +74,8 @@ function buildModel(src){
   reportDiagnostics(model);
   const m = buildRollModel(model);
   roll.setModel(m);
-  NOTES = m.notes; starts = m.starts; contentEnd = m.contentEnd;
+  NOTES = m.notes; starts = m.starts; RESTS = m.rests; contentEnd = m.contentEnd;
+  if (!RESTS.some((r) => r.tok === selRest)) selRest = -1;   // the selected rest may not have survived the edit
   compTempo = m.tempo;
   tempoBpm = compTempo;   // reset to the composition tempo on (re)load; the slider re-applies its multiplier
   saRef = m.saRef;
@@ -106,7 +109,7 @@ const cv = document.getElementById('cv');
 let mode='roll', sel=-1, drawing=false, drawSpan=22, dragIdx=-1;
 // Roll-mode long-press grab (move/resize a note). paintMode is wired to the
 // `+ note` toolbar toggle below; grab and paint gestures are mutually exclusive.
-let grab=null, pressTimer=0, pressXY=null, justGrabbed=false, paintMode=false, gamakaMode=false;   // grab: {idx, kind:'move'|'resize', oldStep, oldDur, pid}
+let paintMode=false, gamakaMode=false;   // the press/drag gestures themselves live in core/roll-edit.js
 let paint=null;   // paint={ts, step?, rest?, dur, pid} — in-progress paint-a-note/rest drag (roll mode, paintMode on)
 let gamaStroke=null;   // in-roll gamaka gesture: {gi, pid, dragIdx, downX, downY, buffer, mode:'anchor'|'free'|'pending'}
 const HANDLE_PX=18;
@@ -153,8 +156,8 @@ function resizeCanvas(){ syncView(); roll.resize(); positionHandles(); }
 // draw's state, pushed into the roll before anything reads or draws it. The roll is
 // told what to show; it never reaches back for it.
 function syncView(){
-  roll.setView({ mode, sel, drawSpan, zoom, playPos, markerA, markerB,
-    saMidi: saPlay==null ? saRef : saPlay, grabIdx: grab?grab.idx:-1 });
+  roll.setView({ mode, sel, selRest, drawSpan, zoom, playPos, markerA, markerB,
+    saMidi: saPlay==null ? saRef : saPlay, grabIdx: rollEdit ? rollEdit.grabbedIndex() : -1 });
 }
 // ---- editing chrome ----
 // Painted through the roll's hooks, because it is interleaved with the roll's own
@@ -252,9 +255,6 @@ function roundRect(x,y,w,h,r){ r=Math.min(r,w/2,h/2); ctx.beginPath(); ctx.moveT
 // ---------- interaction ----------
 function evtPos(e){ const r=cv.getBoundingClientRect(); return { x:e.clientX-r.left, y:e.clientY-r.top }; }
 // roll: selection is a click/tap (so a drag can scroll the tall roll)
-cv.addEventListener('click', e=>{ if (mode!=='roll') return;
-  if (justGrabbed){ justGrabbed=false; return; }   // suppress the click that follows a long-press grab/drag/release
-  ensureAudio(); const {x,y}=evtPos(e); const i=hitNote(x,y); if (i>=0) enterDraw(i); });
 let dEdit=null;   // draw-mode curve gesture: {downX,downY,hi,origCurve,mode:'pending'|'drag'|'free'}
 const DEDIT_EPS=6;
 // Is (x,y) on the selected note's curve LINE (draw-mode coords), for tap-to-add?
@@ -280,56 +280,157 @@ cv.addEventListener('pointerup', e=>{ if (mode!=='draw' || !dEdit) return; const
     NOTES[sel].curve=addAnchor(NOTES[sel].curve, u, st); render(); autoPlay(); scheduleShare(); return; }
   liveOff(); });
 cv.addEventListener('pointercancel', ()=>{ if (dEdit){ if (dEdit.mode!=='pending') NOTES[sel].curve=dEdit.origCurve; dEdit=null; } drawing=false; dragIdx=-1; liveOff(); render(); });
-// roll: on desktop (mouse), grabbing a note is immediate on press-drag; touch/pen
-// still long-press (300ms) to disambiguate from scroll. body-drag MOVEs (pitch,
-// snapped to the raga's rows), end-cap-handle-drag RESIZEs (duration, snapped to
-// the tala akshara).
-function startGrab(i, y, pid){ ensureAudio();
-  const y1=Y(starts[i]+NOTES[i].dur);                  // far-time edge
-  const kind=(Math.abs(y - y1)<=HANDLE_PX*1.4)?'resize':'move';
-  grab={ idx:i, kind, oldStep:NOTES[i].step, oldDur:NOTES[i].dur, pid };
-  cv.style.touchAction='none';   // own the gesture: a RESIZE is a vertical drag, exactly the
-  // axis 'pan-y' permits, so without this the native touch-scroll fights the grab.
-  try{ cv.setPointerCapture(pid); }catch(_){}
-  render(); }
-cv.addEventListener('pointerdown', e=>{ if (mode!=='roll' || paintMode || gamakaMode) return;
-  { const {x,y}=evtPos(e); const gh=hitGridHandle(x,y); if (gh){ if (gh==='tbottom') extendTime(); else startHandleDrag(gh,e); return; } }
-  // Defensive: a missed pointerup/pointercancel (OS interruption) can leave a stale
-  // grab/press from a previous touch. Reset it before starting the new press so an
-  // early pointermove on THIS touch can't mutate the wrong (previously grabbed) note.
-  if (grab || pressXY){ clearTimeout(pressTimer); pressXY=null;
-    if (grab){ NOTES[grab.idx].step=grab.oldStep; NOTES[grab.idx].dur=grab.oldDur; }   // revert the in-flight mutation before dropping the stale grab
-    grab=null; cv.style.touchAction=ROLL_TOUCH_ACTION; }
-  const {x,y}=evtPos(e);
-  const i=hitNote(x,y); if (i<0) return;                 // empty grid -> let it scroll
-  pressXY={x,y,id:e.pointerId}; clearTimeout(pressTimer);
-  if (e.pointerType==='mouse'){ startGrab(i, y, e.pointerId); return; }   // desktop: no long-press needed
-  pressTimer=setTimeout(()=>{ if (!pressXY) return; startGrab(i, y, e.pointerId); }, 300); });
-cv.addEventListener('pointermove', e=>{ if (mode!=='roll') return; const {x,y}=evtPos(e);
-  if (!grab){ if (pressXY && (Math.abs(x-pressXY.x)>8||Math.abs(y-pressXY.y)>8)){ clearTimeout(pressTimer); pressXY=null; } return; }
-  if (e.pointerId!==grab.pid) return;   // ignore a second concurrent touch while grabbing
-  if (grab.kind==='move'){ const raw=stepAtX(Math.max(plot().x,Math.min(plot().x+plot().w,x)));
-    NOTES[grab.idx].step=snapToRagaRow(Math.round(raw), ragaRowSteps());
-  } else { const t=tAtY(y); const beat=talaBeat||1; let d=snapToAkshara(t-starts[grab.idx], beat);
-    NOTES[grab.idx].dur=Math.max(beat, d); }
-  render(); });
-cv.addEventListener('pointerup', async e=>{ if (mode!=='roll') return;
-  if (grab && e.pointerId!==grab.pid) return;   // ignore a second concurrent touch's release; the owning grab stays live
-  clearTimeout(pressTimer);
-  const g=grab; pressXY=null; grab=null; if (!g){ return; }   // no grab (plain tap) -> let the click handler select
-  cv.style.touchAction=ROLL_TOUCH_ACTION;   // grab over (committed or no-op) — give the scroll gesture back
-  if (g.kind==='move'){ const changed=NOTES[g.idx].step!==g.oldStep;
-    if (!changed){ render(); return; }   // no actual move (e.g. plain mouse click) — let the click handler select
-    justGrabbed=true;   // a real edit happened — suppress the click-select that may follow this release
-    pushUndo(); await onMoveDrop(g.idx, g.oldStep); }
-  else { const changed=NOTES[g.idx].dur!==g.oldDur; if (!changed){ render(); return; }
-    justGrabbed=true;
-    pushUndo(); await commitEdit({ changed:new Set([NOTES[g.idx].tok]), deriveOctave:false }); }
+// The pointer gestures live in core/roll-edit.js: it decides what a press MEANS and
+// emits an intent. What an edit costs — undo, re-serialising the notation, rebuilding
+// the model — is decided here, because that is draw's answer and not every host's.
+//
+// preview: in flight, shown but not recorded. commit: recorded. cancel: put it back.
+const rollEdit = createRollEdit(cv, {
+  geometry: () => geo(),
+  model: () => ({ notes: NOTES, starts, rests: RESTS, stepMin, stepMax }),
+  snapStep: (step) => snapToRagaRow(step, ragaRowSteps()),
+  snapDur: (d) => { const beat = talaBeat || 1; return Math.max(beat, snapToAkshara(d, beat)); },
+  snapTime: (t) => snapToAkshara(t, talaBeat || 1),
+  redraw: () => render(),
+  enabled: () => mode === 'roll' && !paintMode && !gamakaMode,
+  idleTouchAction: ROLL_TOUCH_ACTION,
+  onGrabStart: () => ensureAudio(),
+  emit: (it) => applyIntent(it),
 });
-cv.addEventListener('pointercancel', e=>{ if (mode!=='roll') return;
-  if (grab && e.pointerId!==grab.pid) return;   // ignore a second concurrent touch's cancel; the owning grab stays live
-  clearTimeout(pressTimer); pressXY=null;
-  if (grab){ NOTES[grab.idx].step=grab.oldStep; NOTES[grab.idx].dur=grab.oldDur; grab=null; cv.style.touchAction=ROLL_TOUCH_ACTION; render(); } });
+
+// The grid stretch-handles are draw's, not the roll's — they resize the VIEW, not the
+// music. Capture phase so a press on a handle is claimed before roll-edit reads it as
+// a note.
+cv.addEventListener('pointerdown', e=>{ if (mode!=='roll' || paintMode || gamakaMode) return;
+  const {x,y}=evtPos(e); const gh=hitGridHandle(x,y); if (!gh) return;
+  e.stopPropagation();
+  if (gh==='tbottom') extendTime(); else startHandleDrag(gh,e);
+}, true);
+
+// Whatever ends where this note begins — a note or a rest. Token order is the
+// composition's order, rests included, so the neighbour is simply the highest tok
+// below this one.
+function prevElement(tok) {
+  let best = null;
+  for (const n of NOTES) if (n.tok < tok && (!best || n.tok > best.tok)) best = { tok: n.tok, rest: false, dur: n.dur, t0: starts[NOTES.indexOf(n)], step: n.step, curve: n.curve };
+  for (const r of RESTS) if (r.tok < tok && (!best || r.tok > best.tok)) best = { tok: r.tok, rest: true, dur: r.dur, t0: r.t0, step: 0, curve: null };
+  return best;
+}
+
+// The seam drag in flight: the contour as it was when the pointer went down, plus
+// what to put back if the gesture dies.
+let seamDrag = null;
+function restoreSeam() {
+  if (!seamDrag) return;
+  const d = seamDrag, i = NOTES.findIndex((x) => x.tok === d.tok);
+  const pn = d.prev.rest ? null : NOTES.find((x) => x.tok === d.prev.tok);
+  const pr = d.prev.rest ? RESTS.find((x) => x.tok === d.prev.tok) : null;
+  if (pn) { pn.dur = d.was.prevDur; pn.curve = d.was.prevCurve; }
+  if (pr) pr.dur = d.was.prevDur;
+  if (i >= 0) { NOTES[i].dur = d.was.dur; NOTES[i].curve = d.was.curve; starts[i] = d.was.t0; }
+  seamDrag = null;
+}
+
+const INTENT_LOG = [];              // headless guards read this; nothing else does
+async function applyIntent(it) {
+  INTENT_LOG.push({ ...it }); if (INTENT_LOG.length > 200) INTENT_LOG.shift();
+  if (it.kind === 'select') {
+    selRest = it.target && it.target.type === 'rest' ? it.target.tok : -1;
+    syncDelete(); render(); return;
+  }
+  if (it.kind === 'open') { selRest = -1; syncDelete(); enterDraw(it.index); return; }
+
+  const n = NOTES.find((x) => x.tok === it.tok);
+  const r = RESTS.find((x) => x.tok === it.tok);
+
+  if (it.kind === 'move') {
+    if (!n) return;
+    if (it.phase !== 'commit') { n.step = it.step; render(); return; }
+    pushUndo(); await onMoveDrop(NOTES.indexOf(n), it.from);
+    return;
+  }
+  // The near edge moves the SEAM between this note and whatever ran up to it — and
+  // the sound across the pair does not change. The pair is one pitch contour; the drag
+  // only moves where it stops being written as one note and starts being written as
+  // the next. Pull it far enough and the first note is gone, its line preserved inside
+  // this one's gamaka. That is the repair for a detector that split one sung phrase in
+  // two, which is most of what pitchy's over-segmentation produces.
+  //
+  // The contour is captured ONCE, when the drag starts. Re-reading it from notes that
+  // have already been re-split would fold each preview's rounding into the next.
+  if (it.kind === 'boundary') {
+    const i = NOTES.indexOf(n);
+    if (i < 0) return;
+    if (it.phase === 'cancel') { restoreSeam(); render(); return; }
+
+    if (!seamDrag || seamDrag.tok !== it.tok) {
+      const prev = prevElement(it.tok);
+      if (!prev) { seamDrag = null; return; }        // nothing before it: no seam to move
+      const before = prev.rest ? prevElement(prev.tok) : null;
+      seamDrag = {
+        tok: it.tok, prev,
+        t0: prev.t0, end: starts[i] + NOTES[i].dur,
+        prevStep: prev.rest ? NOTES[i].step : prev.step,
+        nextStep: NOTES[i].step,
+        // When the neighbour is a REST, the note before IT comes along as context —
+        // not as something this drag can change, but because bridging the silence
+        // needs the pitch the line left off at. Without it the gap has only one end
+        // and the best it could do is hold this note's opening pitch backwards.
+        points: anchorsOf([
+          ...(prev.rest && before ? [{ t0: before.t0, dur: before.dur, step: before.step, curve: before.curve, rest: before.rest }] : []),
+          { t0: prev.t0, dur: prev.dur, step: prev.step, curve: prev.curve, rest: prev.rest },
+          { t0: starts[i], dur: NOTES[i].dur, step: NOTES[i].step, curve: NOTES[i].curve },
+        ]),
+        was: { prevDur: prev.dur, prevCurve: prev.curve, dur: NOTES[i].dur, curve: NOTES[i].curve, t0: starts[i] },
+      };
+    }
+    const d = seamDrag;
+    const beat = talaBeat || 1;
+    const out = resplitAt({ points: d.points, t0: d.t0, end: d.end, seam: it.t0,
+      prevStep: d.prevStep, nextStep: d.nextStep, minDur: beat });
+
+    const prevNote = d.prev.rest ? null : NOTES.find((x) => x.tok === d.prev.tok);
+    const prevRest = d.prev.rest ? RESTS.find((x) => x.tok === d.prev.tok) : null;
+
+    if (it.phase !== 'commit') {
+      // Shown, not recorded. A fully absorbed neighbour is drawn as nothing rather
+      // than removed, so the arrays keep their shape until the pointer is up.
+      const pd = out.prev ? out.prev.dur : 0;
+      if (prevNote) { prevNote.dur = pd; if (!d.prev.rest) prevNote.curve = out.prev ? out.prev.curve : prevNote.curve; }
+      if (prevRest) prevRest.dur = pd;
+      NOTES[i].dur = out.next.dur; NOTES[i].curve = out.next.curve;
+      starts[i] = d.t0 + pd;
+      render(); return;
+    }
+
+    pushUndo();
+    const changed = new Set([it.tok]);
+    if (!out.prev) {
+      // Swallowed whole: the neighbour's token goes, its pitch already inside this
+      // note's gamaka. deriveOctave, because a dropped token takes its octave marks
+      // with it and the register must be re-stated for everything after.
+      seamDrag = null;
+      await commitEdit({ changed, deletes: new Set([d.prev.tok]), deriveOctave: true });
+      return;
+    }
+    seamDrag = null;
+    if (d.prev.rest) await commitEdit({ changed, deriveOctave: false, restDurs: new Map([[d.prev.tok, out.prev.dur]]) });
+    else { changed.add(d.prev.tok); await commitEdit({ changed, deriveOctave: false }); }
+    return;
+  }
+  if (it.kind === 'resize') {
+    if (it.target === 'rest') {
+      if (!r) return;
+      if (it.phase !== 'commit') { r.dur = it.dur; render(); return; }
+      pushUndo(); await commitRestDur(it.tok, it.dur);
+      return;
+    }
+    if (!n) return;
+    if (it.phase !== 'commit') { n.dur = it.dur; render(); return; }
+    pushUndo(); await commitEdit({ changed: new Set([it.tok]), deriveOctave: false });
+  }
+}
+
 // Paint mode (`+ note` toggled on): drag on the grid creates a note — pitch snaps to
 // a raga row, length to the tala akshara. Capture-phase + the !paintMode guard on the
 // grab handlers above keep paint and grab gestures mutually exclusive. `paint` tracks
@@ -350,7 +451,7 @@ cv.addEventListener('pointermove', e=>{ if (!paint || e.pointerId!==paint.pid) r
 cv.addEventListener('pointerup', async e=>{ if (!paint || e.pointerId!==paint.pid) return;
   if (!paintMode){ paint=null; render(); return; }   // Fix #7: `+ note` toggled off mid-drag — abort, don't commit
   const p=paint; paint=null;
-  justGrabbed=true;   // suppress the trailing click so a freshly-painted note doesn't auto-open gamaka editing
+  rollEdit.suppressClick();   // a painted note ends in a click ON it; that is not "open me"
   const durs=NOTES.map(n=>n.dur);
   const place=placePaint({ ts:p.ts, dur:p.dur, notes:NOTES, starts, durs, total:TOTAL });
   pushUndo(); await applyPaint(place, p); }, true);
@@ -395,7 +496,7 @@ cv.addEventListener('pointermove', e=>{ if (!gamaStroke || e.pointerId!==gamaStr
     NOTES[g.gi].curve=g.buffer.slice(); render(); }
 }, true);
 cv.addEventListener('pointerup', e=>{ if (!gamaStroke || e.pointerId!==gamaStroke.pid) return; const g=gamaStroke; gamaStroke=null;
-  justGrabbed=true;   // suppress any trailing click (don't fall into the full-screen editor)
+  rollEdit.suppressClick();   // suppress the trailing click (don't fall into the full-screen editor)
   const {x,y}=evtPos(e); const moved=Math.abs(x-g.downX)>MOVE_EPS||Math.abs(y-g.downY)>MOVE_EPS;
   if (g.mode==='free'){ NOTES[g.gi].curve=pointsToAnchors(g.buffer); render(); scheduleShare(); return; }
   if (g.mode==='anchor'){ if (g.moved){ scheduleShare(); }
@@ -433,7 +534,7 @@ cv.addEventListener('pointercancel', e=>{ if (!handleDrag || e.pointerId!==handl
 // Discoverability: hover the grid stretch-handles shows a resize cursor (idle only —
 // not while any drag/grab/paint gesture is in progress). No log param -> hitGridHandle
 // stays silent here, so this high-frequency listener doesn't flood the console (Fix 5).
-cv.addEventListener('pointermove', e=>{ if (mode!=='roll' || handleDrag || grab || paint) return;
+cv.addEventListener('pointermove', e=>{ if (mode!=='roll' || handleDrag || rollEdit.busy() || paint) return;
   const {x,y}=evtPos(e); const h=hitGridHandle(x,y);
   cv.style.cursor = h ? (h==='tbottom'?'pointer':'col-resize') : (paintMode?'crosshair':''); });
 // A moved note is committed with the current gamaka-on-move default; if it carried
@@ -527,8 +628,12 @@ async function applyPaint(place, p){
   const newSrc=serializeModel(srcText, { model, changed, inserts, deletes:new Set(), deriveOctave:true, ctx:ragaCtx() });
   buildModel(newSrc); syncControls(); resizeCanvas(); render(); await rebuildShare();
 }
-function hitNote(x,y){ for (let i=0;i<NOTES.length;i++){ const y0=Y(starts[i]),y1=Y(starts[i]+NOTES[i].dur),xc=X(NOTES[i].step),w=Math.max(16,plot().w/(stepMax-stepMin)*4);
-  if (y>=y0&&y<=y1&&x>=xc-w/2-6&&x<=xc+w/2+6) return i; } return -1; }
+// A rest spans the width, so anywhere on its band selects it — the same target the
+// eye sees. Notes are tested first: where a note box overlaps a rest band, the note
+// is what you meant.
+// Hit-testing lives with the gestures now (core/roll-edit.js); the paint and gamaka
+// paths still ask for it here.
+const hitNote = (x,y) => rollEdit.hitNote(x,y);
 function addPoint(x,y){ const p=plot(),[ba,bb]=yStartEnd();
   let u=Math.max(0,Math.min(1,(tAtY(y)-ba)/(bb-ba)));
   const st=stepAtX(Math.max(p.x,Math.min(p.x+p.w,x)));
@@ -549,12 +654,12 @@ function dragHandle(x,y){ const c=NOTES[sel].curve,p=plot(),[ba,bb]=yStartEnd();
 
 const $ = id => document.getElementById(id);
 let clipRel=null;   // copied curve, stored RELATIVE to its note's step (so it re-anchors on paste)
-function enterDraw(i){ sel=i; mode='draw';
+function enterDraw(i){ sel=i; mode='draw'; syncDelete();
   $('mode').textContent='draw the curve'; $('crumb').textContent='note '+(i+1)+' · '+NOTES[i].swara+NOTES[i].octave;
   for (const b of ['clear','copy','paste','back']) $(b).style.display='';   // draw-only buttons appear
   $('back').disabled=false; $('clear').disabled=!NOTES[i].curve; $('copy').disabled=!NOTES[i].curve; $('paste').disabled=!clipRel;
   setPlayBtn('▶','Play note'); $('rangectl').style.display=''; $('snapctl').style.display=''; $('tzoom').style.display='none'; resizeCanvas(); }
-$('back').onclick=()=>{ dEdit=null; drawing=false; dragIdx=-1; mode='roll'; sel=-1; $('mode').textContent='select a note'; $('crumb').textContent='';
+$('back').onclick=()=>{ dEdit=null; drawing=false; dragIdx=-1; mode='roll'; sel=-1; syncDelete(); $('mode').textContent='select a note'; $('crumb').textContent='';
   for (const b of ['clear','copy','paste','back']) $(b).style.display='none';   // draw-only buttons hidden in roll mode
   $('read').textContent=''; setPlayBtn('▶',playLabel());
   $('rangectl').style.display='none'; $('snapctl').style.display='none'; $('tzoom').style.display=''; resizeCanvas(); };
@@ -809,10 +914,57 @@ $('undobtn').onclick=()=>{ undo(); };
 // Ctrl/Cmd+Z triggers structural undo only in roll mode and only outside the srgm
 // editor textarea, so native textarea undo (typing) still works while editing text.
 document.addEventListener('keydown', e=>{ if ((e.ctrlKey||e.metaKey) && !e.shiftKey && (e.key==='z'||e.key==='Z') && mode==='roll' && document.activeElement!==$('editor')){ e.preventDefault(); undo(); } });
+$('delbtn').onclick=()=>{ deleteSelected(); };
+// Del/Backspace, but never while the srgm editor has focus — there the key belongs
+// to the text, and deleting a note out from under someone who is typing is the kind
+// of thing there is no obvious way back from.
+document.addEventListener('keydown', e=>{
+  if (e.key!=='Delete' && e.key!=='Backspace') return;
+  if (document.activeElement===$('editor')) return;
+  const t=document.activeElement; if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+  if (!(selRest>=0 || (sel>=0 && NOTES[sel]))) return;
+  e.preventDefault(); deleteSelected();
+});
 
 // Re-serialize the current model to srgm, then rebuild everything from that text.
-async function commitEdit({ changed=new Set(), inserts=new Map(), deletes=new Set(), deriveOctave=false }){
-  const newSrc=serializeModel(srcText, { model:modelByTok(), changed, inserts, deletes, deriveOctave, ctx:ragaCtx() });
+// A rest's new length, written back to its own token.
+async function commitRestDur(tok, dur){
+  const newSrc=serializeModel(srcText, { model:modelByTok(), changed:new Set(), inserts:new Map(),
+    deletes:new Set(), deriveOctave:false, ctx:ragaCtx(), restDurs:new Map([[tok,dur]]) });
+  buildModel(newSrc); syncControls(); resizeCanvas(); render(); await rebuildShare();
+}
+// Delete whatever is selected — a note, or a rest. Removing a note leaves NO silence
+// in its place: the piece gets shorter, which is what deleting a note means. Paint a
+// rest if a gap is wanted.
+async function deleteSelected(){
+  const tok = selRest>=0 ? selRest : (sel>=0 && NOTES[sel] ? NOTES[sel].tok : -1);
+  if (tok<0) return;
+  pushUndo();
+  const wasDrawing = mode==='draw';
+  selRest=-1; sel=-1;
+  // The note being curve-edited is gone, so there is nothing left to edit — go back
+  // to the roll rather than leaving the editor pointed at a note that no longer is.
+  if (wasDrawing) $('back').click();
+  await commitEdit({ deletes:new Set([tok]), deriveOctave:true });
+  syncDelete();
+}
+// The button is only live when something is selected — a delete with no target is
+// not a no-op the user can see, it just looks broken.
+function syncDelete(){ const b=$('delbtn'); if (!b) return;
+  // Also in draw mode: clicking a note OPENS it for curve editing, so that is exactly
+  // where someone looking at a note they want rid of will be.
+  b.disabled = !(selRest>=0 || (sel>=0 && NOTES[sel]));
+}
+// A dropped token leaves its separator behind, so every delete widened a gap in the
+// saved notation and two adjacent deletes widened it twice. srgm is whitespace-
+// separated, so collapsing a run of spaces changes nothing except how it reads —
+// except inside a comment, where the spacing is someone's text.
+const tidySpaces = (src) => src.split('\n')
+  .map((l) => (l.trimStart().startsWith('%') ? l : l.replace(/[ \t]{2,}/g, ' ').replace(/[ \t]+$/, '')))
+  .join('\n');
+async function commitEdit({ changed=new Set(), inserts=new Map(), deletes=new Set(), deriveOctave=false, restDurs=undefined }){
+  let newSrc=serializeModel(srcText, { model:modelByTok(), changed, inserts, deletes, deriveOctave, ctx:ragaCtx(), restDurs });
+  if (deletes.size) newSrc=tidySpaces(newSrc);
   buildModel(newSrc); syncControls(); resizeCanvas(); render(); await rebuildShare(); }
 // Reflect srcText into the editor textarea — but never clobber the box the user
 // is actively typing in (that also preserves its native ctrl-z history).
@@ -925,7 +1077,10 @@ $('fileinput').onchange=async e=>{ const f=e.target.files[0]; e.target.value='';
 function download(name, data, type){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([data],{type})); a.download=name; a.click(); URL.revokeObjectURL(a.href); }
 $('save').onclick=()=>download(docName+'.srgm', srcText, 'text/plain');
 $('exportmidi').onclick=()=>{ try{ download(docName+'.mid', writeSMF(buildSequence(parse(srcText))), 'audio/midi'); }catch(e){ window.alert('MIDI export failed: '+e.message); } };
-window.__rr = { notes:()=>NOTES, X, Y, starts:()=>starts, get playing(){ return playing; }, get paused(){ return paused; }, get stepMin(){ return stepMin; }, get stepMax(){ return stepMax; }, get padTop(){ return PAD.t; }, gridSteps:()=>gridPitches.map(g=>g.step), labelChipW:()=>14, get shareLink(){ return shareLink; }, get playPos(){ return playPos; }, get markerA(){ return markerA; }, get markerB(){ return markerB; }, get talaMeasure(){ return talaMeasure; }, get talaAccents(){ return talaAccents; }, get droneVol(){ return droneVol; }, get talaVol(){ return talaVol; }, inlineSrc:()=>inlineSrc(), rebuild:()=>rebuildShare(), get src(){ return srcText; } };
+window.__rr = { notes:()=>NOTES, rests:()=>RESTS.map(r=>({...r})), get selRest(){ return selRest; },
+  intents:()=>INTENT_LOG.map(i=>({...i})), clearIntents:()=>{ INTENT_LOG.length=0; }, get mode(){ return mode; },
+  get delEnabled(){ return !$('delbtn').disabled; }, restEdgeY:(tok)=>{ const r=RESTS.find(x=>x.tok===tok); return r?Y(r.t0+r.dur):null; },
+  restMidY:(tok)=>{ const r=RESTS.find(x=>x.tok===tok); return r?Y(r.t0+r.dur/2):null; }, X, Y, starts:()=>starts, get playing(){ return playing; }, get paused(){ return paused; }, get stepMin(){ return stepMin; }, get stepMax(){ return stepMax; }, get padTop(){ return PAD.t; }, gridSteps:()=>gridPitches.map(g=>g.step), labelChipW:()=>14, get shareLink(){ return shareLink; }, get playPos(){ return playPos; }, get markerA(){ return markerA; }, get markerB(){ return markerB; }, get talaMeasure(){ return talaMeasure; }, get talaAccents(){ return talaAccents; }, get droneVol(){ return droneVol; }, get talaVol(){ return talaVol; }, inlineSrc:()=>inlineSrc(), rebuild:()=>rebuildShare(), get src(){ return srcText; } };
 // Populate the examples dropdown from the manifest (same source as the app).
 fetch('./examples/index.json').then(r=>r.json()).then(list=>{
   const sel=$('exsel'); for (const n of list){ const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); }

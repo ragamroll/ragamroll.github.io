@@ -14,8 +14,19 @@ export function octMarks(dOct) {
 
 // Round a curve to note-relative integer deltas (u to 2dp), matching draw's
 // inlineSrc() so gamaka output is identical to the existing curve-editing path.
+// Two decimals, matching what pitchy writes and what the curated corpus holds
+// (-17.19, 0.01, 3.92 …). Rounding a delta to a WHOLE shruti loses up to half a step —
+// 11 cents — per anchor, and it did so silently: any edit re-tokenises the note it
+// touched, and an edit that re-derives octaves re-tokenises EVERY note in the piece.
+// A single delete was enough to flatten every gamaka in a curated file to integers.
+// u gets a digit more than the pitch does, and not for symmetry. A note is one unit of
+// u no matter how long it is, so on a long note 0.01 of u is a sizeable stretch of
+// time — and an anchor placed at the wrong instant on a steep climb is a pitch error
+// just as surely as a mis-rounded step. Two places put ~6 cents into an absorbed rest;
+// three puts it under one. The pitch stays at two: it is measured in shrutis, where
+// a hundredth is already far below anything audible.
 function relCurve(curve, step) {
-  return curve.map(([u, s]) => [Math.round(u * 100) / 100, Math.round(s - step)]);
+  return curve.map(([u, s]) => [Math.round(u * 1000) / 1000, Math.round((s - step) * 100) / 100]);
 }
 
 // Build a note token's text from the absolute model: octave marks (from the
@@ -45,7 +56,7 @@ function noteToken(n, { verbatimOct, verbatimBody, deriveOctave, curL, curOct, c
 // deriveOctave:true — an inserted note shifts the running O= register that
 // verbatim (unchanged) notes downstream rely on, so without deriveOctave those
 // verbatim notes desync their octave from what they'd actually parse back to.
-export function serializeModel(srcText, { model, changed, inserts, deletes, deriveOctave, ctx }) {
+export function serializeModel(srcText, { model, changed, inserts, deletes, deriveOctave, ctx, restDurs }) {
   const curL = { v: 1 }, curOct = { v: 5 };   // running L= multiplier + octave register
   let prependDone = false;                    // emit inserts.get(-1) before the first NOTE token, once
   return walkTokens(srcText, (t) => {
@@ -93,6 +104,13 @@ export function serializeModel(srcText, { model, changed, inserts, deletes, deri
       if (deriveOctave && t.octMarks) {
         const d = t.octMarks[0] === '>' ? t.octMarks.length : -t.octMarks.length;
         curOct.v += d;
+      }
+      // A rest whose LENGTH was changed is the one thing about it that can change —
+      // silence has a duration and nothing else. Rewritten through noteToken so the
+      // running L= multiplier is honoured exactly as it is for a note.
+      if (restDurs && restDurs.has(tok)) {
+        return prefix + noteToken({ rest: true, dur: restDurs.get(tok) },
+          { verbatimOct: '', verbatimBody: '', deriveOctave: false, curL, curOct, ctx });
       }
       return prefix ? prefix + t.raw : undefined;   // verbatim (also keeps ordinal alignment)
     }

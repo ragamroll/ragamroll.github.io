@@ -34,9 +34,16 @@ export function walkTokens(srcText, visit) {
     const c = srcText[i];
     if (c === '\n') { out += c; i++; atLineStart = true; continue; }
     if (isWs(c)) { out += c; i++; continue; }
-    if (atLineStart && c === '%') {                    // whole-line comment: verbatim, uncounted
+    if (atLineStart && c === '%') {                    // whole-line comment: uncounted
       let e = i; while (e < srcText.length && srcText[e] !== '\n') e++;
-      out += srcText.slice(i, e); i = e; atLineStart = false; continue;
+      const raw = srcText.slice(i, e);
+      // Offered to the visitor so a caller can READ a comment (a %% metadata line
+      // needs to know which note it sits before) or rewrite one. Returning nothing
+      // keeps it verbatim, which is what every existing caller does.
+      const r = visit({ isNote: false, isComment: true, ordinal: -1, nextOrdinal: ordinal + 1,
+        octMarks: '', letter: '', len: '', head: raw, hadBrace: false, body: '', raw });
+      out += (typeof r === 'string') ? r : raw;
+      i = e; atLineStart = false; continue;
     }
     atLineStart = false;
     let j = i;

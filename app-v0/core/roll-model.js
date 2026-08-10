@@ -41,15 +41,22 @@ export function buildRollModel(model) {
   // Real composition time: the cursor advances over rests too, so a leading or
   // interior silence shows as empty time rather than being compressed out and
   // sliding everything after it off the tala grid.
-  const starts = []; let t = 0, ki = 0;
+  //
+  // The rests are collected as we go. A rest is a real part of the music — the
+  // silence between phrases is written, not absent — so it is returned rather than
+  // left as a gap for the reader to infer. Same `tok` numbering as the notes, so an
+  // edit can find the token that wrote it.
+  const starts = [], rests = []; let t = 0, ki = 0;
   for (let o = 0; o < allNotes.length; o++) {
     if (ki < keep.length && keep[ki] === o) { starts.push(t); ki++; }
-    if (allNotes[o].absLen > 0) t += allNotes[o].absLen;
+    const e = allNotes[o];
+    if (e.rest && e.absLen > 0) rests.push({ t0: t, dur: e.absLen, tok: o });
+    if (e.absLen > 0) t += e.absLen;
   }
 
   const tp = [...model.events].reverse().find((e) => e.type === 'tala');
   const P = (tp && tp.props) || {};
-  return { notes, starts, contentEnd: t, saRef, raga,
+  return { notes, starts, rests, contentEnd: t, saRef, raga,
     tempo: (model.meta && model.meta.tempo > 0) ? model.meta.tempo : 120,
     tala: { measure: P.measure > 0 ? P.measure : 0,
       accents: Array.isArray(P.accents) ? P.accents : [],
