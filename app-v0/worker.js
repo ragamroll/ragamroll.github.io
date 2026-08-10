@@ -15,7 +15,7 @@ import { setRagas } from './core/raga-base.js';
 let ready = false;
 const pending = [];
 
-fetch('./core/raga-base.json')
+fetch('./core/raga-db.json')
   .then((r) => r.json())
   .then((data) => {
     setRagas(data);

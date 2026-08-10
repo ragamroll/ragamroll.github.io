@@ -391,13 +391,14 @@ function App({ examples }) {
 // Load raga data + the extended-raga overlay + the example manifest
 // (data-driven), then mount. Each optional feed falls back gracefully.
 Promise.all([
-  fetch('./core/raga-base.json').then(r => r.json()),
+  // One database: scale, mela, shrutis and arohana on the same record, with the
+  // duplicate spellings folded into aliases. It used to be three fetches whose keys
+  // never lined up.
+  fetch('./core/raga-db.json').then(r => r.json()),
   fetch(`${EXAMPLES_BASE}/index.json`).then(r => r.json()).catch(() => EXAMPLES_FALLBACK),
-  fetch('./core/raga-ext.json').then(r => r.json()).catch(() => ({})),
-  fetch('./core/raga-add.json').then(r => r.json()).catch(() => ({})),   // imported ragas (optional)
-]).then(([data, examples, ext, add]) => {
-  setRagas({ ...data, ...add });
-  setRagaExt(ext);
+]).then(([db, examples]) => {
+  setRagas(db);
+  setRagaExt(db);
   render(h(App, { examples: Array.isArray(examples) && examples.length ? examples : EXAMPLES_FALLBACK }),
          document.getElementById('app'));
 });

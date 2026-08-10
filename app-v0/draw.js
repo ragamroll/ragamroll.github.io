@@ -931,10 +931,8 @@ fetch('./examples/index.json').then(r=>r.json()).then(list=>{
   const sel=$('exsel'); for (const n of list){ const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); }
 }).catch(()=>{});
 Promise.all([
-  fetch('./core/raga-base.json').then(r=>r.json()),
-  fetch('./core/raga-ext.json').then(r=>r.json()).catch(()=>({})),
-  fetch('./core/raga-add.json').then(r=>r.json()).catch(()=>({})),
-]).then(([base,ext,add])=>{ const ragas={ ...base, ...add }; setRagas(ragas); setRagaExt(ext);
+  fetch('./core/raga-db.json').then(r=>r.json()),   // one database: scale + mela + shrutis + arohana, aliases folded in
+]).then(([db])=>{ const ragas=db; setRagas(db); setRagaExt(db);
     const ragaNames=Object.keys(ragas).filter(n=>!/^mela_\d+$/i.test(n)).sort((a,b)=>a.toLowerCase().localeCompare(b.toLowerCase())); defaultRaga=ragaNames[0]||'c12';
     const rl=$('ragalist'); for (const n of ragaNames){ const o=document.createElement('option'); o.value=n; rl.appendChild(o); }
     const ts=$('talasel'); for (const n of Object.keys(TALA_MAP)){ const o=document.createElement('option'); o.value=n; o.textContent=n; ts.appendChild(o); }

@@ -7,22 +7,37 @@
 import { S_STEP, P_STEP } from './shruti.js';
 import { presentVarieties, stepForVariety, melaForRaga, jiAb } from './melakarta.js';
 import { ragaSwaras } from './reference.js';
+import { resolveRagaName } from './raga-base.js';
 
 let RAGAEXT = {};
 
-// Node/test path: load the overlay if it exists (it may not before generation).
+// Node/test path: the merged database carries these fields on the same record as
+// the scale, so there is one lookup and one set of names. Falls back to the raw
+// overlay for a tree where the database has not been generated yet.
 if (typeof process !== 'undefined' && process.versions?.node) {
   try {
     const { readFileSync } = await import('node:fs');
     const { fileURLToPath } = await import('node:url');
     const { dirname, join } = await import('node:path');
     const HERE = dirname(fileURLToPath(import.meta.url));
-    RAGAEXT = JSON.parse(readFileSync(join(HERE, 'raga-ext.json'), 'utf8'));
+    try { RAGAEXT = JSON.parse(readFileSync(join(HERE, 'raga-db.json'), 'utf8')); }
+    catch { RAGAEXT = JSON.parse(readFileSync(join(HERE, 'raga-ext.json'), 'utf8')); }
   } catch { RAGAEXT = {}; }
 }
 
 export function setRagaExt(data) { RAGAEXT = data || {}; }
-export function getRagaExt(name) { return RAGAEXT[name] || null; }
+// Looked up through the SAME name resolution the scale uses, so a raga reached by
+// a folded-away spelling does not silently lose its mela and arohana.
+export function getRagaExt(name) {
+  if (name == null) return null;
+  if (RAGAEXT[name]) return RAGAEXT[name];
+  const canon = resolveRagaName(name);
+  if (canon !== name && RAGAEXT[canon]) return RAGAEXT[canon];
+  const lower = String(name).toLowerCase();
+  if (RAGAEXT[lower]) return RAGAEXT[lower];
+  const hit = Object.keys(RAGAEXT).find((k) => k.toLowerCase() === lower);
+  return hit ? RAGAEXT[hit] : null;
+}
 export function allRagaExt() { return RAGAEXT; }
 
 // The raga's distinct swaras, ascending. Uses ragaSwaras so same-note case

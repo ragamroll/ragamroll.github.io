@@ -3052,12 +3052,9 @@
     // ---- Load raga data and populate the picker -----------------------------
     (async () => {
       try {
-        const [base, ext, add] = await Promise.all([
-          fetch('./core/raga-base.json').then(r => r.json()),
-          fetch('./core/raga-ext.json').then(r => r.json()).catch(() => ({})),
-          fetch('./core/raga-add.json').then(r => r.json()).catch(() => ({})),
-        ]);
-        const ragas = { ...base, ...add }; setRagas(ragas); setRagaExt(ext);
+        // One database: the three files never agreed on how a raga was spelled.
+        const ragas = await fetch('./core/raga-db.json').then(r => r.json());
+        setRagas(ragas); setRagaExt(ragas);
         const names = Object.keys(ragas)
           .filter(n => !/^mela_\d+$/i.test(n) && n.toLowerCase() !== 'c12')
           .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));

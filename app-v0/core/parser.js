@@ -187,7 +187,10 @@ export function parse(input) {
         }
         case 'Raga': case 'raga': {
           ragaKeyTuple = val.split(',');
-          ragaKeyTuple[0] = resolveRagaName(ragaKeyTuple[0]);   // case-insensitive raga name -> canonical key
+          // Case only. A raga written under a folded-away spelling still resolves
+          // to its scale (swaraMap follows aliases), but the model keeps the name
+          // the notation actually used — rewriting it here would edit the piece.
+          ragaKeyTuple[0] = resolveRagaName(ragaKeyTuple[0], { aliases: false });
           events.push({ type: 'raga', key: ragaKeyTuple });
           try {
             curSrgAbcMap = swaraMap(ragaKeyTuple[0]);

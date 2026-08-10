@@ -3,7 +3,7 @@
 // 5,1 → 51 reversed → 15 = Mayamalavagowla). Grouped into the 12 chakras of 6.
 //
 // The variety numbers ({R,G,D,N}=1..3, M=1..2) are NOT stored: they derive at
-// runtime from each mela's 12-EDO note names already in raga-base.json. This
+// runtime from each mela's 12-EDO note names already in the raga database. This
 // module owns the names + the derivation, and maps a mela onto the 53-EDO strip.
 import { PITCH_CLASS } from './tuning.js';
 import { BOXES, S_STEP, P_STEP, EDO } from './shruti.js';
@@ -41,6 +41,17 @@ const VARIETY = {
   R: { 1: 1, 2: 2, 3: 3 }, G: { 2: 1, 3: 2, 4: 3 }, M: { 5: 1, 6: 2 },
   D: { 8: 1, 9: 2, 10: 3 }, N: { 9: 1, 10: 2, 11: 3 },
 };
+
+// The inverse of VARIETY: which semitone above Sa a named variety sits on. Exported
+// so an importer can place an ANYA swara — a note its parent mela does not have —
+// instead of silently substituting the parent's. Null for a variety that does not
+// exist (there is no M3).
+export function semitoneForVariety(letter, num) {
+  const row = VARIETY[String(letter).toUpperCase()];
+  if (!row) return null;
+  const hit = Object.entries(row).find(([, v]) => v === Number(num));
+  return hit ? Number(hit[0]) : null;
+}
 
 // Derive {R,G,M,D,N} variety numbers for mela n from raga-base's 12-EDO notes.
 export function melaVarieties(ragas, n) {

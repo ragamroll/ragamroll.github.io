@@ -23,7 +23,12 @@ if (typeof process !== 'undefined' && process.versions?.node) {
     const { dirname, join } = await import('node:path');
     const HERE = dirname(fileURLToPath(import.meta.url));
     const add = JSON.parse(readFileSync(join(HERE, 'raga-add.json'), 'utf8'));
-    setRagas({ ...(getRagas() || {}), ...add });
+    // What is already loaded WINS. raga-db.json carries every raga plus the aliases
+    // that fold the duplicate spellings together, and raga-add's raw records have
+    // neither — letting them land on top erased the alias index and a raga reached
+    // by an old spelling lost its mela and arohana. This now only fills gaps, which
+    // is all it was ever for.
+    setRagas({ ...add, ...(getRagas() || {}) });
   } catch {
     // leave whatever raga-base.js already auto-loaded (base-only)
   }
