@@ -21,6 +21,7 @@
  * @property {(vol: number) => void} setTalaVolume    // tala track volume 0..1; live on a playing piece
  * @property {(muted: boolean) => void} setMelodyMuted // mute/unmute the melody track; live (solo tala+drone)
  * @property {(name: string) => void} setTimbre       // melody voice preset ('bowed-fm'|'soft-am'|'reed'); applies on next load()
+ * @property {(ev: {midi?: number, freq?: number, durSec: number, gamaka?: Float32Array}) => void} previewNote  // sound ONE note immediately, for auditioning while editing. A ScheduledEvent minus its timing. MUST NOT touch the transport: position(), the play/pause state and any scheduled events are unaffected, so a note can be auditioned mid-playback or with nothing loaded at all
  * @property {(freqs: number[], vol?: number) => void} setDrone  // constant drone at these freqs, vol 0..1; vol<=0 / empty = off. Same freqs + new vol changes loudness without re-voicing. Independent of the transport
  * @property {() => void} droneOff         // silence the drone
  * @property {() => void} dispose          // release audio resources (incl. drone)

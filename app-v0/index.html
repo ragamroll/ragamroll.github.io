@@ -8,101 +8,120 @@
   <link rel="icon" href="./icons/icon-192.png" />
   <meta name="theme-color" content="#1a1a1a" />
   <style>
+    /* The same palette draw.html has always used, verbatim — warm paper-and-ink rather
+       than grey-on-grey, and a light theme that follows the system. It lives here so the
+       ROLL can read it: the roll is drawn on a canvas and cannot inherit anything, so
+       until now it carried a hardcoded copy that matched neither draw nor the page it
+       sat on. One palette, three surfaces. */
+    :root{
+      --bg:#15140f; --panel:#1e1c15; --panel2:#26231a; --ink:#ece7d9; --muted:#9a9280;
+      --hair:rgba(236,231,217,.12); --hair2:rgba(236,231,217,.06);
+      --amber:#d8a13f; --amberSoft:rgba(216,161,63,.55);
+      --teal:#46c39a; --tealSoft:rgba(70,195,154,.9); --terra:#c96b5a;
+      --serif:ui-serif,Georgia,"Iowan Old Style","Times New Roman",serif;
+      --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+      --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    }
+    @media (prefers-color-scheme:light){:root{
+      --bg:#f4f0e6;--panel:#fbf8f0;--panel2:#f0ead9;--ink:#2a2418;--muted:#6f6752;
+      --hair:rgba(42,36,24,.14);--hair2:rgba(42,36,24,.07);
+      --amber:#a76f16;--amberSoft:rgba(167,111,22,.6);--teal:#177f5e;--tealSoft:rgba(23,127,94,.95);--terra:#b4553f;
+    }}
     * { box-sizing: border-box; }
     html, body { height:100%; }
-    body { margin: 0; font-family: system-ui, sans-serif; background:#1a1a1a; color:#eee; }
+    body { margin: 0; font-family: var(--sans); background:var(--bg); color:var(--ink); }
     #app { height:100vh; height:100dvh; display:flex; flex-direction:column; overflow:hidden; }
-    .toolbar { display:flex; gap:.5rem; align-items:center; padding:.5rem; border-bottom:1px solid #333; }
+    .toolbar { display:flex; gap:.5rem; align-items:center; padding:.5rem; border-bottom:1px solid var(--hair); }
     .toolbar .readout { margin-left:auto; opacity:.7; font-size:.85rem; }
-    .toolbar .app-badge { font-weight:bold; font-size:.95rem; background:#222; border:1px solid #444;
+    .toolbar .app-badge { font-weight:bold; font-size:.95rem; background:var(--panel2); border:1px solid var(--hair);
       border-radius:10px; padding:.12rem .55rem; margin-right:.25rem; }
     .toolbar .help-link { display:inline-flex; align-items:center; justify-content:center; width:1.5rem; height:1.5rem;
-      border-radius:50%; border:1px solid #555; background:#222; color:#9cf; text-decoration:none; font-weight:bold; font-size:.9rem; }
-    .toolbar .help-link:hover { border-color:#9cf; }
-    .transport { display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; padding:.35rem .5rem; border-bottom:1px solid #333; }
+      border-radius:50%; border:1px solid var(--hair); background:var(--panel2); color:var(--amber); text-decoration:none; font-weight:bold; font-size:.9rem; }
+    .toolbar .help-link:hover { border-color:var(--amber); }
+    .transport { display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; padding:.35rem .5rem; border-bottom:1px solid var(--hair); }
     .transport button { font-size:1rem; padding:.15rem .5rem; cursor:pointer; }
     .transport button:disabled { opacity:.4; cursor:default; }
     .transport .doc-btn { font-size:.85rem; }
-    .transport .doc-btn.ok { border-color:#6c9; color:#9fc; }
+    .transport .doc-btn.ok { border-color:var(--teal); color:var(--teal); }
     .transport-play { display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; margin-left:auto; }  /* wraps in portrait */
     .transport .sapick { display:inline-flex; align-items:center; gap:.25rem; font-size:.85rem; margin-left:.4rem; }
-    .transport .sapick select { background:#111; color:#eee; border:1px solid #444; border-radius:4px; padding:.1rem .25rem; font:inherit; }
+    .transport .sapick select { background:var(--panel2); color:var(--ink); border:1px solid var(--hair); border-radius:4px; padding:.1rem .25rem; font:inherit; }
     .transport .tempo { display:inline-flex; align-items:center; gap:.3rem; font-size:.85rem; margin-left:.4rem; }
-    .transport .tempo .tempo-mult { width:4.5rem; accent-color:#6c9; cursor:pointer; }
-    .transport .tempo .tempo-num { width:3.2rem; background:#111; color:#eee; border:1px solid #444;
+    .transport .tempo .tempo-mult { width:4.5rem; accent-color:var(--teal); cursor:pointer; }
+    .transport .tempo .tempo-num { width:3.2rem; background:var(--panel2); color:var(--ink); border:1px solid var(--hair);
       border-radius:4px; padding:.1rem .25rem; font:inherit; }
-    .transport .tempo.on .tempo-num { border-color:#6c9; color:#9fc; }
+    .transport .tempo.on .tempo-num { border-color:var(--teal); color:var(--teal); }
     .transport .tempo .tempo-state { font-size:.68rem; opacity:.55; }
-    .transport .tempo.on .tempo-state { color:#9fc; opacity:.9; }
-    .transport .tempo .tempo-reset { cursor:pointer; background:#2a2a2a; color:#eee; border:1px solid #555;
+    .transport .tempo.on .tempo-state { color:var(--teal); opacity:.9; }
+    .transport .tempo .tempo-reset { cursor:pointer; background:var(--panel2); color:var(--ink); border:1px solid var(--hair);
       border-radius:4px; padding:0 .3rem; font-size:.8rem; }
-    .toolbar .readout .ovr { color:#9fc; }
+    .toolbar .readout .ovr { color:var(--teal); }
     .transport .vol { display:inline-flex; align-items:center; gap:.3rem; font-size:.8rem;
       margin-left:.5rem; white-space:nowrap; opacity:.9; }
-    .transport .vol input[type=range] { width:5rem; cursor:pointer; accent-color:#6c9; }
-    .transport .vol .vol-toggle { font:inherit; font-size:.8rem; cursor:pointer; background:#2a2a2a;
-      color:#eee; border:1px solid #555; border-radius:4px; padding:.1rem .4rem; }
-    .transport .vol .vol-toggle[aria-pressed=true] { border-color:#6c9; color:#9fc; }
+    .transport .vol input[type=range] { width:5rem; cursor:pointer; accent-color:var(--teal); }
+    .transport .vol .vol-toggle { font:inherit; font-size:.8rem; cursor:pointer; background:var(--panel2);
+      color:var(--ink); border:1px solid var(--hair); border-radius:4px; padding:.1rem .4rem; }
+    .transport .vol .vol-toggle[aria-pressed=true] { border-color:var(--teal); color:var(--teal); }
     .transport .vol.muted input[type=range] { opacity:.4; accent-color:#777; }
     /* Unified Open ▾ menu */
     .openmenu { position:relative; display:inline-flex; }
     .openmenu-btn { cursor:pointer; }
     .openmenu-pop { position:absolute; top:100%; left:0; margin-top:.25rem; z-index:900;
-      background:#1a1a1a; border:1px solid #444; border-radius:6px; min-width:11rem; padding:.25rem;
+      background:var(--panel); border:1px solid var(--hair); border-radius:6px; min-width:11rem; padding:.25rem;
       display:flex; flex-direction:column; box-shadow:0 8px 30px rgba(0,0,0,.5); }
-    .openmenu-item { display:block; width:100%; text-align:left; background:none; border:0; color:#eee;
+    .openmenu-item { display:block; width:100%; text-align:left; background:none; border:0; color:var(--ink);
       padding:.35rem .5rem; border-radius:4px; cursor:pointer; font:inherit; }
-    .openmenu-item:hover { background:#2a2a3a; }
-    .openmenu-item.current { color:#9cf; }
+    .openmenu-item:hover { background:var(--panel2); }
+    .openmenu-item.current { color:var(--amber); }
     .openmenu-sep { opacity:.5; font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; padding:.35rem .5rem .15rem; }
     .openmenu-link { display:flex; gap:.3rem; padding:.1rem .5rem .2rem; }
-    .openmenu-linkin { flex:1 1 0; min-width:8rem; background:#111; color:#eee; border:1px solid #444;
+    .openmenu-linkin { flex:1 1 0; min-width:8rem; background:var(--panel2); color:var(--ink); border:1px solid var(--hair);
       border-radius:4px; padding:.25rem .4rem; font:inherit; font-size:.82rem; }
     .openmenu-linkin.err { border-color:#c55; }
-    .openmenu-linkgo { background:#2a2a3a; color:#cde; border:1px solid #556; border-radius:4px;
+    .openmenu-linkgo { background:var(--panel2); color:var(--amber); border:1px solid #556; border-radius:4px;
       padding:.25rem .55rem; cursor:pointer; font:inherit; font-size:.82rem; }
     .openmenu-linkerr { color:#e88; font-size:.75rem; padding:0 .5rem .2rem; }
     .diagnostics { margin:.5rem; padding:.5rem; border:1px solid #a63; border-radius:4px; background:#241a10; color:#eda; font-size:.85rem; max-height:20vh; overflow:auto; }
     .diagnostics ul { margin:.25rem 0 0; padding-left:1.25rem; }
     .dialog-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.6);
       display:flex; align-items:flex-start; justify-content:center; padding:4vh 1rem; z-index:1000; }
-    .dialog-box { background:#1a1a1a; border:1px solid #444; border-radius:6px;
+    .dialog-box { background:var(--panel); border:1px solid var(--hair); border-radius:6px;
       width:min(760px,100%); max-height:88vh; display:flex; flex-direction:column;
       box-shadow:0 8px 40px rgba(0,0,0,.6); }
     .dialog-head { display:flex; justify-content:space-between; align-items:center;
-      padding:.6rem .8rem; border-bottom:1px solid #333; }
-    .dialog-head button { cursor:pointer; background:#333; color:#eee; border:1px solid #555; border-radius:4px; }
+      padding:.6rem .8rem; border-bottom:1px solid var(--hair); }
+    .dialog-head button { cursor:pointer; background:var(--hair); color:var(--ink); border:1px solid var(--hair); border-radius:4px; }
     .dialog-body { overflow:auto; padding:.5rem .8rem; }
     /* Sticky control strip: stays put while the raga list scrolls beneath it.
        Negative margins + matching padding let its background cover the
        dialog-body padding so scrolled rows never peek above it. Room here for
        more filter controls later. */
-    .ref-controls { position:sticky; top:0; z-index:2; background:#1a1a1a;
+    .ref-controls { position:sticky; top:0; z-index:2; background:var(--panel);
       margin:-.5rem -.8rem .35rem; padding:.5rem .8rem .1rem; }
     .dialog-search { width:100%; padding:.35rem .5rem; margin-bottom:.4rem;
-      background:#111; color:#eee; border:1px solid #444; border-radius:4px; }
+      background:var(--panel2); color:var(--ink); border:1px solid var(--hair); border-radius:4px; }
     .dialog-count { opacity:.6; font-size:.8rem; margin-bottom:.3rem; }
     .ref-list { list-style:none; margin:0; padding:0; font-family:ui-monospace,monospace; font-size:13px; }
     .ref-list li { display:grid; grid-template-columns:10rem 1fr; column-gap:.8rem;
-      padding:.3rem 0; border-bottom:1px solid #222; align-items:baseline; }
+      padding:.3rem 0; border-bottom:1px solid var(--panel2); align-items:baseline; }
     .ref-cols { display:flex; flex-direction:column; gap:.1rem; overflow-x:auto; }
     .ref-name { font-weight:bold; }
-    .ref-seq { color:#9cf; }
-    .ref-map { color:#9c9; }
+    .ref-seq { color:var(--amber); }
+    .ref-map { color:var(--muted); }
     .ref-int { color:#cc9; }
     /* Scale ⚙ / Drone toggles */
-    .toolbar .scale-btn.active { border-color:#6c9; color:#9fc; }
+    .toolbar .scale-btn.active { border-color:var(--teal); color:var(--teal); }
     .toolbar .timbre { display:inline-flex; align-items:center; gap:.25rem; font-size:.9rem; }
-    .toolbar .timbre select { background:#222; color:#eee; border:1px solid #444; border-radius:4px;
+    .toolbar .timbre select { background:var(--panel2); color:var(--ink); border:1px solid var(--hair); border-radius:4px;
       padding:.15rem .3rem; font:inherit; cursor:pointer; }
     /* Experimental 53-EDO scale dialog */
     .scale-box { width:min(680px,96vw); }
     .mela-row label { font-size:.9rem; }
-    .mela-row select { margin-left:.35rem; background:#111; color:#eee; border:1px solid #444;
+    .mela-row select { margin-left:.35rem; background:var(--panel2); color:var(--ink); border:1px solid var(--hair);
       border-radius:4px; padding:.2rem .35rem; font:inherit; }
     /* Mela picker + a/b table */
     .mela-row { display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; margin:.2rem 0 .6rem; }
-    .mela-row .mela-step { cursor:pointer; background:#2a2a2a; color:#eee; border:1px solid #555;
+    .mela-row .mela-step { cursor:pointer; background:var(--panel2); color:var(--ink); border:1px solid var(--hair);
       border-radius:4px; padding:.15rem .45rem; font:inherit; }
     .mela-row .mela-step:disabled { opacity:.35; cursor:default; }
     .mela-row .mela-chakra { font-size:.78rem; opacity:.6; margin-left:.2rem; }
@@ -110,17 +129,17 @@
     .mela-table th { text-align:right; font-weight:normal; opacity:.55; font-size:.72rem; padding:.2rem .5rem .2rem 0; }
     .mela-table td { text-align:center; padding:.2rem .3rem; font-size:.85rem; }
     .mela-table .mt-swara td { font-weight:bold; }
-    .mela-table .mt-variety td { color:#9fc; }
+    .mela-table .mt-variety td { color:var(--teal); }
     .mela-table .mt-edo td, .mela-table .mt-cents td { opacity:.7; font-size:.78rem; }
     .mela-table .fixed-dot { opacity:.4; }
     .mela-table .ab { display:inline-flex; gap:2px; }
-    .mela-table .ab-btn { cursor:pointer; background:#1a1a1a; color:#bbb; border:1px solid #444;
+    .mela-table .ab-btn { cursor:pointer; background:var(--panel); color:#bbb; border:1px solid var(--hair);
       border-radius:3px; width:1.4rem; padding:.1rem 0; font:inherit; font-size:.78rem; }
-    .mela-table .ab-btn.on { background:#183028; border-color:#6c9; color:#cfe; }
-    .scale-actions { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; padding-top:.3rem; border-top:1px solid #333; }
+    .mela-table .ab-btn.on { background:#183028; border-color:var(--teal); color:var(--teal); }
+    .scale-actions { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; padding-top:.3rem; border-top:1px solid var(--hair); }
     .scale-actions .actions-spacer { flex:1 1 auto; }
     .scale-actions .reset-icon { font-size:1rem; padding:.15rem .5rem; }
-    .scale-actions .suggest-btn { background:#1c2f3a; border-color:#69c; color:#cde; }
+    .scale-actions .suggest-btn { background:#1c2f3a; border-color:#69c; color:var(--amber); }
     /* Tala browser */
     .tala-box { width:min(680px,96vw); }
     .tala-hint { font-size:.8rem; opacity:.75; margin:.1rem 0 .4rem; }
@@ -128,11 +147,11 @@
       margin:0 0 .6rem; color:#ccc; }
     .tala-timbre select { font-size:.82rem; }
     .tala-list { list-style:none; margin:0; padding:0; }
-    .tala-list li { padding:.45rem 0; border-bottom:1px solid #222; }
+    .tala-list li { padding:.45rem 0; border-bottom:1px solid var(--panel2); }
     .tala-head { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
-    .tala-play { cursor:pointer; background:#2a2a2a; color:#eee; border:1px solid #555; border-radius:4px;
+    .tala-play { cursor:pointer; background:var(--panel2); color:var(--ink); border:1px solid var(--hair); border-radius:4px;
       padding:.1rem .55rem; font-size:.9rem; }
-    .tala-play.on { border-color:#6c9; color:#9fc; }
+    .tala-play.on { border-color:var(--teal); color:var(--teal); }
     .tala-name { font-weight:bold; }
     .tala-count { font-size:.74rem; opacity:.6; }
     /* One row always: boxes shrink to fit (14 aksharas on a phone) rather than
@@ -142,30 +161,30 @@
     .akbox { flex:1 1 0; min-width:0; max-width:1.5rem; aspect-ratio:1; display:flex; align-items:center;
       justify-content:center; border:1px solid #5a5a5a; border-radius:4px; background:#1c1c1c;
       font-family:ui-monospace,monospace; font-size:.7rem; }
-    .akbox.start { border-color:#6c9; color:#9fc; background:#12211b; }
-    .akbox.acc { border-color:#a86; color:#eca; background:#211a12; }
-    .akbox.on { background:#2b4; color:#111; border-color:#2b4; }
+    .akbox.start { border-color:var(--teal); color:var(--teal); background:var(--panel2); }
+    .akbox.acc { border-color:var(--muted); color:#eca; background:#211a12; }
+    .akbox.on { background:#2b4; color:var(--panel2); border-color:#2b4; }
     /* Raga browser preview */
     .raga-list li { display:grid; grid-template-columns:auto 1fr; column-gap:.6rem; align-items:start;
-      padding:.35rem 0; border-bottom:1px solid #222; }
-    .raga-list li.playing { background:#12211b; }
-    .raga-play { cursor:pointer; background:#2a2a2a; color:#eee; border:1px solid #555; border-radius:4px;
+      padding:.35rem 0; border-bottom:1px solid var(--panel2); }
+    .raga-list li.playing { background:var(--panel2); }
+    .raga-play { cursor:pointer; background:var(--panel2); color:var(--ink); border:1px solid var(--hair); border-radius:4px;
       padding:.1rem .5rem; font-size:.85rem; align-self:center; }
-    .raga-play.on { border-color:#6c9; color:#9fc; }
+    .raga-play.on { border-color:var(--teal); color:var(--teal); }
     .raga-main .ref-name { font-weight:bold; }
     .raga-list .ref-mela { color:#c9c; font-size:.78rem; }
-    .raga-list .ref-aroha { color:#9c9; font-size:.78rem; font-family:ui-monospace,monospace; }
+    .raga-list .ref-aroha { color:var(--muted); font-size:.78rem; font-family:ui-monospace,monospace; }
     /* Raga browser v2: 22-shruti grid header + per-row X footprint, sharing one
        column template so swaras line up under their shrutis. */
     .raga2-box { width:min(96vw, 760px); max-width:96vw; --rr-gutter:11rem; }
-    .rr-scroll { overflow:auto; max-height:66vh; border:1px solid #2a2a2a; border-radius:6px; }
+    .rr-scroll { overflow:auto; max-height:66vh; border:1px solid var(--panel2); border-radius:6px; }
     .rr-grid, .rr-raga { display:grid;
       grid-template-columns: var(--rr-gutter, 11rem) repeat(22, minmax(0.5rem, 1fr));
       align-items:start; column-gap:1px; }
     .rr-header { position:sticky; top:0; z-index:2; background:#161616;
       border-bottom:1px solid #3a3a3a; padding:.3rem .2rem .35rem; }
     .rr-melaline { font-size:.82rem; padding:0 .3rem .2rem; }
-    .rr-melaline .rr-selname { color:#9fc; font-weight:bold; margin-left:.5rem; }
+    .rr-melaline .rr-selname { color:var(--teal); font-weight:bold; margin-left:.5rem; }
     /* Cents summary: free-flowing above the grid so multi-digit values never
        widen a shruti column. Each entry = swara letter + its chosen cents. */
     .rr-cents-line { display:flex; flex-wrap:wrap; gap:.1rem .55rem; padding:0 .3rem .3rem;
@@ -174,24 +193,24 @@
     .rr-rowlab { font-size:.62rem; color:#999; align-self:center; padding-right:.3rem; }
     .rr-cell { display:flex; align-items:center; justify-content:center; font-size:.64rem;
       font-family:ui-monospace,monospace; min-height:1.05rem; }
-    .rr-swara { color:#cfe; font-weight:bold; }
-    .rr-comma.gap { color:#4a4a4a; border:1px solid #262626; border-radius:3px; min-height:1rem; }
+    .rr-swara { color:var(--teal); font-weight:bold; }
+    .rr-comma.gap { color:#4a4a4a; border:1px solid var(--panel2); border-radius:3px; min-height:1rem; }
     .rr-comma.anchor { color:#bcbcbc; border:1px solid #6a6a6a; border-radius:3px; min-height:1rem;
-      background:#262626; font-weight:bold; }   /* S / P: stronger box, but grey (not an a/b choice) */
-    button.rr-comma { cursor:pointer; background:#1e1e1e; color:#c9a; border:1px solid #444;
+      background:var(--panel2); font-weight:bold; }   /* S / P: stronger box, but grey (not an a/b choice) */
+    button.rr-comma { cursor:pointer; background:#1e1e1e; color:#c9a; border:1px solid var(--hair);
       border-radius:3px; padding:0; line-height:1; min-height:1rem; }
-    button.rr-comma.on { background:#3a2c12; border-color:#a86; color:#fda; font-weight:bold; }
+    button.rr-comma.on { background:#3a2c12; border-color:var(--muted); color:#fda; font-weight:bold; }
     .rr-cell.dim { opacity:.32; }
     .rr-list { list-style:none; margin:0; padding:0; }
     .rr-raga { padding:.3rem .2rem; border-bottom:1px solid #202020; }
-    .rr-raga.sel { background:#12211b; }
+    .rr-raga.sel { background:var(--panel2); }
     .rr-namecell { grid-column:1; padding-right:.4rem; min-width:0; }
     .rr-nameline { display:flex; align-items:center; gap:.35rem; }
     .rr-nameline .ref-name { font-weight:bold; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .rr-aroha, .rr-avaroha { color:#9c9; font-size:.68rem; font-family:ui-monospace,monospace;
+    .rr-aroha, .rr-avaroha { color:var(--muted); font-size:.68rem; font-family:ui-monospace,monospace;
       white-space:normal; overflow-wrap:anywhere; }   /* wrap so all notes show */
     .rr-avaroha { color:#9ac; }
-    .rr-x { color:#333; }
+    .rr-x { color:var(--hair); }
     .rr-x.on { color:#2b4; font-weight:bold; }
     /* Mobile portrait: shrink the name gutter + glyphs so all 22 shruti columns
        fit without horizontal scroll. */
@@ -201,34 +220,60 @@
       .rr-nameline .ref-name { font-size:.8rem; }
       .rr-aroha, .rr-avaroha { font-size:.6rem; }
     }
-    .scale-actions button { cursor:pointer; background:#2a2a2a; color:#eee; border:1px solid #555;
+    .scale-actions button { cursor:pointer; background:var(--panel2); color:var(--ink); border:1px solid var(--hair);
       border-radius:4px; padding:.3rem .7rem; }
-    .scale-actions button.primary { background:#1c3a30; border-color:#6c9; color:#cfe; }
+    .scale-actions button.primary { background:#1c3a30; border-color:var(--teal); color:var(--teal); }
     .scale-actions button:disabled { opacity:.4; cursor:default; }
     .workspace { flex:1 1 0; min-height:0; display:flex; flex-direction:column; padding:.35rem .5rem; }
     .cols { display:grid; gap:.3rem; align-items:stretch; min-height:0; }  /* flex-basis (topFrac) + columns set inline */
     .editor, .pane {
       font-family: ui-monospace, "Menlo", "Consolas", monospace;
       font-size: 15px; line-height: 1.2; white-space: pre; overflow:auto;
-      background:#111; color:#eee; border:1px solid #333; border-radius:4px;
+      background:var(--panel2); color:var(--ink); border:1px solid var(--hair); border-radius:4px;
       padding:.5rem; margin:0;
     }
     .cols > .editor, .cols > .pane { height:100%; min-height:0; }
     .editor { width:100%; }
     .pane.notation { margin:.35rem 0 0; min-height:0; }  /* flex share set inline */
-    .split-v { width:6px; background:#333; cursor:col-resize; border-radius:3px; touch-action:none; }
-    .split-h { height:6px; margin:.15rem .5rem; background:#333; cursor:row-resize; border-radius:3px; touch-action:none; }
+    .split-v { width:6px; background:var(--hair); cursor:col-resize; border-radius:3px; touch-action:none; }
+    .split-h { height:6px; margin:.15rem .5rem; background:var(--hair); cursor:row-resize; border-radius:3px; touch-action:none; }
     .split-v:hover, .split-h:hover { background:#66c; }
     /* The roll is a canvas now, so the pane holds no text and does its own scrolling:
        the inner holder is the scroll window, and the canvas inside it stays
        viewport-sized however long the piece is. */
-    .pane.roll { white-space:normal; overflow:hidden; padding:0; display:flex; }
-    .roll-holder { flex:1 1 auto; min-width:0; overflow-y:auto; overflow-x:hidden; }
+    /* Column, so the roll's own controls sit ABOVE its canvas rather than beside it —
+       they act on what the roll has selected, so they belong to the roll, not to the
+       app-wide toolbar. min-height:0 or the holder refuses to shrink and the strip is
+       pushed off the pane. */
+    .pane.roll { white-space:normal; overflow:hidden; padding:0; display:flex; flex-direction:column; }
+    /* NEVER reflows. This strip sits above the canvas, so if its height changes the
+       canvas moves — and a hint that wraps to two lines when the text gets longer moved
+       it 14px between a pointerdown and the click that followed, landing the click on a
+       different part of the roll. One line, clipped, no wrapping. */
+    .roll-tools { display:flex; gap:.5rem; align-items:center; padding:.25rem .4rem;
+      border-bottom:1px solid var(--hair); background:var(--panel); font-size:.75rem; flex:0 0 auto;
+      flex-wrap:nowrap; white-space:nowrap; overflow:hidden;
+      /* Fixed, not intrinsic: roll mode and the curve editor carry different controls,
+         and letting the strip size to them changed its height by 7px when you opened a
+         note — moving the canvas for that reason alone. */
+      height:2.4rem; box-sizing:border-box; }
+    .roll-tools > * { flex:0 0 auto; }
+    .roll-tools button { font-size:.75rem; padding:.15rem .5rem; }
+    .roll-tools button:disabled { opacity:.4; cursor:default; }
+    .roll-tools .rt-what { opacity:.6; flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+    .roll-tools .rt-paint.on { background:#2c3a34; border-color:#46c39a; color:#9fe7cd; }
+    .roll-tools .rt-ab { display:flex; gap:.2rem; align-items:center; }
+    .roll-tools .rt-ab.on button { border-color:var(--amberSoft); color:var(--amber); }
+    .roll-tools .rt-hz { font-family:var(--mono); color:var(--teal); min-width:6.5em; }
+    .roll-tools .rt-snap { display:flex; gap:.25rem; align-items:center; opacity:.85; }
+    .roll-tools .rt-zoom { display:flex; gap:.25rem; align-items:center; }
+    .roll-tools .rt-zoom b { font-weight:600; min-width:2.2em; text-align:center; opacity:.8; }
+    .roll-holder { flex:1 1 auto; min-width:0; min-height:0; overflow-y:auto; overflow-x:hidden; }
     .roll-holder > div { position:relative; width:100%; }
     .roll-holder canvas { display:block; position:sticky; top:0; width:100%; }
-    .footer { display:flex; gap:.6rem; align-items:center; padding:.35rem .6rem; border-top:1px solid #333; font-size:.75rem; opacity:.7; }
+    .footer { display:flex; gap:.6rem; align-items:center; padding:.35rem .6rem; border-top:1px solid var(--hair); font-size:.75rem; opacity:.7; }
     .footer .build { margin-left:auto; }  /* build timestamp + version, pushed right */
-    .footer .ver { color:#9cf; font-family:ui-monospace,monospace; }
+    .footer .ver { color:var(--amber); font-family:ui-monospace,monospace; }
     /* Mobile portrait: keep the toolbar uncrowded — no burger needed once Save/
        Export moved to the transport and Open+Examples merged. Readout drops to
        its own line. The version now lives in the footer, shown at every width. */

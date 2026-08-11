@@ -56,6 +56,109 @@ function noteToken(n, { verbatimOct, verbatimBody, deriveOctave, curL, curOct, c
 // deriveOctave:true — an inserted note shifts the running O= register that
 // verbatim (unchanged) notes downstream rely on, so without deriveOctave those
 // verbatim notes desync their octave from what they'd actually parse back to.
+// A dropped token leaves its separator behind, so every delete widens a gap in the
+// saved notation and two adjacent deletes widen it twice. srgm is whitespace-separated,
+// so collapsing a run of spaces changes nothing except how it reads — except inside a
+// COMMENT, where the spacing is someone's text and not ours to tidy.
+export function tidySpaces(src) {
+  return src.split('\n')
+    .map((l) => (l.trimStart().startsWith('%') ? l : l.replace(/[ \t]{2,}/g, ' ').replace(/[ \t]+$/, '')))
+    .join('\n');
+}
+
+/**
+ * A painted note or rest, turned into the edit that writes it down.
+ *
+ * Where it lands was already decided by placePaint; this says what the notation has to
+ * do about it, and it is four different things: cut a note in two around it, append past
+ * the end (with silence for the gap it was dropped after), prepend before the first
+ * note, or drop it into a gap.
+ *
+ * An EMPTY piece is the one case that cannot be expressed as an edit to a model, because
+ * there is no token to anchor against — so a token is returned for the caller to append
+ * to the source directly. That token carries its own octave marks: nothing re-derives
+ * them on this path, and a blank skeleton's `O=5` would otherwise flatten a note painted
+ * in an upper or lower row.
+ *
+ * `deriveOctave` is always true for the model path — an inserted token shifts the running
+ * octave register that every later verbatim note reads.
+ */
+export function paintEdit({ place, ts, dur, step, rest, model, notes, starts, contentEnd, ctx }) {
+  const item = rest ? { rest: true, dur } : { step, octave: Math.floor(step / EDO) + 5, dur, curve: null };
+  const changed = new Set(), inserts = new Map();
+
+  if (place.kind === 'append' && place.anchorTok < 0) {
+    const lead = ts > 0 ? ('z' + (Math.round(ts) > 1 ? Math.round(ts) : '') + ' ') : '';
+    const len = Math.max(1, Math.round(dur));
+    const body = len > 1 ? String(len) : '';
+    const sw = rest ? null : stepToSwara(step, ctx);
+    const tok = rest ? ('z' + body) : (octMarks(sw.octave - 5) + sw.letter + body);
+    return { seed: lead + tok };
+  }
+  if (place.kind === 'split') {
+    const hostIdx = notes.findIndex((n) => n.tok === place.host);
+    const host = model.get(place.host);
+    const { head, tail } = splitSpans(starts[hostIdx], host.dur, ts, dur);
+    if (head <= 0) {
+      // Degenerate: the paint lands at or before the host's own start, and a zero-length
+      // head would emit a bogus token. Insert BEFORE the host instead.
+      if (hostIdx > 0) inserts.set(notes[hostIdx - 1].tok, [item]);
+      else inserts.set(-1, ts > 0 ? [{ rest: true, dur: ts }, item] : [item]);
+    } else {
+      host.dur = head; changed.add(place.host);
+      // The tail carries the host's remainder onward, same pitch, no gamaka of its own.
+      const tailNote = tail > 0 ? { step: host.step, octave: host.octave, dur: tail, curve: null } : null;
+      inserts.set(place.host, tailNote ? [item, tailNote] : [item]);
+    }
+  } else if (place.kind === 'append') {
+    const gap = Math.round(ts - contentEnd);
+    inserts.set(place.anchorTok, gap > 0 ? [{ rest: true, dur: gap }, item] : [item]);
+  } else if (place.anchorTok < 0) {
+    inserts.set(-1, ts > 0 ? [{ rest: true, dur: ts }, item] : [item]);
+  } else {
+    inserts.set(place.anchorTok, [item]);
+  }
+  return { changed, inserts, deriveOctave: true };
+}
+
+/**
+ * A note has been dragged to a new pitch. Mutates it and says whether the octave
+ * register has to be re-derived for the whole piece.
+ *
+ * The octave comes from stepToSwara, NOT from Math.floor(step/EDO): the two disagree
+ * near the top of an octave, where c12 wraps to the next one, and the letter is already
+ * derived that way — spelling them differently would put the note in the wrong octave.
+ *
+ * A gamaka is held in ABSOLUTE steps, so a moved note has to say what its ornament
+ * meant. 'preserve-pitch' leaves the curve where it was, so what sounds is unchanged
+ * and only the note it is written against moved; 'move-with-note' shifts it by the same
+ * interval, so the shape rides along and sounds transposed.
+ */
+export function applyMove(note, oldStep, ctx, mode = 'preserve-pitch') {
+  const dStep = note.step - oldStep;
+  const oldOct = stepToSwara(oldStep, ctx).octave, newOct = stepToSwara(note.step, ctx).octave;
+  note.octave = newOct;
+  if (mode === 'move-with-note' && note.curve && note.curve.length) {
+    note.curve = note.curve.map(([u, sv]) => [u, sv + dStep]);
+  }
+  return { deriveOctave: newOct !== oldOct, dStep };
+}
+
+/**
+ * The whole commit path, for any host: re-serialise the model over the source it came
+ * from and tidy what a deletion left behind.
+ *
+ * Both apps that edit a roll need exactly this and nothing more of each other — draw
+ * re-parses into its own globals afterwards, the app hands the string to a worker — so
+ * the shared part ends at the string. It is the counterpart to core/roll-edit.js: that
+ * decides what a gesture MEANS, this decides what the notation then SAYS.
+ */
+export function applyEdit(srcText, { model, changed = new Set(), inserts = new Map(),
+  deletes = new Set(), deriveOctave = false, ctx, restDurs } = {}) {
+  const out = serializeModel(srcText, { model, changed, inserts, deletes, deriveOctave, ctx, restDurs });
+  return deletes.size ? tidySpaces(out) : out;
+}
+
 export function serializeModel(srcText, { model, changed, inserts, deletes, deriveOctave, ctx, restDurs }) {
   const curL = { v: 1 }, curOct = { v: 5 };   // running L= multiplier + octave register
   let prependDone = false;                    // emit inserts.get(-1) before the first NOTE token, once

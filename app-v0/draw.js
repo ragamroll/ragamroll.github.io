@@ -18,10 +18,12 @@ import { createRagamRoll } from './core/ragamroll.js';
 import { createRollAudio } from './core/roll-audio.js';
 import { createRollEdit } from './core/roll-edit.js';
 import { anchorsOf, resplitAt } from './core/note-split.js';
-import { extractAnchors, pointsToAnchors, addAnchor, removeAnchor, moveAnchor } from './core/gamaka-curve.js';
+import { createSeamHost } from './core/roll-seam.js';
+import { pointsToAnchors, addAnchor, removeAnchor, moveAnchor } from './core/gamaka-curve.js';
+import { createCurveEdit } from './core/curve-edit.js';
 import { buildSequence } from './core/midi/sequence.js';
 import { writeSMF } from './core/midi/smf.js';
-import { serializeModel, snapToRagaRow, snapToAkshara, placePaint, splitSpans, octMarks } from './core/note-edit.js';
+import { serializeModel, applyEdit, applyMove, paintEdit, snapToRagaRow, snapToAkshara, placePaint, splitSpans, octMarks } from './core/note-edit.js';
 import { buildRagaSteps } from './core/detect-raga-helper.js';
 // Aliased: shruti.js exports a DIFFERENT stepForLetter(scale, letter). This one
 // is (letter, approxStep, ragaSwaraName) -> the raga's own step for that letter.
@@ -106,14 +108,12 @@ function snapStep(s){ const oct = Math.floor(s / EDO), base = s - oct * EDO; let
 
 // ---------- canvas ----------
 const cv = document.getElementById('cv');
-let mode='roll', sel=-1, drawing=false, drawSpan=22, dragIdx=-1;
+let mode='roll', sel=-1, drawSpan=22;   // the curve gesture's own state lives in core/curve-edit.js
 // Roll-mode long-press grab (move/resize a note). paintMode is wired to the
 // `+ note` toolbar toggle below; grab and paint gestures are mutually exclusive.
 let paintMode=false, gamakaMode=false;   // the press/drag gestures themselves live in core/roll-edit.js
-let paint=null;   // paint={ts, step?, rest?, dur, pid} — in-progress paint-a-note/rest drag (roll mode, paintMode on)
 let gamaStroke=null;   // in-roll gamaka gesture: {gi, pid, dragIdx, downX, downY, buffer, mode:'anchor'|'free'|'pending'}
 const HANDLE_PX=18;
-const REST_LANE_PX=22;   // width of the rest-paint gutter at the left edge of the plot area (roll, paint mode)
 const ROLL_TOUCH_ACTION='pan-y';   // touchAction roll mode uses when idle (matches resizeCanvas below)
 // Grid stretch-handles (pitch-low/pitch-high/time-bottom) — shared sizing between
 // the render() draw and hitGridHandle()'s hit-test so they stay in lockstep.
@@ -135,7 +135,7 @@ const roll = createRagamRoll({ holder: document.getElementById('holder'), conten
   touchAction: ROLL_TOUCH_ACTION,
   palette: () => ({ amber:cssvar('--amber'), amberS:cssvar('--amberSoft'), teal:cssvar('--teal'),
     terra:cssvar('--terra'), hair:cssvar('--hair2'), muted:cssvar('--muted'),
-    panel2:cssvar('--panel2'), mono:cssvar('--mono') }),
+    panel2:cssvar('--panel2'), mono:cssvar('--mono'), bg:cssvar('--bg'), sans:cssvar('--sans') }),
   hooks: { underGrid: drawRestGutter, overNotes: drawEditChrome, top: drawHandles },
 });
 const ctx = roll.ctx, PAD = roll.pad;
@@ -185,7 +185,11 @@ function restoreView(){ const hd=$('holder'), u=pxU();
 // told what to show; it never reaches back for it.
 function syncView(){
   roll.setView({ mode, sel, selRest, drawSpan, zoom, playPos, markerA, markerB,
-    saMidi: saPlay==null ? saRef : saPlay, grabIdx: rollEdit ? rollEdit.grabbedIndex() : -1 });
+    saMidi: saPlay==null ? saRef : saPlay, grabIdx: rollEdit ? rollEdit.grabbedIndex() : -1,
+    // The rest gutter and the in-progress paint box are the shared renderer's now, so
+    // they are told rather than drawn here — both apps aim at the same band.
+    paintMode: mode==='roll' && paintMode, paint: rollEdit ? rollEdit.painting() : null,
+    drawing: curveEdit ? curveEdit.drawing() : false });
 }
 // ---- editing chrome ----
 // Painted through the roll's hooks, because it is interleaved with the roll's own
@@ -194,11 +198,6 @@ function syncView(){
 // the geometry, so the chrome and the roll cannot disagree about where anything is.
 function drawRestGutter(g){ const p=g.plot, [sa,sb]=g.xRange, C=roll.ctx;
   // A faint band at the left edge, paint mode only — pressing inside it paints a rest
-  // (a silent gap) instead of a note. Same REST_LANE_PX as the pointerdown check.
-  if (mode==='roll' && paintMode){ C.fillStyle='rgba(216,161,63,.09)'; C.fillRect(p.x,p.y,REST_LANE_PX,p.h);
-    C.strokeStyle=cssvar('--hair2'); C.lineWidth=1; C.beginPath(); C.moveTo(p.x+REST_LANE_PX,p.y); C.lineTo(p.x+REST_LANE_PX,p.y+p.h); C.stroke();
-    C.fillStyle=cssvar('--muted'); C.globalAlpha=.8; C.textAlign='center'; C.font='bold 11px '+cssvar('--mono');
-    C.fillText('z', p.x+REST_LANE_PX/2, p.y+13); C.globalAlpha=1; C.font='11px '+cssvar('--mono'); }
   // Draw mode zooms onto one note and shows every shruti — you are placing a pitch by
   // hand there, not reading a raga.
   if (mode==='draw'){ for (let oct=Math.floor(sa/EDO)-1; oct<=Math.floor(sb/EDO)+1; oct++) for (const sh of SHRUTI){ const s=oct*EDO+sh;
@@ -210,17 +209,7 @@ function drawEditChrome(g){ const p=g.plot, X=g.X, Y=g.Y, C=roll.ctx, teal=cssva
     for (const [u,st] of c){ const cx=X(st), cy=Y(t0+(t1-t0)*u);
       C.fillStyle=teal; C.globalAlpha=.9; C.beginPath(); C.arc(cx,cy,4,0,6.283); C.fill(); C.globalAlpha=1;
       C.strokeStyle='rgba(0,0,0,.35)'; C.lineWidth=.7; C.stroke(); } }
-  if (paint){ const y0=Y(paint.ts), y1=Y(paint.ts+paint.dur);
-    if (paint.rest){ const xc=p.x+REST_LANE_PX/2;
-      C.fillStyle='#999'; C.globalAlpha=0.4; roundRect(xc-8,y0,16,Math.max(4,y1-y0),4); C.fill(); C.globalAlpha=1; }
-    else { const xc=X(paint.step);
-      C.fillStyle='#9fc'; C.globalAlpha=0.35; roundRect(xc-8,y0,16,Math.max(4,y1-y0),4); C.fill(); C.globalAlpha=1; } }
-  if (mode==='draw'&&!NOTES[sel].curve){ C.fillStyle=cssvar('--muted'); C.textAlign='center'; C.font='13px '+cssvar('--sans');
-    C.fillText('drag top→bottom to draw the pitch', p.x+p.w/2, p.y+p.h/2); }
-  if (mode==='draw'&&NOTES[sel].curve&&!drawing){ const c=NOTES[sel].curve,[t0,t1]=g.yRange;
-    for (let k=0;k<c.length;k++){ const cx=X(c[k][1]),cy=Y(t0+(t1-t0)*c[k][0]);
-      C.beginPath();C.arc(cx,cy,6.5,0,7);C.fillStyle=cssvar('--bg');C.fill();
-      C.lineWidth=2;C.strokeStyle=teal;C.stroke(); C.beginPath();C.arc(cx,cy,2.4,0,7);C.fillStyle=teal;C.fill(); } }
+  // The curve editor's anchors and its empty-note prompt are the shared renderer's now.
 }
 function drawHandles(){ if (mode==='roll') drawGridHandles(cssvar('--teal')); }
 
@@ -283,31 +272,35 @@ function roundRect(x,y,w,h,r){ r=Math.min(r,w/2,h/2); ctx.beginPath(); ctx.moveT
 // ---------- interaction ----------
 function evtPos(e){ const r=cv.getBoundingClientRect(); return { x:e.clientX-r.left, y:e.clientY-r.top }; }
 // roll: selection is a click/tap (so a drag can scroll the tall roll)
-let dEdit=null;   // draw-mode curve gesture: {downX,downY,hi,origCurve,mode:'pending'|'drag'|'free'}
 const DEDIT_EPS=6;
 // Is (x,y) on the selected note's curve LINE (draw-mode coords), for tap-to-add?
-function onCurveLineDraw(x,y){ const c=NOTES[sel].curve; if (!c) return false; const [t0,t1]=yStartEnd();
-  const u=Math.max(0,Math.min(1,(tAtY(y)-t0)/Math.max(1e-6,t1-t0))); const st=sampleCurve(c,u); return Math.abs(X(st)-x)<=14; }
-cv.addEventListener('pointerdown', e=>{ if (mode!=='draw') return; try{ cv.setPointerCapture(e.pointerId); }catch(_){} ; ensureAudio(); const {x,y}=evtPos(e);
-  dEdit={ downX:x, downY:y, hi:(NOTES[sel].curve?hitHandle(x,y):-1), origCurve:(NOTES[sel].curve?NOTES[sel].curve.map(p=>p.slice()):null), mode:'pending' }; });
-cv.addEventListener('pointermove', e=>{ if (mode!=='draw' || !dEdit) return; const {x,y}=evtPos(e);
-  if (dEdit.mode==='pending' && (Math.abs(x-dEdit.downX)>DEDIT_EPS || Math.abs(y-dEdit.downY)>DEDIT_EPS)){
-    if (dEdit.hi>=0){ pushUndo(); dEdit.mode='drag'; dragIdx=dEdit.hi; liveOn(); liveSet(NOTES[sel].curve[dEdit.hi][1]); }
-    else { pushUndo(); dEdit.mode='free'; drawing=true; NOTES[sel].curve=[]; liveOn(); addPoint(x,y); render(); return; } }
-  if (dEdit.mode==='drag'){ dragHandle(x,y); render(); return; }
-  if (dEdit.mode==='free'){ addPoint(x,y); render(); return; } });
-cv.addEventListener('pointerup', e=>{ if (mode!=='draw' || !dEdit) return; const {x,y}=evtPos(e); const g=dEdit; dEdit=null;
-  if (g.mode==='drag'){ if (document.getElementById('snap').checked) NOTES[sel].curve[dragIdx][1]=snapStep(NOTES[sel].curve[dragIdx][1]); dragIdx=-1; liveOff(); render(); autoPlay(); scheduleShare(); return; }
-  if (g.mode==='free'){ drawing=false; liveOff(); finalizeCurve(); render(); autoPlay(); scheduleShare(); return; }
-  // tap (no drag): on a handle -> remove; on the curve line -> add
-  if (g.hi>=0){ pushUndo(); NOTES[sel].curve=removeAnchor(NOTES[sel].curve, g.hi);
-    const has=!!(NOTES[sel].curve&&NOTES[sel].curve.length); document.getElementById('clear').disabled=!has; document.getElementById('copy').disabled=!has;
-    liveOff(); render(); autoPlay(); scheduleShare(); return; }
-  if (NOTES[sel].curve && onCurveLineDraw(x,y)){ pushUndo(); const [t0,t1]=yStartEnd();
-    const u=Math.max(0,Math.min(1,(tAtY(y)-t0)/Math.max(1e-6,t1-t0))); const st=document.getElementById('snap').checked ? snapStep(Math.round(stepAtX(x))) : Math.round(stepAtX(x));
-    NOTES[sel].curve=addAnchor(NOTES[sel].curve, u, st); render(); autoPlay(); scheduleShare(); return; }
-  liveOff(); });
-cv.addEventListener('pointercancel', ()=>{ if (dEdit){ if (dEdit.mode!=='pending') NOTES[sel].curve=dEdit.origCurve; dEdit=null; } drawing=false; dragIdx=-1; liveOff(); render(); });
+// The curve-editor gestures live in core/curve-edit.js — the third gesture module, and
+// framework-free like the others, so the app can mount the same editor. What stays here
+// is what a stroke COSTS draw: undo, the live tone, the Hz readout, its buttons, and
+// re-serialising the notation.
+const curveEdit = createCurveEdit(cv, {
+  geometry: () => geo(),
+  curve: () => (sel >= 0 && NOTES[sel] ? NOTES[sel].curve : null),
+  setCurve: (c) => { if (sel >= 0 && NOTES[sel]) NOTES[sel].curve = c; syncCurveButtons(); },
+  snapStep,
+  snapping: () => $('snap').checked,
+  enabled: () => mode === 'draw',
+  redraw: () => render(),
+  sample: sampleCurve,
+  onGrabStart: () => ensureAudio(),
+  onPitch: (st, start) => {
+    if (st == null) { liveOff(); $('read').textContent = ''; return; }
+    if (start) liveOn();
+    liveSet(st); $('read').textContent = '≈' + freqOf(st).toFixed(0) + ' Hz';
+  },
+  emit: (it) => {
+    if (it.phase === 'begin') { pushUndo(); liveOn(); return; }
+    autoPlay(); scheduleShare();
+  },
+});
+function syncCurveButtons(){ const has = !!(sel >= 0 && NOTES[sel] && NOTES[sel].curve && NOTES[sel].curve.length);
+  $('clear').disabled = !has; $('copy').disabled = !has; }
+
 // The pointer gestures live in core/roll-edit.js: it decides what a press MEANS and
 // emits an intent. What an edit costs — undo, re-serialising the notation, rebuilding
 // the model — is decided here, because that is draw's answer and not every host's.
@@ -320,7 +313,8 @@ const rollEdit = createRollEdit(cv, {
   snapDur: (d) => { const beat = talaBeat || 1; return Math.max(beat, snapToAkshara(d, beat)); },
   snapTime: (t) => snapToAkshara(t, talaBeat || 1),
   redraw: () => render(),
-  enabled: () => mode === 'roll' && !paintMode && !gamakaMode,
+  enabled: () => mode === 'roll' && !gamakaMode,
+  painting: () => paintMode,
   idleTouchAction: ROLL_TOUCH_ACTION,
   onGrabStart: () => ensureAudio(),
   emit: (it) => applyIntent(it),
@@ -338,122 +332,14 @@ cv.addEventListener('pointerdown', e=>{ if (mode!=='roll' || paintMode || gamaka
 // Whatever ends where this note begins — a note or a rest. Token order is the
 // composition's order, rests included, so the neighbour is simply the highest tok
 // below this one.
-function prevElement(tok) {
-  let best = null;
-  for (const n of NOTES) if (n.tok < tok && (!best || n.tok > best.tok)) best = { tok: n.tok, rest: false, dur: n.dur, t0: starts[NOTES.indexOf(n)], step: n.step, curve: n.curve };
-  for (const r of RESTS) if (r.tok < tok && (!best || r.tok > best.tok)) best = { tok: r.tok, rest: true, dur: r.dur, t0: r.t0, step: 0, curve: null };
-  return best;
-}
-
-function nextElement(tok) {
-  let best = null;
-  for (const n of NOTES) if (n.tok > tok && (!best || n.tok < best.tok)) best = { tok: n.tok, rest: false, dur: n.dur, t0: starts[NOTES.indexOf(n)], step: n.step, curve: n.curve };
-  for (const r of RESTS) if (r.tok > tok && (!best || r.tok < best.tok)) best = { tok: r.tok, rest: true, dur: r.dur, t0: r.t0, step: 0, curve: null };
-  return best;
-}
-
-// SHIFT on either handle: change ONLY THIS note's length and let the roll reflow after
-// it. The seam drag keeps the piece the same length by design, which leaves no way to
-// make a note simply last longer.
-//
-// A note's start is the sum of every duration before it. That is not an implementation
-// detail, it is what the notation IS — so the top handle cannot move without changing
-// something that is not the note you grabbed. Rather than quietly reach for the
-// neighbour, the top edge becomes a PULL: it stays where it is, and how far you drag
-// away from it is how much longer the note gets. The note opens downward, the notes
-// after it move, and nothing adjacent changes length. The bottom edge is the same
-// operation with the handle able to follow the pointer.
-let pushDrag = null;    // { idx, tok, near, oldDur, t0, starts, restT0 } snapshotted at grab start
-function restorePush() {
-  if (!pushDrag) return;
-  const d = pushDrag;
-  if (NOTES[d.idx]) NOTES[d.idx].dur = d.oldDur;
-  for (let j = 0; j < starts.length && j < d.starts.length; j++) starts[j] = d.starts[j];
-  RESTS.forEach((r, k) => { if (k < d.restT0.length) r.t0 = d.restT0[k]; });
-  pushDrag = null;
-}
-async function pushEdge(i, it) {
-  const near = it.edge !== 'far';
-  const beat = talaBeat || 1;
-  if (!pushDrag || pushDrag.tok !== it.tok || pushDrag.near !== near) {
-    pushDrag = { idx: i, tok: it.tok, near, oldDur: NOTES[i].dur, t0: starts[i],
-      starts: starts.slice(), restT0: RESTS.map((r) => r.t0) };
-  }
-  const d = pushDrag;
-  // Far edge: the pointer IS the note's end. Near edge: the pointer's distance above
-  // the note's start is how much has been pulled open.
-  const dur = Math.max(beat, Math.round(d.near ? d.oldDur - (it.t - d.t0) : it.t - d.t0));
-  const delta = dur - d.oldDur;
-
-  if (it.phase !== 'commit') {
-    // The notes after it move DURING the drag. Without this the note grows over its
-    // neighbours and they only jump apart on pointerup — the piece looks broken at
-    // exactly the moment you are judging whether the length is right.
-    NOTES[i].dur = dur;
-    const end = d.t0 + d.oldDur;
-    for (let j = 0; j < starts.length; j++) if (d.starts[j] >= end) starts[j] = d.starts[j] + delta;
-    RESTS.forEach((r, k) => { if (d.restT0[k] >= end) r.t0 = d.restT0[k] + delta; });
-    render(); return;
-  }
-  pushDrag = null;
-  if (delta === 0) { render(); return; }
-  pushUndo();
-  NOTES[i].dur = dur;
-  await commitEdit({ changed: new Set([it.tok]), deriveOctave: false });
-}
-
-// Cut one note into two at `t`, without changing what is heard.
-//
-// The inverse of dragging a seam away, and the same machinery: a note is a list of
-// absolute anchors, and splitting it is choosing where to cut that list. Both halves
-// keep the original's pitch, so each carries its own part of the ornament and the two
-// played back to back are the note that was there before.
-//
-// pitchy's split inserts a small REST between the halves, because two same-pitch notes
-// there would be re-merged by its segmenter. Nothing merges here — two tokens are two
-// notes — so no silence is invented, and the pair can be re-joined by dragging the new
-// seam, which is the gesture that already exists.
-async function splitNoteAt(tok, t) {
-  const i = NOTES.findIndex((x) => x.tok === tok);
-  if (i < 0) return;
-  const beat = talaBeat || 1;
-  const t0 = starts[i], end = t0 + NOTES[i].dur;
-  const cut = snapToAkshara(t, beat);
-  // Refuse rather than clamp. Clamping would move the cut somewhere the user did not
-  // click and hand back two notes of a length they did not choose; a cut with no room
-  // on one side is not a split at all. Same rule as pitchy, which ignores a click
-  // inside a note's edge margin.
-  if (cut - t0 < beat || end - cut < beat) {
-    $('mode').textContent = 'too close to the edge to split — click nearer the middle';
-    return;
-  }
-  const n = NOTES[i];
-  const out = resplitAt({
-    points: anchorsOf([{ t0, dur: n.dur, step: n.step, curve: n.curve }]),
-    t0, end, seam: cut, prevStep: n.step, nextStep: n.step, minDur: beat });
-  if (!out.prev) return;                        // unreachable given the guard; never emit a half-note
-  pushUndo();
-  n.dur = out.prev.dur; n.curve = out.prev.curve;
-  const tail = { step: n.step, octave: Math.floor(n.step / EDO) + 5, dur: out.next.dur, curve: out.next.curve };
-  // deriveOctave is REQUIRED with a non-empty inserts (serializeModel's contract): a
-  // new token shifts the running octave register every later verbatim note reads.
-  await commitEdit({ changed: new Set([tok]), inserts: new Map([[tok, [tail]]]), deriveOctave: true });
-  $('mode').textContent = 'split into two notes';
-}
-
-// The seam drag in flight: the contour as it was when the pointer went down, plus
-// what to put back if the gesture dies.
-let seamDrag = null;
-function restoreSeam() {
-  if (!seamDrag) return;
-  const d = seamDrag, i = NOTES.findIndex((x) => x.tok === d.tok);
-  const on = d.other.rest ? null : NOTES.find((x) => x.tok === d.other.tok);
-  const or_ = d.other.rest ? RESTS.find((x) => x.tok === d.other.tok) : null;
-  if (on) { on.dur = d.was.otherDur; on.curve = d.was.otherCurve; const j = NOTES.indexOf(on); if (j >= 0) starts[j] = d.was.otherT0; }
-  if (or_) { or_.dur = d.was.otherDur; or_.t0 = d.was.otherT0; }
-  if (i >= 0) { NOTES[i].dur = d.was.dur; NOTES[i].curve = d.was.curve; starts[i] = d.was.t0; }
-  seamDrag = null;
-}
+const seamHost = createSeamHost({
+  model: () => ({ notes: NOTES, starts, rests: RESTS }),
+  beat: () => talaBeat,
+  pushUndo: () => pushUndo(),
+  commit: (spec) => commitEdit(spec),
+  render: () => render(),
+  notify: (msg) => { $('mode').textContent = msg; },
+});
 
 const INTENT_LOG = [];              // headless guards read this; nothing else does
 async function applyIntent(it) {
@@ -470,7 +356,11 @@ async function applyIntent(it) {
     syncDelete(); render(); return;
   }
   if (it.kind === 'open') { selRest = -1; syncDelete(); enterDraw(it.index); return; }
-  if (it.kind === 'split') { await splitNoteAt(it.tok, it.t); return; }
+  if (it.kind === 'split') { await seamHost.handle(it); return; }
+  if (it.kind === 'paint') {
+    const place = placePaint({ ts: it.ts, dur: it.dur, notes: NOTES, starts, durs: NOTES.map((n) => n.dur), total: TOTAL });
+    pushUndo(); await applyPaint(place, it); return;
+  }
 
   const n = NOTES.find((x) => x.tok === it.tok);
   const r = RESTS.find((x) => x.tok === it.tok);
@@ -481,119 +371,13 @@ async function applyIntent(it) {
     pushUndo(); await onMoveDrop(NOTES.indexOf(n), it.from);
     return;
   }
-  // BOTH edges move the SEAM this note shares with the neighbour on that side, and
-  // the sound across the pair does not change. The pair is one pitch contour; the drag
-  // only moves where it stops being written as one note and starts being written as
-  // the other. Pull it far enough and the neighbour is gone, its line preserved inside
-  // this note's gamaka. That is the repair for a detector that split one sung phrase in
-  // two, which is most of what pitchy's over-segmentation produces — and it needs to
-  // work in both directions, since which side of a spurious boundary you happen to
-  // grab is an accident.
-  //
-  // The note being HELD is never the one that vanishes. Dragging the near edge back
-  // consumes what came before; dragging the far edge on consumes what comes after.
-  // Deleting the note under the pointer would be a different gesture entirely.
-  //
-  // The contour is captured ONCE, when the drag starts. Re-reading it from notes that
-  // have already been re-split would fold each preview's rounding into the next.
-  if (it.kind === 'boundary') {
-    const i = NOTES.indexOf(n);
-    if (i < 0) return;
-    if (it.phase === 'cancel') { restorePush(); restoreSeam(); render(); return; }
-    if (it.push) { await pushEdge(i, it); return; }
-    const near = it.edge !== 'far';
-
-    if (!seamDrag || seamDrag.tok !== it.tok || seamDrag.near !== near) {
-      const other = near ? prevElement(it.tok) : nextElement(it.tok);
-      if (!other) {
-        // No neighbour on this side, so there is no seam. At the FAR edge that leaves
-        // the plain length change it always was — the only way to lengthen the piece
-        // from the roll — and at the near edge of the very first note, nothing to do.
-        seamDrag = null;
-        if (near) return;
-        const dur = Math.max(talaBeat || 1, it.t - starts[i]);
-        if (it.phase !== 'commit') { NOTES[i].dur = dur; render(); return; }
-        pushUndo(); NOTES[i].dur = dur;
-        await commitEdit({ changed: new Set([it.tok]), deriveOctave: false });
-        return;
-      }
-      // When the neighbour is a REST, the element on ITS far side comes along as
-      // context — not as something this drag can change, but because bridging the
-      // silence needs the pitch at both ends of it. Without it the gap has only one
-      // end and the best it could do is hold one pitch flat across the silence.
-      const beyond = other.rest ? (near ? prevElement(other.tok) : nextElement(other.tok)) : null;
-      const held = { t0: starts[i], dur: NOTES[i].dur, step: NOTES[i].step, curve: NOTES[i].curve };
-      const oth = { t0: other.t0, dur: other.dur, step: other.step, curve: other.curve, rest: other.rest };
-      const ctxItem = beyond ? [{ t0: beyond.t0, dur: beyond.dur, step: beyond.step, curve: beyond.curve, rest: beyond.rest }] : [];
-      seamDrag = {
-        tok: it.tok, near, other,
-        t0: near ? other.t0 : held.t0,
-        end: near ? held.t0 + held.dur : oth.t0 + oth.dur,
-        // Each side keeps its own letter; a rest has no pitch, so the note it is being
-        // traded against lends its step to that side of the cut.
-        prevStep: near ? (other.rest ? NOTES[i].step : other.step) : NOTES[i].step,
-        nextStep: near ? NOTES[i].step : (other.rest ? NOTES[i].step : other.step),
-        points: anchorsOf(near ? [...ctxItem, oth, held] : [held, oth, ...ctxItem]),
-        was: { dur: held.dur, curve: held.curve, t0: held.t0,
-          otherDur: other.dur, otherCurve: other.curve, otherT0: other.t0 },
-      };
-    }
-    const d = seamDrag;
-    const beat = talaBeat || 1;
-    const out = resplitAt({ points: d.points, t0: d.t0, end: d.end, seam: it.t,
-      prevStep: d.prevStep, nextStep: d.nextStep, minDur: beat,
-      swallow: d.near ? 'first' : 'second' });
-
-    // The held note is the SECOND of the pair at its near edge, the FIRST at its far
-    // edge. Only the other side can come back null.
-    const heldPart = d.near ? out.next : out.prev;
-    const otherPart = d.near ? out.prev : out.next;
-    const otherNote = d.other.rest ? null : NOTES.find((x) => x.tok === d.other.tok);
-    const otherRest = d.other.rest ? RESTS.find((x) => x.tok === d.other.tok) : null;
-
-    if (it.phase !== 'commit') {
-      // Shown, not recorded. A fully absorbed neighbour is drawn as nothing rather
-      // than removed, so the arrays keep their shape until the pointer is up.
-      const od = otherPart ? otherPart.dur : 0;
-      if (otherNote) { otherNote.dur = od; if (otherPart) otherNote.curve = otherPart.curve; }
-      if (otherRest) otherRest.dur = od;
-      NOTES[i].dur = heldPart.dur; NOTES[i].curve = heldPart.curve;
-      // Whichever element sits second in the pair is the one whose start moves.
-      if (d.near) starts[i] = d.t0 + od;
-      else {
-        const j = otherNote ? NOTES.indexOf(otherNote) : -1;
-        if (j >= 0) starts[j] = d.t0 + heldPart.dur;
-        if (otherRest) otherRest.t0 = d.t0 + heldPart.dur;
-      }
-      render(); return;
-    }
-
-    pushUndo();
-    const changed = new Set([it.tok]);
-    if (!otherPart) {
-      // Swallowed whole: the neighbour's token goes, its pitch already inside this
-      // note's gamaka. deriveOctave, because a dropped token takes its octave marks
-      // with it and the register must be re-stated for everything after.
-      seamDrag = null;
-      await commitEdit({ changed, deletes: new Set([d.other.tok]), deriveOctave: true });
-      return;
-    }
-    seamDrag = null;
-    if (d.other.rest) await commitEdit({ changed, deriveOctave: false, restDurs: new Map([[d.other.tok, otherPart.dur]]) });
-    else { changed.add(d.other.tok); await commitEdit({ changed, deriveOctave: false }); }
-    return;
-  }
-  if (it.kind === 'resize') {
-    if (it.target === 'rest') {
-      if (!r) return;
-      if (it.phase !== 'commit') { r.dur = it.dur; render(); return; }
-      pushUndo(); await commitRestDur(it.tok, it.dur);
-      return;
-    }
-    if (!n) return;
-    if (it.phase !== 'commit') { n.dur = it.dur; render(); return; }
-    pushUndo(); await commitEdit({ changed: new Set([it.tok]), deriveOctave: false });
-  }
+  // Both edges move the SEAM this note shares with its neighbour, and the sound across
+  // the pair does not change. All of that lives in core/roll-seam.js now, so the app can
+  // host the same drag; what stays here is undo, re-serialising and the redraw — the
+  // things the two apps genuinely disagree about.
+  if (it.kind === 'boundary') { await seamHost.handle(it); return; }
+  // A rest's own edge — core/roll-seam.js, same as the seam drags.
+  if (it.kind === 'resize') { await seamHost.handle(it); return; }
 }
 
 // Paint mode (`+ note` toggled on): drag on the grid creates a note — pitch snaps to
@@ -601,31 +385,9 @@ async function applyIntent(it) {
 // grab handlers above keep paint and grab gestures mutually exclusive. `paint` tracks
 // its owning pointerId (`pid`), same pattern as `grab`, so a second concurrent touch
 // can't overwrite the in-progress gesture and corrupt the eventual commit.
-cv.addEventListener('pointerdown', e=>{ if (mode!=='roll' || !paintMode) return;
-  { const {x,y}=evtPos(e); const gh=hitGridHandle(x,y); if (gh){ if (gh==='tbottom') extendTime(); else startHandleDrag(gh,e); return; } }
-  if (paint) return;   // a paint is already active (e.g. a second finger) — ignore
-  ensureAudio();
-  const {x,y}=evtPos(e); const beat=talaBeat||1;
-  const ts=Math.max(0, snapToAkshara(tAtY(y), beat));
-  const restLane = x < plot().x + REST_LANE_PX;
-  if (restLane){ paint={ ts, rest:true, dur:beat, pid:e.pointerId }; }
-  else { const step=snapToRagaRow(Math.round(stepAtX(x)), ragaRowSteps()); paint={ ts, step, dur:beat, pid:e.pointerId }; }
-  try{ cv.setPointerCapture(e.pointerId); }catch(_){}; render(); }, true);
-cv.addEventListener('pointermove', e=>{ if (!paint || e.pointerId!==paint.pid) return; const {y}=evtPos(e); const beat=talaBeat||1;
-  paint.dur=Math.max(beat, snapToAkshara(tAtY(y)-paint.ts, beat)); render(); }, true);
-cv.addEventListener('pointerup', async e=>{ if (!paint || e.pointerId!==paint.pid) return;
-  if (!paintMode){ paint=null; render(); return; }   // Fix #7: `+ note` toggled off mid-drag — abort, don't commit
-  const p=paint; paint=null;
-  rollEdit.suppressClick();   // a painted note ends in a click ON it; that is not "open me"
-  const durs=NOTES.map(n=>n.dur);
-  const place=placePaint({ ts:p.ts, dur:p.dur, notes:NOTES, starts, durs, total:TOTAL });
-  pushUndo(); await applyPaint(place, p); }, true);
-// Defensive, mirroring the grab gesture's pointercancel: an OS-interrupted paint
-// (app backgrounded mid-drag, etc.) must not leave `paint` set — that would render
-// the green preview forever with no gesture left to dismiss it. Paint doesn't touch
-// cv.style.cursor/touchAction per-gesture (unlike grab, which owns the drag axis),
-// so there is nothing else to restore here beyond nulling the state and re-rendering.
-cv.addEventListener('pointercancel', e=>{ if (!paint || e.pointerId!==paint.pid) return; paint=null; render(); }, true);
+// Painting is core/roll-edit.js's gesture now, like every other press on the roll; what
+// arrives here is the finished intent. The grid stretch-handles still get first refusal
+// in the capture-phase listener above, so you can still zoom while painting is armed.
 // In-roll gamaka drawing/editing (`✎ gamaka` toggled on). Grid handles + `+ time`
 // are checked first (so you can zoom while editing). The note under the initial
 // press is the stroke's target; drag on empty note area = freehand redraw.
@@ -699,7 +461,7 @@ cv.addEventListener('pointercancel', e=>{ if (!handleDrag || e.pointerId!==handl
 // Discoverability: hover the grid stretch-handles shows a resize cursor (idle only —
 // not while any drag/grab/paint gesture is in progress). No log param -> hitGridHandle
 // stays silent here, so this high-frequency listener doesn't flood the console (Fix 5).
-cv.addEventListener('pointermove', e=>{ if (mode!=='roll' || handleDrag || rollEdit.busy() || paint) return;
+cv.addEventListener('pointermove', e=>{ if (mode!=='roll' || handleDrag || rollEdit.busy()) return;
   const {x,y}=evtPos(e); const h=hitGridHandle(x,y);
   cv.style.cursor = h ? (h==='tbottom'?'pointer':'col-resize') : (paintMode?'crosshair':''); });
 // A moved note is committed with the current gamaka-on-move default; if it carried
@@ -713,21 +475,15 @@ async function onMoveDrop(idx, oldStep){
   // a raw Math.floor(step/EDO) — that disagrees with stepToSwara's c12 wrap-to-next-
   // octave behaviour near the top of an octave, which could spell the wrong octave.
   const ctx=ragaCtx();
-  const newOct=stepToSwara(n.step, ctx).octave, oldOct=stepToSwara(oldStep, ctx).octave;
-  n.octave=newOct;
   const hasCurve=!!(n.curve && n.curve.length);
   // Capture the mode once, before the await below — gmovesel can change live while
   // commitEdit is in flight, and the toast must describe/flip the mode that was
   // actually applied to this drop, not whatever the dropdown reads afterward.
   const appliedMode=gamakaOnMove;
-  const applyMode=(mode)=>{ if (!hasCurve) return;
-    // The abs curve is left exactly as it was pre-drop; the mode only decides
-    // whether to shift it by dStep so it rides the note (move-with-note) or
-    // stays put so the note's pitch through the curve is unchanged (preserve-pitch).
-    if (mode==='move-with-note') n.curve=n.curve.map(([u,s])=>[u,s+dStep]);
-    /* preserve-pitch: leave abs curve as-is */ };
-  applyMode(appliedMode);
-  await commitEdit({ changed:new Set([n.tok]), deriveOctave:newOct!==oldOct });
+  // The octave re-spelling and the gamaka's fate are shared with the app — see
+  // core/note-edit.js. What stays here is the toast that lets the choice be flipped.
+  const { deriveOctave }=applyMove(n, oldStep, ctx, appliedMode);
+  await commitEdit({ changed:new Set([n.tok]), deriveOctave });
   if (!hasCurve) return;
   const other=appliedMode==='preserve-pitch'?'move-with-note':'preserve-pitch';
   const label=appliedMode==='preserve-pitch'?'move with note':'preserve pitch';
@@ -747,51 +503,15 @@ async function onMoveDrop(idx, oldStep){
 // DRAGGED time `p.ts`, not just after the anchor — a leading rest is inserted ahead
 // of it whenever there's a time gap (append past the true content end, or fill/split
 // before the very first note, via serializeModel's `inserts.get(-1)` prepend).
+// What the notation must do about a painted note is core/note-edit.js's; what it costs
+// — re-parsing, redrawing, the share link — is draw's, as with every other edit.
 async function applyPaint(place, p){
-  const item = p.rest ? { rest:true, dur:p.dur }
-    : { step:p.step, octave:Math.floor(p.step/EDO)+5, dur:p.dur, curve:null };
-  const model=modelByTok(); const changed=new Set(); const inserts=new Map();
-  if (place.kind==='append' && place.anchorTok<0){        // empty piece: seed directly in srcText
-    const lead = p.ts>0 ? ('z'+(Math.round(p.ts)>1?Math.round(p.ts):'')+' ') : '';
-    const len=Math.max(1,Math.round(p.dur));
-    // Octave marks are needed here (unlike commitEdit's derived path) because this
-    // branch writes srcText directly, bypassing serializeModel's deriveOctave — the
-    // blank skeleton's O=5 baseline means a bare letter always parses back to octave
-    // 5, silently flattening a note painted in an upper/lower row (Fix 1).
-    const sw = stepToSwara(p.step, ragaCtx());
-    const body = len > 1 ? String(len) : '';
-    const tok = p.rest ? ('z' + body) : (octMarks(sw.octave - 5) + sw.letter + body);   // bare swara/z when len===1 (Task 3 convention)
-    buildModel(srcText.replace(/\s*$/,'') + '\n' + lead + tok + '\n');
+  const spec = paintEdit({ place, ts:p.ts, dur:p.dur, step:p.step, rest:p.rest,
+    model:modelByTok(), notes:NOTES, starts, contentEnd, ctx:ragaCtx() });
+  if (spec.seed){
+    buildModel(srcText.replace(/\s*$/,'') + '\n' + spec.seed + '\n');
     syncControls(); resizeCanvas(); render(); await rebuildShare(); return; }
-  if (place.kind==='split'){
-    const hostIdx=NOTES.findIndex(n=>n.tok===place.host);
-    const host=model.get(place.host);
-    const { head, tail }=splitSpans(starts[hostIdx], host.dur, p.ts, p.dur);
-    if (head<=0){
-      // Degenerate: paint lands at/before the host's own start — a zero-length head
-      // would emit a bogus token. Insert BEFORE the host instead (anchor on the
-      // previous surviving note), or — no previous note — prepend via inserts.get(-1),
-      // with a leading rest if `p.ts` is after the very start of the piece.
-      if (hostIdx>0) inserts.set(NOTES[hostIdx-1].tok, [item]);
-      else inserts.set(-1, p.ts>0 ? [{rest:true,dur:p.ts}, item] : [item]);
-    } else {
-      host.dur=head; changed.add(place.host);
-      // Tail continuation carries the host's original remainder onward, same pitch,
-      // no gamaka curve of its own — only emitted when there IS a remainder.
-      const tailNote = tail>0 ? { step:host.step, octave:host.octave, dur:tail, curve:null } : null;
-      inserts.set(place.host, tailNote ? [item, tailNote] : [item]);
-    }
-  } else if (place.kind==='append'){                       // append past the true content end
-    const gap = Math.round(p.ts - contentEnd);
-    inserts.set(place.anchorTok, gap>0 ? [{rest:true,dur:gap}, item] : [item]);
-  } else if (place.anchorTok<0){                            // fill: before the very first note
-    const lead = p.ts>0 ? [{rest:true, dur:p.ts}] : [];
-    inserts.set(-1, [...lead, item]);
-  } else {                                                   // fill: mid-piece
-    inserts.set(place.anchorTok, [item]);
-  }
-  const newSrc=serializeModel(srcText, { model, changed, inserts, deletes:new Set(), deriveOctave:true, ctx:ragaCtx() });
-  buildModel(newSrc); syncControls(); resizeCanvas(); render(); await rebuildShare();
+  await commitEdit(spec);
 }
 // A rest spans the width, so anywhere on its band selects it — the same target the
 // eye sees. Notes are tested first: where a note box overlaps a rest band, the note
@@ -799,24 +519,6 @@ async function applyPaint(place, p){
 // Hit-testing lives with the gestures now (core/roll-edit.js); the paint and gamaka
 // paths still ask for it here.
 const hitNote = (x,y) => rollEdit.hitNote(x,y);
-function addPoint(x,y){ const p=plot(),[ba,bb]=yStartEnd();
-  let u=Math.max(0,Math.min(1,(tAtY(y)-ba)/(bb-ba)));
-  const st=stepAtX(Math.max(p.x,Math.min(p.x+p.w,x)));
-  const c=NOTES[sel].curve; if (c.length&&u<=c[c.length-1][0]) c[c.length-1][1]=st; else c.push([u,st]);
-  liveSet(st); document.getElementById('read').textContent='≈'+freqOf(st).toFixed(0)+' Hz'; }
-function finalizeCurve(){ let c=NOTES[sel].curve; if (!c||c.length<2){ NOTES[sel].curve=null; document.getElementById('clear').disabled=true; document.getElementById('copy').disabled=true; return; }
-  c=extractAnchors(c);
-  if (document.getElementById('snap').checked) c=c.map(pt=>[pt[0],snapStep(pt[1])]);
-  if (c[0][0]>0.001) c=[[0,c[0][1]],...c];
-  if (c[c.length-1][0]<0.999) c=[...c,[1,c[c.length-1][1]]];
-  NOTES[sel].curve=c; document.getElementById('clear').disabled=false; document.getElementById('copy').disabled=false; }
-function hitHandle(x,y){ const c=NOTES[sel].curve; if (!c) return -1; const [t0,t1]=yStartEnd();
-  for (let k=0;k<c.length;k++){ const cx=X(c[k][1]),cy=Y(t0+(t1-t0)*c[k][0]); if ((x-cx)*(x-cx)+(y-cy)*(y-cy)<=18*18) return k; } return -1; }
-function dragHandle(x,y){ const c=NOTES[sel].curve,p=plot(),[ba,bb]=yStartEnd();
-  let u=(tAtY(y)-ba)/(bb-ba); const lo=dragIdx===0?0:c[dragIdx-1][0]+0.006, hi=dragIdx===c.length-1?1:c[dragIdx+1][0]-0.006;
-  u=Math.max(lo,Math.min(hi,u)); const st=stepAtX(Math.max(p.x,Math.min(p.x+p.w,x)));
-  c[dragIdx][0]=u; c[dragIdx][1]=st; liveSet(st); document.getElementById('read').textContent='≈'+freqOf(st).toFixed(0)+' Hz'; }
-
 const $ = id => document.getElementById(id);
 let clipRel=null;   // copied curve, stored RELATIVE to its note's step (so it re-anchors on paste)
 function enterDraw(i){ sel=i; mode='draw'; syncDelete();
@@ -827,7 +529,7 @@ function enterDraw(i){ sel=i; mode='draw'; syncDelete();
 // Leaving the editor keeps the note SELECTED — you were just looking at it, and
 // dropping the selection here would put delete back out of reach the moment you
 // stepped out of an editor you only opened to look.
-$('back').onclick=()=>{ dEdit=null; drawing=false; dragIdx=-1; mode='roll'; syncDelete(); $('mode').textContent='select a note'; $('crumb').textContent='';
+$('back').onclick=()=>{ mode='roll'; syncDelete(); $('mode').textContent='select a note'; $('crumb').textContent='';
   for (const b of ['clear','copy','paste','back']) $(b).style.display='none';   // draw-only buttons hidden in roll mode
   $('read').textContent=''; setPlayBtn('▶',playLabel());
   $('rangectl').style.display='none'; $('snapctl').style.display='none'; $('tzoom').style.display=''; resizeCanvas(); };
@@ -1099,11 +801,6 @@ document.addEventListener('keydown', e=>{
 
 // Re-serialize the current model to srgm, then rebuild everything from that text.
 // A rest's new length, written back to its own token.
-async function commitRestDur(tok, dur){
-  const newSrc=serializeModel(srcText, { model:modelByTok(), changed:new Set(), inserts:new Map(),
-    deletes:new Set(), deriveOctave:false, ctx:ragaCtx(), restDurs:new Map([[tok,dur]]) });
-  buildModel(newSrc); syncControls(); resizeCanvas(); render(); await rebuildShare();
-}
 // Delete whatever is selected — a note, or a rest. Removing a note leaves NO silence
 // in its place: the piece gets shorter, which is what deleting a note means. Paint a
 // rest if a gap is wanted.
@@ -1126,16 +823,12 @@ function syncDelete(){ const b=$('delbtn'); if (!b) return;
   // where someone looking at a note they want rid of will be.
   b.disabled = !(selRest>=0 || (sel>=0 && NOTES[sel]));
 }
-// A dropped token leaves its separator behind, so every delete widened a gap in the
-// saved notation and two adjacent deletes widened it twice. srgm is whitespace-
-// separated, so collapsing a run of spaces changes nothing except how it reads —
-// except inside a comment, where the spacing is someone's text.
-const tidySpaces = (src) => src.split('\n')
-  .map((l) => (l.trimStart().startsWith('%') ? l : l.replace(/[ \t]{2,}/g, ' ').replace(/[ \t]+$/, '')))
-  .join('\n');
+// What an edit COSTS is draw's own business — re-parsing into these globals, redrawing,
+// rebuilding the share link. What it MEANS for the notation is not: applyEdit is shared
+// with the app, which does the same serialise-and-tidy and then hands the string to a
+// worker instead.
 async function commitEdit({ changed=new Set(), inserts=new Map(), deletes=new Set(), deriveOctave=false, restDurs=undefined }){
-  let newSrc=serializeModel(srcText, { model:modelByTok(), changed, inserts, deletes, deriveOctave, ctx:ragaCtx(), restDurs });
-  if (deletes.size) newSrc=tidySpaces(newSrc);
+  const newSrc=applyEdit(srcText, { model:modelByTok(), changed, inserts, deletes, deriveOctave, ctx:ragaCtx(), restDurs });
   buildModel(newSrc); syncControls(); resizeCanvas(); render(); await rebuildShare(); }
 // Reflect srcText into the editor textarea — but never clobber the box the user
 // is actively typing in (that also preserves its native ctrl-z history).
@@ -1253,7 +946,7 @@ $('exportmidi').onclick=()=>{ try{ download(docName+'.mid', writeSMF(buildSequen
 window.__rr = { notes:()=>NOTES, rests:()=>RESTS.map(r=>({...r})), get selRest(){ return selRest; },
   intents:()=>INTENT_LOG.map(i=>({...i})), clearIntents:()=>{ INTENT_LOG.length=0; }, get mode(){ return mode; },
   get delEnabled(){ return !$('delbtn').disabled; }, restEdgeY:(tok)=>{ const r=RESTS.find(x=>x.tok===tok); return r?Y(r.t0+r.dur):null; },
-  restMidY:(tok)=>{ const r=RESTS.find(x=>x.tok===tok); return r?Y(r.t0+r.dur/2):null; }, X, Y, starts:()=>starts, get playing(){ return playing; }, get paused(){ return paused; }, get stepMin(){ return stepMin; }, get stepMax(){ return stepMax; }, get padTop(){ return PAD.t; }, gridSteps:()=>gridPitches.map(g=>g.step), labelChipW:()=>14, get shareLink(){ return shareLink; }, get playPos(){ return playPos; }, get markerA(){ return markerA; }, get markerB(){ return markerB; }, get talaMeasure(){ return talaMeasure; }, get talaAccents(){ return talaAccents; }, get droneVol(){ return droneVol; }, get talaVol(){ return talaVol; }, inlineSrc:()=>inlineSrc(), rebuild:()=>rebuildShare(), get src(){ return srcText; } };
+  yRange:()=>geo().yRange, restMidY:(tok)=>{ const r=RESTS.find(x=>x.tok===tok); return r?Y(r.t0+r.dur/2):null; }, X, Y, starts:()=>starts, get playing(){ return playing; }, get paused(){ return paused; }, get stepMin(){ return stepMin; }, get stepMax(){ return stepMax; }, get padTop(){ return PAD.t; }, gridSteps:()=>gridPitches.map(g=>g.step), labelChipW:()=>14, get shareLink(){ return shareLink; }, get playPos(){ return playPos; }, get markerA(){ return markerA; }, get markerB(){ return markerB; }, get talaMeasure(){ return talaMeasure; }, get talaAccents(){ return talaAccents; }, get droneVol(){ return droneVol; }, get talaVol(){ return talaVol; }, inlineSrc:()=>inlineSrc(), rebuild:()=>rebuildShare(), get src(){ return srcText; } };
 // Populate the examples dropdown from the manifest (same source as the app).
 fetch('./examples/index.json').then(r=>r.json()).then(list=>{
   const sel=$('exsel'); for (const n of list){ const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); }

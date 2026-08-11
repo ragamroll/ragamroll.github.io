@@ -99,6 +99,7 @@ function makeTala(timbre) {
 
 export function createToneBackend() {
   let synth = null;      // melody voice (mono)
+  let preview = null;    // audition voice — see previewNote; never the melody voice
   let tala = null;       // tala voice — separate so its volume is live
   let drone = null;      // separate sustained voice; survives load/play/stop
   let droneKey = '';     // freqs signature — lets volume change without re-voicing
@@ -218,6 +219,33 @@ export function createToneBackend() {
       drone.triggerAttack(freqs);
       droneKey = key;
     },
+    // Sound ONE note right now, for auditioning while a curve is being shaped.
+    //
+    // Deliberately NOT the transport: it is triggered at Tone.now() and touches no
+    // schedule, so position() and the play/pause state are exactly as they were. That
+    // is the contract — an editor asking to hear a note must not be able to disturb
+    // playback, and must work with nothing loaded at all.
+    //
+    // Its own voice, too. The melody voice is monophonic and may be mid-phrase, so
+    // borrowing it would cut the note that is playing and land the preview's frequency
+    // ramps on top of the scheduled ones. It is also independent of the melody mute:
+    // muting the melody is for listening to the tala, and this is an explicit request
+    // to hear a pitch.
+    previewNote(ev) {
+      if (!ev || !(ev.durSec > 0)) return;
+      Tone.start();                              // called on a user gesture; unlocks/resumes
+      if (!preview) preview = makeMelody(timbre);
+      const t = Tone.now();
+      if (ev.gamaka && ev.gamaka.length) {
+        const arr = ev.gamaka, N = arr.length;
+        preview.triggerAttack(arr[0], t, 0.8);
+        for (let k = 1; k < N; k++) preview.frequency.linearRampToValueAtTime(arr[k], t + ev.durSec * k / (N - 1));
+        preview.triggerRelease(t + ev.durSec);
+      } else {
+        const freq = ev.freq != null ? ev.freq : midiToFreq(ev.midi);
+        preview.triggerAttackRelease(freq, ev.durSec, t, 0.8);
+      }
+    },
     // Master output level (0..1): scales everything — melody, tala, drone.
     // 1 → 0 dB (unattenuated), 0 → silence. Live.
     setMasterVolume(vol) {
@@ -273,6 +301,9 @@ export function createToneBackend() {
     dispose() {
       b.disposeMelody();
       b.droneOff();
+      // The preview voice survives load()/stop() on purpose — you audition notes
+      // between takes — so only a full dispose releases it.
+      if (preview) { preview.dispose(); preview = null; }
     },
   };
   return b;

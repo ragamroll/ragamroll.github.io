@@ -77,6 +77,16 @@ export function renderRoll(ctx, m, v, hooks = {}) {
   ctx.strokeStyle = C.hair; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(v.pad.l, 0); ctx.lineTo(v.pad.l, v.h); ctx.stroke();
 
+  // Painting a rest targets the LEFT GUTTER — outside the grid, where the tala marks
+  // are. Nothing is labelled: a rest is drawn across the whole width of the roll, so
+  // there is no reading of it that a marker would disambiguate. The band that used to
+  // sit INSIDE the plot took the leftmost pitch rows with it, and a note on the first
+  // row could not be painted at all.
+  if (v.paintMode) {
+    ctx.fillStyle = 'rgba(216,161,63,.14)';
+    ctx.fillRect(0, p.y, v.pad.l, p.h);
+  }
+
   hooks.underGrid && hooks.underGrid(g);
 
   // The pitch grid, in three weights. All 53 steps of the octave are drawn, because
@@ -157,14 +167,16 @@ export function renderRoll(ctx, m, v, hooks = {}) {
     for (let c = c0; c < vHi && c < TOTAL; c += T.measure) {
       angs.forEach(([s, e]) => { const t = c + s; if (t > TOTAL) return; gline(t, C.amber, 1, .3);
         if (t >= vLo && t <= vHi) { const y = Y(t);
-          ctx.fillStyle = C.amber; ctx.globalAlpha = .8; ctx.textAlign = 'left'; ctx.font = 'bold 10px ' + mono;
-          ctx.fillText(glyphOf(s, e), v.pad.l + 3, y - 4); ctx.globalAlpha = 1; ctx.font = '11px ' + mono; } });
+          // In the GUTTER, right up against the grid rather than on top of it. Inside
+          // the plot these sat over the first pitch rows and made both hard to read.
+          ctx.fillStyle = C.amber; ctx.globalAlpha = .85; ctx.textAlign = 'right'; ctx.font = 'bold 10px ' + mono;
+          ctx.fillText(glyphOf(s, e), v.pad.l - 4, y - 3); ctx.globalAlpha = 1; ctx.font = '11px ' + mono; } });
     }
     for (let t = Math.max(0, Math.floor(vLo / T.measure) * T.measure); t <= Math.min(TOTAL, vHi); t += T.measure) {
       gline(t, C.terra, 1.8, .5);
       if (t < TOTAL - 1e-6) { const y = Y(t);
-        ctx.fillStyle = C.terra; ctx.globalAlpha = .75; ctx.textAlign = 'left'; ctx.font = 'bold 10px ' + mono;
-        ctx.fillText(String(Math.round(t / T.measure) + 1), v.pad.l + 3, y + 12); ctx.globalAlpha = 1; ctx.font = '11px ' + mono; }
+        ctx.fillStyle = C.terra; ctx.globalAlpha = .8; ctx.textAlign = 'right'; ctx.font = 'bold 10px ' + mono;
+        ctx.fillText(String(Math.round(t / T.measure) + 1), v.pad.l - 4, y + 11); ctx.globalAlpha = 1; ctx.font = '11px ' + mono; }
     }
   }
 
@@ -242,6 +254,39 @@ export function renderRoll(ctx, m, v, hooks = {}) {
       ctx.fillRect(x - 10, y0 - zone / 2, 20, zone);
       ctx.fillRect(x - 10, y1 - zone / 2, 20, zone);
       ctx.globalAlpha = 1;
+    }
+  }
+
+  // A paint in progress. Also shared: it is the same box in both apps, and drawing it
+  // from view state means the gesture layer can stay the only thing that knows how a
+  // press becomes a length.
+  if (v.paint) {
+    const y0 = Y(v.paint.ts), y1 = Y(v.paint.ts + v.paint.dur);
+    const xc = v.paint.rest ? v.pad.l / 2 : X(v.paint.step);
+    ctx.fillStyle = v.paint.rest ? '#999' : '#9fc';
+    ctx.globalAlpha = v.paint.rest ? 0.4 : 0.35;
+    roundRect(ctx, xc - 8, y0, 16, Math.max(4, y1 - y0), 4); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // The curve editor's own furniture: the anchors you grab, and a prompt when there is
+  // nothing to grab yet. Shared, because a curve editor without visible anchor points is
+  // not one — you cannot aim at what is not drawn. Suppressed mid-stroke (v.drawing),
+  // when the freehand trace has hundreds of points and none of them is a handle.
+  if (mode === 'draw' && notes[v.sel]) {
+    const c = notes[v.sel].curve;
+    if (!c) {
+      ctx.fillStyle = C.muted; ctx.textAlign = 'center'; ctx.font = '13px ' + (C.sans || 'system-ui, sans-serif');
+      ctx.fillText('drag top→bottom to draw the pitch', p.x + p.w / 2, p.y + p.h / 2);
+      ctx.font = '11px ' + mono;
+    } else if (!v.drawing) {
+      const [t0, t1] = g.yRange;
+      for (let k = 0; k < c.length; k++) {
+        const cx = X(c[k][1]), cy = Y(t0 + (t1 - t0) * c[k][0]);
+        ctx.beginPath(); ctx.arc(cx, cy, 6.5, 0, 7); ctx.fillStyle = C.bg || C.panel2; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = C.teal; ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx, cy, 2.4, 0, 7); ctx.fillStyle = C.teal; ctx.fill();
+      }
     }
   }
 

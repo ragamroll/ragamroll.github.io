@@ -126,6 +126,9 @@ export function createRagamRoll(el, opts = {}) {
     // ---- what it worked out ----
     model: () => model,
     bounds: () => bounds,
+    // Read-only, for hosts and guards: what the renderer is actually being told to
+    // draw. A selection pushed in through setView is only real if it arrives here.
+    view: () => ({ ...view }),
     geometry: () => rollGeometry({ ...asView(), stepMin: bounds.stepMin, stepMax: bounds.stepMax, total: bounds.total }),
     pxPerUnit: pxU,
     virtH, yVirt,

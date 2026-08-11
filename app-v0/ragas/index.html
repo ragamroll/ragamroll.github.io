@@ -1172,9 +1172,10 @@ import { getRagaExt } from '../core/raga-ext.js';
 import { setRagas } from '../core/raga-base.js';
 import { setRagaExt } from '../core/raga-ext.js';
 import { createRagamRoll } from '../core/ragamroll.js';
-import { createRollAudio } from '../core/roll-audio.js';
-import { stepFreq } from '../core/shruti.js';
-import { midiToFreq } from '../audio/schedule.js';
+import { createWebAudioBackend } from '../audio/backends/webaudio.js';
+import { buildSequence } from '../core/midi/sequence.js';
+import { scheduleEvents, totalSeconds } from '../audio/schedule.js';
+import { droneFreqs } from '../audio/drone.js';
 
 const $ = (id) => document.getElementById(id);
 const panel = $('player');
@@ -1193,23 +1194,32 @@ const roll = createRagamRoll({ holder: $('pholder'), content: $('pcontent'), can
     panel2: cssvar('--panel2'), mono: cssvar('--mono') }),
 });
 
-let actx = null, audio = null, model = null, tempo = 120, raf = 0, startedAt = 0, span = 0, head = null;
+// Sounding goes through the SAME contract the app plays compositions with, on the
+// webaudio backend: identical voices to the roll-audio this replaced, but a real
+// transport (position/pause/onended) and none of Tone's 353KB, which a generated
+// static page has no business carrying.
+let player = null, model = null, parsed = null, tempo = 120, raf = 0, span = 0, head = null;
 const secPerUnit = () => 30 / tempo;
 const mixLevels = { drone: 0.5, tala: 0 };   // tala off by default: these are phrases, not compositions
 
 function sound() {
-  if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
-  if (actx.state === 'suspended') actx.resume();
-  if (!audio) { audio = createRollAudio(actx, (st) => stepFreq(midiToFreq(model.saRef), st)); audio.setMix(mixLevels); }
-  return audio;
+  if (!player) {
+    // The backend module directly, not audio/player.js: that module statically imports
+    // the Tone backend, so going through it would pull 353KB of Tone into a page whose
+    // whole point is not to need it.
+    player = createWebAudioBackend();
+    player.onended = () => stop();
+  }
+  return player;
 }
 
-// The component draws the playhead; this page advances it, because only this page
-// knows it is counting length-units at a tempo.
+// The component draws the playhead; this page advances it, converting the backend's
+// 0..1 into the length-units the roll counts in. The span comes from the SEQUENCE, not
+// from the grid: bounds().total can include empty grid a reader stretched to, and the
+// playhead must track the music rather than the paper.
 function tick() {
-  if (!audio) return;
-  const pos = (actx.currentTime - startedAt) / secPerUnit();
-  if (pos >= span) { stop(); return; }
+  if (!player) return;
+  const pos = player.position() * span;
   head = pos; roll.setPlayhead(pos).render();
   const hd = $('pholder');
   hd.scrollTop = Math.max(0, Math.min(Math.max(0, roll.virtH() - hd.clientHeight), roll.yVirt(pos) - hd.clientHeight * 0.4));
@@ -1217,16 +1227,21 @@ function tick() {
 }
 function stop() {
   if (raf) { cancelAnimationFrame(raf); raf = 0; }
-  if (audio) audio.stop();
+  if (player) { player.stop(); player.droneOff(); }
   $('pplay').textContent = '▶ Play';
   head = null; roll.setPlayhead(null).render();
 }
 function play() {
-  const a = sound(); if (!a || !model) return;
+  const a = sound(); if (!a || !parsed) return;
   stop();
-  span = roll.bounds().total;
-  startedAt = a.phrase({ notes: model.notes, starts: model.starts, from: 0, to: span,
-    secPerUnit: secPerUnit(), tala: model.tala });
+  const seq = buildSequence(parsed);
+  const totalSec = totalSeconds(seq);
+  if (!(totalSec > 0)) return;
+  span = totalSec / secPerUnit();
+  a.load(scheduleEvents(seq), totalSec);
+  a.setTalaVolume(mixLevels.tala);
+  a.setDrone(droneFreqs(model.saRef), mixLevels.drone);
+  a.play();
   $('pplay').textContent = '⏸ Playing';
   head = 0; roll.setPlayhead(0).render();
   raf = requestAnimationFrame(tick);
@@ -1245,7 +1260,7 @@ async function open(a) {
     src = raw;
     try { const j = JSON.parse(raw); if (j && j.srgm) { src = j.srgm; if (j.mix) { if (j.mix.dv != null) mixLevels.drone = j.mix.dv; if (j.mix.tv != null) mixLevels.tala = j.mix.tv; } } } catch (e) { /* a bare srgm token */ }
   }
-  const parsed = parse(src);
+  parsed = parse(src);
   roll.setNotation(parsed);
   model = roll.model();
   tempo = model.tempo;
@@ -1255,7 +1270,7 @@ async function open(a) {
   $('pedit').style.display = a.dataset.scale ? 'none' : '';   // nothing saved to edit
   $('pdrone').value = String(mixLevels.drone);
   $('ptala').value = String(mixLevels.tala);
-  if (audio) audio.setMix(mixLevels);
+  if (player) { player.setTalaVolume(mixLevels.tala); player.setDrone(droneFreqs(model.saRef), mixLevels.drone); }
   panel.hidden = false;
   document.body.classList.add('playing');
   // Scroll the raga being played into view above the sheet. Otherwise the phrase
@@ -1280,8 +1295,10 @@ $('pplay').addEventListener('click', () => { if (raf) stop(); else play(); });
 $('pstop').addEventListener('click', stop);
 const close = () => { stop(); panel.hidden = true; document.body.classList.remove('playing'); };
 $('pclose').addEventListener('click', close);
-$('pdrone').addEventListener('input', (e) => { mixLevels.drone = Number(e.target.value); if (audio) audio.setMix({ drone: mixLevels.drone }); });
-$('ptala').addEventListener('input', (e) => { mixLevels.tala = Number(e.target.value); if (audio) audio.setMix({ tala: mixLevels.tala }); });
+// Live: the same freqs with a new level moves the drone bus rather than re-voicing,
+// so a slider does not re-attack the note you are listening to.
+$('pdrone').addEventListener('input', (e) => { mixLevels.drone = Number(e.target.value); if (player && model) player.setDrone(droneFreqs(model.saRef), mixLevels.drone); });
+$('ptala').addEventListener('input', (e) => { mixLevels.tala = Number(e.target.value); if (player) player.setTalaVolume(mixLevels.tala); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.hidden) close(); });
 addEventListener('resize', () => { if (!panel.hidden) roll.resize(); });
 window.__rp = { get open(){ return !panel.hidden; }, get playing(){ return raf !== 0; },

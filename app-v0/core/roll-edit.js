@@ -20,9 +20,9 @@
 // somewhere to send intents. It never reads the host's state and never touches the DOM
 // beyond the canvas it was handed.
 //
-// Not here, on purpose: painting new notes, gamaka strokes, the grid stretch handles
-// and the one-note curve editor. Each is the same shape and can follow; keeping them
-// out keeps this reviewable against the gestures it replaces.
+// Not here, on purpose: gamaka strokes, the grid stretch handles and the one-note curve
+// editor. Each is the same shape and can follow; keeping them out keeps this reviewable
+// against the gestures it replaces.
 
 const HANDLE_PX = 10;          // end-cap grab radius; ×1.4 in use, as draw had it
 const LONG_PRESS_MS = 300;     // touch: long-press to grab, so a plain drag still scrolls
@@ -38,11 +38,18 @@ export function createRollEdit(canvas, opts) {
     emit,                      // (intent) -> void
     redraw,                    // () -> void       the host owns rendering
     enabled = () => true,      // () -> bool       host decides when editing is live
+    // Which gestures this host actually implements. A host that ignores an intent it
+    // never asked for still gets the GESTURE — the grab, the handles, the redraw — and
+    // a drag that visibly starts and then does nothing reads as broken rather than as
+    // unimplemented. So a host declares what it handles and the rest stay inert.
+    allow = () => true,        // (kind) -> bool   'move'|'boundary'|'resize'|'open'|'split'|'paint'
+    painting: paintArmed = () => false,   // () -> bool   the host's "+ note" toggle
     idleTouchAction = 'pan-y',
     onGrabStart = () => {},    // e.g. unlock audio before a drag makes a sound
   } = opts;
 
   let grab = null;             // { tok, idx, kind:'move'|'resize', oldStep, oldDur, cur, pid }
+  let paint = null;            // { ts, step?, rest?, dur, pid } — a note being drawn
   let restGrab = null;         // { tok, oldDur, dur, pid }
   let pressXY = null, pressTimer = 0;
   let justGrabbed = false;     // a real edit happened: swallow the click that follows
@@ -175,11 +182,30 @@ export function createRollEdit(canvas, opts) {
     if (!enabled()) return;
     const { x, y } = at(e);
 
+    // Painting comes FIRST and takes the whole canvas: while it is armed, a press is
+    // placing something new, never grabbing what is already there. The two gestures
+    // start the same way, so they cannot both be live.
+    if (paintArmed() && allow('paint')) {
+      if (paint) return;                                   // a second finger: ignore
+      onGrabStart();
+      const g = geometry();
+      const ts = Math.max(0, snapTime(g.tAtY(y)));
+      // Left of the grid — the gutter the tala marks live in — paints SILENCE. The plot
+      // itself is entirely notes now, so its leftmost pitch row can be painted on like
+      // any other; it used to be covered by a rest band.
+      paint = x < g.plot.x
+        ? { ts, rest: true, dur: snapDur(0), pid: e.pointerId }
+        : { ts, step: snapStep(Math.round(g.stepAtX(x))), dur: snapDur(0), pid: e.pointerId };
+      own(e.pointerId);
+      redraw();
+      return;
+    }
+
     // The split is decided BEFORE the edge handles are consulted. Holding the modifier
     // says this click is a split and nothing else, and the edge zones reach a third of
     // the way into a short note — without this, splitting a short note near its middle
     // would silently start a resize instead.
-    if (isSplitClick(e)) {
+    if (isSplitClick(e) && allow('split')) {
       const i = hitNote(x, y);
       if (i < 0) return;                                   // not on a note: nothing to split
       e.preventDefault();
@@ -190,9 +216,11 @@ export function createRollEdit(canvas, opts) {
 
     // A note's edges first — but they only reach across the note's box, so the rest
     // band ending on the same row is still grabbable to either side of it.
-    const ne = noteEdgeAt(x, y);
+    // An edge the host cannot act on is not an edge: fall through, so the press lands
+    // on the note itself rather than starting a drag that can only be cancelled.
+    const ne = allow('boundary') ? noteEdgeAt(x, y) : null;
     if (ne) { startGrab(ne.i, y, e.pointerId, ne.kind, e.shiftKey); return; }
-    const r = restEdgeAt(x, y);
+    const r = allow('resize') ? restEdgeAt(x, y) : null;
     if (r) { startRestGrab(r, e.pointerId, y); return; }
 
     // Defensive: a missed pointerup/cancel (an OS interruption) can leave a stale
@@ -207,6 +235,7 @@ export function createRollEdit(canvas, opts) {
     if (i < 0) return;                                     // empty grid: let it scroll
     pressXY = { x, y, id: e.pointerId };
     clearTimeout(pressTimer);
+    if (!allow('move')) { pressXY = null; return; }         // nothing to drag a note into
     if (e.pointerType === 'mouse') { startGrab(i, y, e.pointerId, null, e.shiftKey); return; }   // desktop: no long-press
     pressTimer = setTimeout(() => { if (pressXY) startGrab(i, y, e.pointerId, null, e.shiftKey); }, LONG_PRESS_MS);
   };
@@ -214,6 +243,15 @@ export function createRollEdit(canvas, opts) {
   const onMove = (e) => {
     if (!enabled()) return;
     const { x, y } = at(e);
+
+    if (paint) {
+      if (e.pointerId !== paint.pid) return;
+      const dur = snapDur(geometry().tAtY(y) - paint.ts);
+      if (dur === paint.dur) return;
+      paint.dur = dur;
+      redraw();
+      return;
+    }
 
     if (restGrab) {
       if (e.pointerId !== restGrab.pid) return;
@@ -265,6 +303,16 @@ export function createRollEdit(canvas, opts) {
       return;
     }
 
+    if (paint && e.pointerId === paint.pid) {
+      const p = paint; paint = null; release(); redraw();
+      // Disarmed mid-drag: abort rather than commit something the user stopped asking
+      // for. And the press ends in a click ON what was just painted, which is not a
+      // request to select it.
+      if (!paintArmed()) return;
+      justGrabbed = true;
+      emit({ kind: 'paint', ts: p.ts, dur: p.dur, step: p.step, rest: !!p.rest });
+      return;
+    }
     if (grab && e.pointerId !== grab.pid) return;          // the owning grab stays live
     clearTimeout(pressTimer);
     const g = grab; pressXY = null; grab = null;
@@ -288,6 +336,9 @@ export function createRollEdit(canvas, opts) {
 
   const onCancel = (e) => {
     if (!enabled()) return;
+    // An OS-interrupted paint must not leave the preview on screen with no gesture left
+    // to dismiss it.
+    if (paint && e.pointerId === paint.pid) { paint = null; release(); redraw(); return; }
     if (restGrab && e.pointerId === restGrab.pid) {
       emit({ kind: 'resize', phase: 'cancel', target: 'rest', tok: restGrab.tok, dur: restGrab.oldDur, from: restGrab.oldDur });
       restGrab = null; release(); redraw(); return;
@@ -316,7 +367,7 @@ export function createRollEdit(canvas, opts) {
   // Double-click opens the note for curve editing. The two clicks that precede it have
   // already selected it, which is what you want either way.
   const onDblClick = (e) => {
-    if (!enabled()) return;
+    if (!enabled() || !allow('open')) return;
     const { x, y } = at(e);
     const i = hitNote(x, y);
     if (i < 0) return;
@@ -334,9 +385,11 @@ export function createRollEdit(canvas, opts) {
   return {
     hitNote, hitRest, restEdgeAt,
     /** True while a gesture is in flight — the host should not fight it. */
-    busy: () => !!(grab || restGrab),
+    busy: () => !!(grab || restGrab || paint),
     /** The note being dragged, for drawing its handle. -1 when none. */
     grabbedIndex: () => (grab ? grab.idx : -1),
+    /** The paint in progress, for the renderer to preview. null when none. */
+    painting: () => (paint ? { ...paint } : null),
     /**
      * Swallow the click that a host's OWN gesture is about to produce. Painting a
      * note ends in a click on the note just painted, which would otherwise read as
