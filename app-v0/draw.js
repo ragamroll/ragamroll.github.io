@@ -151,7 +151,35 @@ function tAtY(py){ return geo().tAtY(py); }
 
 function fit(){ const h=(window.visualViewport&&window.visualViewport.height)||window.innerHeight;
   document.getElementById('wrap').style.height=h+'px'; requestAnimationFrame(resizeCanvas); }
-function resizeCanvas(){ syncView(); roll.resize(); positionHandles(); }
+function resizeCanvas(){ syncView(); roll.resize(); positionHandles(); if (mode==='roll') restoreView(); }
+
+// Where the roll is looking, held as a TIME rather than as a scroll offset.
+//
+// scrollTop is pixels, and pixels-per-unit is derived from the SHORTEST note in the
+// piece — split one note and the whole time axis rescales underneath you. Keeping the
+// pixel then puts you somewhere else in the music, which reads as the grid having
+// jumped on its own; keeping the time puts you back on the same phrase. Measured: a
+// split took the scroll range from 186px to 762px with scrollTop untouched at 102.
+//
+// Everything that rebuilds the grid goes through resizeCanvas(), so that is the one
+// place this has to happen: every edit that re-serialises the piece, the zoom buttons,
+// a window resize, and the return from the curve editor — which collapses the scroll
+// height to a single screen, so the browser clamps scrollTop to 0 on the way IN and
+// there is nothing left to come back to.
+// null means "nothing remembered yet" — go to the top. It has to be its own value
+// rather than the time 0, because t=0 sits BELOW the header pad: mapping 0 back would
+// park a freshly opened piece 44px down, and clamping the remembered time at 0 instead
+// would make the mapping one-way and lose the pad strip entirely. Times above the first
+// note are simply negative.
+let viewT = null;
+function rememberView(){ const hd=$('holder'), u=pxU(); if (u>0) viewT = (hd.scrollTop - PAD.t)/u; }
+function restoreView(){ const hd=$('holder'), u=pxU();
+  if (viewT === null || !(u>0)) { hd.scrollTop = 0; return; }
+  hd.scrollTop = Math.max(0, Math.min(Math.max(0, virtH()-hd.clientHeight), PAD.t + viewT*u));
+  // Read back what the browser actually allowed and keep THAT. Near the end of a piece
+  // the target is clamped, and holding the unreachable time instead would make the
+  // next rebuild jump again the moment the piece grew.
+  rememberView(); }
 
 // draw's state, pushed into the roll before anything reads or draws it. The roll is
 // told what to show; it never reaches back for it.
@@ -317,16 +345,112 @@ function prevElement(tok) {
   return best;
 }
 
+function nextElement(tok) {
+  let best = null;
+  for (const n of NOTES) if (n.tok > tok && (!best || n.tok < best.tok)) best = { tok: n.tok, rest: false, dur: n.dur, t0: starts[NOTES.indexOf(n)], step: n.step, curve: n.curve };
+  for (const r of RESTS) if (r.tok > tok && (!best || r.tok < best.tok)) best = { tok: r.tok, rest: true, dur: r.dur, t0: r.t0, step: 0, curve: null };
+  return best;
+}
+
+// SHIFT on either handle: change ONLY THIS note's length and let the roll reflow after
+// it. The seam drag keeps the piece the same length by design, which leaves no way to
+// make a note simply last longer.
+//
+// A note's start is the sum of every duration before it. That is not an implementation
+// detail, it is what the notation IS — so the top handle cannot move without changing
+// something that is not the note you grabbed. Rather than quietly reach for the
+// neighbour, the top edge becomes a PULL: it stays where it is, and how far you drag
+// away from it is how much longer the note gets. The note opens downward, the notes
+// after it move, and nothing adjacent changes length. The bottom edge is the same
+// operation with the handle able to follow the pointer.
+let pushDrag = null;    // { idx, tok, near, oldDur, t0, starts, restT0 } snapshotted at grab start
+function restorePush() {
+  if (!pushDrag) return;
+  const d = pushDrag;
+  if (NOTES[d.idx]) NOTES[d.idx].dur = d.oldDur;
+  for (let j = 0; j < starts.length && j < d.starts.length; j++) starts[j] = d.starts[j];
+  RESTS.forEach((r, k) => { if (k < d.restT0.length) r.t0 = d.restT0[k]; });
+  pushDrag = null;
+}
+async function pushEdge(i, it) {
+  const near = it.edge !== 'far';
+  const beat = talaBeat || 1;
+  if (!pushDrag || pushDrag.tok !== it.tok || pushDrag.near !== near) {
+    pushDrag = { idx: i, tok: it.tok, near, oldDur: NOTES[i].dur, t0: starts[i],
+      starts: starts.slice(), restT0: RESTS.map((r) => r.t0) };
+  }
+  const d = pushDrag;
+  // Far edge: the pointer IS the note's end. Near edge: the pointer's distance above
+  // the note's start is how much has been pulled open.
+  const dur = Math.max(beat, Math.round(d.near ? d.oldDur - (it.t - d.t0) : it.t - d.t0));
+  const delta = dur - d.oldDur;
+
+  if (it.phase !== 'commit') {
+    // The notes after it move DURING the drag. Without this the note grows over its
+    // neighbours and they only jump apart on pointerup — the piece looks broken at
+    // exactly the moment you are judging whether the length is right.
+    NOTES[i].dur = dur;
+    const end = d.t0 + d.oldDur;
+    for (let j = 0; j < starts.length; j++) if (d.starts[j] >= end) starts[j] = d.starts[j] + delta;
+    RESTS.forEach((r, k) => { if (d.restT0[k] >= end) r.t0 = d.restT0[k] + delta; });
+    render(); return;
+  }
+  pushDrag = null;
+  if (delta === 0) { render(); return; }
+  pushUndo();
+  NOTES[i].dur = dur;
+  await commitEdit({ changed: new Set([it.tok]), deriveOctave: false });
+}
+
+// Cut one note into two at `t`, without changing what is heard.
+//
+// The inverse of dragging a seam away, and the same machinery: a note is a list of
+// absolute anchors, and splitting it is choosing where to cut that list. Both halves
+// keep the original's pitch, so each carries its own part of the ornament and the two
+// played back to back are the note that was there before.
+//
+// pitchy's split inserts a small REST between the halves, because two same-pitch notes
+// there would be re-merged by its segmenter. Nothing merges here — two tokens are two
+// notes — so no silence is invented, and the pair can be re-joined by dragging the new
+// seam, which is the gesture that already exists.
+async function splitNoteAt(tok, t) {
+  const i = NOTES.findIndex((x) => x.tok === tok);
+  if (i < 0) return;
+  const beat = talaBeat || 1;
+  const t0 = starts[i], end = t0 + NOTES[i].dur;
+  const cut = snapToAkshara(t, beat);
+  // Refuse rather than clamp. Clamping would move the cut somewhere the user did not
+  // click and hand back two notes of a length they did not choose; a cut with no room
+  // on one side is not a split at all. Same rule as pitchy, which ignores a click
+  // inside a note's edge margin.
+  if (cut - t0 < beat || end - cut < beat) {
+    $('mode').textContent = 'too close to the edge to split — click nearer the middle';
+    return;
+  }
+  const n = NOTES[i];
+  const out = resplitAt({
+    points: anchorsOf([{ t0, dur: n.dur, step: n.step, curve: n.curve }]),
+    t0, end, seam: cut, prevStep: n.step, nextStep: n.step, minDur: beat });
+  if (!out.prev) return;                        // unreachable given the guard; never emit a half-note
+  pushUndo();
+  n.dur = out.prev.dur; n.curve = out.prev.curve;
+  const tail = { step: n.step, octave: Math.floor(n.step / EDO) + 5, dur: out.next.dur, curve: out.next.curve };
+  // deriveOctave is REQUIRED with a non-empty inserts (serializeModel's contract): a
+  // new token shifts the running octave register every later verbatim note reads.
+  await commitEdit({ changed: new Set([tok]), inserts: new Map([[tok, [tail]]]), deriveOctave: true });
+  $('mode').textContent = 'split into two notes';
+}
+
 // The seam drag in flight: the contour as it was when the pointer went down, plus
 // what to put back if the gesture dies.
 let seamDrag = null;
 function restoreSeam() {
   if (!seamDrag) return;
   const d = seamDrag, i = NOTES.findIndex((x) => x.tok === d.tok);
-  const pn = d.prev.rest ? null : NOTES.find((x) => x.tok === d.prev.tok);
-  const pr = d.prev.rest ? RESTS.find((x) => x.tok === d.prev.tok) : null;
-  if (pn) { pn.dur = d.was.prevDur; pn.curve = d.was.prevCurve; }
-  if (pr) pr.dur = d.was.prevDur;
+  const on = d.other.rest ? null : NOTES.find((x) => x.tok === d.other.tok);
+  const or_ = d.other.rest ? RESTS.find((x) => x.tok === d.other.tok) : null;
+  if (on) { on.dur = d.was.otherDur; on.curve = d.was.otherCurve; const j = NOTES.indexOf(on); if (j >= 0) starts[j] = d.was.otherT0; }
+  if (or_) { or_.dur = d.was.otherDur; or_.t0 = d.was.otherT0; }
   if (i >= 0) { NOTES[i].dur = d.was.dur; NOTES[i].curve = d.was.curve; starts[i] = d.was.t0; }
   seamDrag = null;
 }
@@ -335,10 +459,18 @@ const INTENT_LOG = [];              // headless guards read this; nothing else d
 async function applyIntent(it) {
   INTENT_LOG.push({ ...it }); if (INTENT_LOG.length > 200) INTENT_LOG.shift();
   if (it.kind === 'select') {
-    selRest = it.target && it.target.type === 'rest' ? it.target.tok : -1;
+    // A note and a rest are selected the same way now, into the two variables that
+    // already existed. `sel` was previously set ONLY by opening the curve editor, so a
+    // selected note is a new state on the roll — safe because every curve-editor
+    // handler is gated on mode==='draw', and the renderer already draws v.sel with a
+    // heavier border and its end caps.
+    const t = it.target;
+    selRest = t && t.type === 'rest' ? t.tok : -1;
+    sel = t && t.type === 'note' ? t.index : -1;
     syncDelete(); render(); return;
   }
   if (it.kind === 'open') { selRest = -1; syncDelete(); enterDraw(it.index); return; }
+  if (it.kind === 'split') { await splitNoteAt(it.tok, it.t); return; }
 
   const n = NOTES.find((x) => x.tok === it.tok);
   const r = RESTS.find((x) => x.tok === it.tok);
@@ -349,73 +481,106 @@ async function applyIntent(it) {
     pushUndo(); await onMoveDrop(NOTES.indexOf(n), it.from);
     return;
   }
-  // The near edge moves the SEAM between this note and whatever ran up to it — and
+  // BOTH edges move the SEAM this note shares with the neighbour on that side, and
   // the sound across the pair does not change. The pair is one pitch contour; the drag
   // only moves where it stops being written as one note and starts being written as
-  // the next. Pull it far enough and the first note is gone, its line preserved inside
-  // this one's gamaka. That is the repair for a detector that split one sung phrase in
-  // two, which is most of what pitchy's over-segmentation produces.
+  // the other. Pull it far enough and the neighbour is gone, its line preserved inside
+  // this note's gamaka. That is the repair for a detector that split one sung phrase in
+  // two, which is most of what pitchy's over-segmentation produces — and it needs to
+  // work in both directions, since which side of a spurious boundary you happen to
+  // grab is an accident.
+  //
+  // The note being HELD is never the one that vanishes. Dragging the near edge back
+  // consumes what came before; dragging the far edge on consumes what comes after.
+  // Deleting the note under the pointer would be a different gesture entirely.
   //
   // The contour is captured ONCE, when the drag starts. Re-reading it from notes that
   // have already been re-split would fold each preview's rounding into the next.
   if (it.kind === 'boundary') {
     const i = NOTES.indexOf(n);
     if (i < 0) return;
-    if (it.phase === 'cancel') { restoreSeam(); render(); return; }
+    if (it.phase === 'cancel') { restorePush(); restoreSeam(); render(); return; }
+    if (it.push) { await pushEdge(i, it); return; }
+    const near = it.edge !== 'far';
 
-    if (!seamDrag || seamDrag.tok !== it.tok) {
-      const prev = prevElement(it.tok);
-      if (!prev) { seamDrag = null; return; }        // nothing before it: no seam to move
-      const before = prev.rest ? prevElement(prev.tok) : null;
+    if (!seamDrag || seamDrag.tok !== it.tok || seamDrag.near !== near) {
+      const other = near ? prevElement(it.tok) : nextElement(it.tok);
+      if (!other) {
+        // No neighbour on this side, so there is no seam. At the FAR edge that leaves
+        // the plain length change it always was — the only way to lengthen the piece
+        // from the roll — and at the near edge of the very first note, nothing to do.
+        seamDrag = null;
+        if (near) return;
+        const dur = Math.max(talaBeat || 1, it.t - starts[i]);
+        if (it.phase !== 'commit') { NOTES[i].dur = dur; render(); return; }
+        pushUndo(); NOTES[i].dur = dur;
+        await commitEdit({ changed: new Set([it.tok]), deriveOctave: false });
+        return;
+      }
+      // When the neighbour is a REST, the element on ITS far side comes along as
+      // context — not as something this drag can change, but because bridging the
+      // silence needs the pitch at both ends of it. Without it the gap has only one
+      // end and the best it could do is hold one pitch flat across the silence.
+      const beyond = other.rest ? (near ? prevElement(other.tok) : nextElement(other.tok)) : null;
+      const held = { t0: starts[i], dur: NOTES[i].dur, step: NOTES[i].step, curve: NOTES[i].curve };
+      const oth = { t0: other.t0, dur: other.dur, step: other.step, curve: other.curve, rest: other.rest };
+      const ctxItem = beyond ? [{ t0: beyond.t0, dur: beyond.dur, step: beyond.step, curve: beyond.curve, rest: beyond.rest }] : [];
       seamDrag = {
-        tok: it.tok, prev,
-        t0: prev.t0, end: starts[i] + NOTES[i].dur,
-        prevStep: prev.rest ? NOTES[i].step : prev.step,
-        nextStep: NOTES[i].step,
-        // When the neighbour is a REST, the note before IT comes along as context —
-        // not as something this drag can change, but because bridging the silence
-        // needs the pitch the line left off at. Without it the gap has only one end
-        // and the best it could do is hold this note's opening pitch backwards.
-        points: anchorsOf([
-          ...(prev.rest && before ? [{ t0: before.t0, dur: before.dur, step: before.step, curve: before.curve, rest: before.rest }] : []),
-          { t0: prev.t0, dur: prev.dur, step: prev.step, curve: prev.curve, rest: prev.rest },
-          { t0: starts[i], dur: NOTES[i].dur, step: NOTES[i].step, curve: NOTES[i].curve },
-        ]),
-        was: { prevDur: prev.dur, prevCurve: prev.curve, dur: NOTES[i].dur, curve: NOTES[i].curve, t0: starts[i] },
+        tok: it.tok, near, other,
+        t0: near ? other.t0 : held.t0,
+        end: near ? held.t0 + held.dur : oth.t0 + oth.dur,
+        // Each side keeps its own letter; a rest has no pitch, so the note it is being
+        // traded against lends its step to that side of the cut.
+        prevStep: near ? (other.rest ? NOTES[i].step : other.step) : NOTES[i].step,
+        nextStep: near ? NOTES[i].step : (other.rest ? NOTES[i].step : other.step),
+        points: anchorsOf(near ? [...ctxItem, oth, held] : [held, oth, ...ctxItem]),
+        was: { dur: held.dur, curve: held.curve, t0: held.t0,
+          otherDur: other.dur, otherCurve: other.curve, otherT0: other.t0 },
       };
     }
     const d = seamDrag;
     const beat = talaBeat || 1;
-    const out = resplitAt({ points: d.points, t0: d.t0, end: d.end, seam: it.t0,
-      prevStep: d.prevStep, nextStep: d.nextStep, minDur: beat });
+    const out = resplitAt({ points: d.points, t0: d.t0, end: d.end, seam: it.t,
+      prevStep: d.prevStep, nextStep: d.nextStep, minDur: beat,
+      swallow: d.near ? 'first' : 'second' });
 
-    const prevNote = d.prev.rest ? null : NOTES.find((x) => x.tok === d.prev.tok);
-    const prevRest = d.prev.rest ? RESTS.find((x) => x.tok === d.prev.tok) : null;
+    // The held note is the SECOND of the pair at its near edge, the FIRST at its far
+    // edge. Only the other side can come back null.
+    const heldPart = d.near ? out.next : out.prev;
+    const otherPart = d.near ? out.prev : out.next;
+    const otherNote = d.other.rest ? null : NOTES.find((x) => x.tok === d.other.tok);
+    const otherRest = d.other.rest ? RESTS.find((x) => x.tok === d.other.tok) : null;
 
     if (it.phase !== 'commit') {
       // Shown, not recorded. A fully absorbed neighbour is drawn as nothing rather
       // than removed, so the arrays keep their shape until the pointer is up.
-      const pd = out.prev ? out.prev.dur : 0;
-      if (prevNote) { prevNote.dur = pd; if (!d.prev.rest) prevNote.curve = out.prev ? out.prev.curve : prevNote.curve; }
-      if (prevRest) prevRest.dur = pd;
-      NOTES[i].dur = out.next.dur; NOTES[i].curve = out.next.curve;
-      starts[i] = d.t0 + pd;
+      const od = otherPart ? otherPart.dur : 0;
+      if (otherNote) { otherNote.dur = od; if (otherPart) otherNote.curve = otherPart.curve; }
+      if (otherRest) otherRest.dur = od;
+      NOTES[i].dur = heldPart.dur; NOTES[i].curve = heldPart.curve;
+      // Whichever element sits second in the pair is the one whose start moves.
+      if (d.near) starts[i] = d.t0 + od;
+      else {
+        const j = otherNote ? NOTES.indexOf(otherNote) : -1;
+        if (j >= 0) starts[j] = d.t0 + heldPart.dur;
+        if (otherRest) otherRest.t0 = d.t0 + heldPart.dur;
+      }
       render(); return;
     }
 
     pushUndo();
     const changed = new Set([it.tok]);
-    if (!out.prev) {
+    if (!otherPart) {
       // Swallowed whole: the neighbour's token goes, its pitch already inside this
       // note's gamaka. deriveOctave, because a dropped token takes its octave marks
       // with it and the register must be re-stated for everything after.
       seamDrag = null;
-      await commitEdit({ changed, deletes: new Set([d.prev.tok]), deriveOctave: true });
+      await commitEdit({ changed, deletes: new Set([d.other.tok]), deriveOctave: true });
       return;
     }
     seamDrag = null;
-    if (d.prev.rest) await commitEdit({ changed, deriveOctave: false, restDurs: new Map([[d.prev.tok, out.prev.dur]]) });
-    else { changed.add(d.prev.tok); await commitEdit({ changed, deriveOctave: false }); }
+    if (d.other.rest) await commitEdit({ changed, deriveOctave: false, restDurs: new Map([[d.other.tok, otherPart.dur]]) });
+    else { changed.add(d.other.tok); await commitEdit({ changed, deriveOctave: false }); }
     return;
   }
   if (it.kind === 'resize') {
@@ -659,7 +824,10 @@ function enterDraw(i){ sel=i; mode='draw'; syncDelete();
   for (const b of ['clear','copy','paste','back']) $(b).style.display='';   // draw-only buttons appear
   $('back').disabled=false; $('clear').disabled=!NOTES[i].curve; $('copy').disabled=!NOTES[i].curve; $('paste').disabled=!clipRel;
   setPlayBtn('▶','Play note'); $('rangectl').style.display=''; $('snapctl').style.display=''; $('tzoom').style.display='none'; resizeCanvas(); }
-$('back').onclick=()=>{ dEdit=null; drawing=false; dragIdx=-1; mode='roll'; sel=-1; syncDelete(); $('mode').textContent='select a note'; $('crumb').textContent='';
+// Leaving the editor keeps the note SELECTED — you were just looking at it, and
+// dropping the selection here would put delete back out of reach the moment you
+// stepped out of an editor you only opened to look.
+$('back').onclick=()=>{ dEdit=null; drawing=false; dragIdx=-1; mode='roll'; syncDelete(); $('mode').textContent='select a note'; $('crumb').textContent='';
   for (const b of ['clear','copy','paste','back']) $(b).style.display='none';   // draw-only buttons hidden in roll mode
   $('read').textContent=''; setPlayBtn('▶',playLabel());
   $('rangectl').style.display='none'; $('snapctl').style.display='none'; $('tzoom').style.display=''; resizeCanvas(); };
@@ -701,7 +869,10 @@ window.addEventListener('pointermove', e=>{ if (!markerDrag) return; const r=cv.
 window.addEventListener('pointerup', ()=>{ markerDrag=null; });
 document.addEventListener('pointerdown', e=>{ if (!$('ctxmenu').contains(e.target)) hideCtx(); });
 document.addEventListener('keydown', e=>{ if (e.key==='Escape') hideCtx(); });
-$('holder').addEventListener('scroll', ()=>{ hideCtx(); if (mode==='roll') render(); });   // windowed roll: redraw the visible slice
+// Windowed roll: redraw the visible slice, and record where the user put it. Only in
+// roll mode — the curve editor's own collapse to scrollTop 0 must not be mistaken for
+// someone scrolling to the top.
+$('holder').addEventListener('scroll', ()=>{ hideCtx(); if (mode==='roll'){ rememberView(); render(); } });
 // help popup
 $('helpbtn').onclick=()=>{ const h=$('helppop'); h.hidden=!h.hidden; };
 $('helpclose').onclick=()=>{ $('helppop').hidden=true; };
@@ -1028,6 +1199,7 @@ function applyMix(u){
 function applyShared(decoded){
   hideToast();
   userGridMin = userGridMax = userGridBottom = null;   // new composition: start at auto/seed bounds, not a stale stretch
+  viewT = null;                                        // ...and at its beginning, not wherever the LAST piece was being read
   let legacy=null, carried=null;
   try{ const o=JSON.parse(decoded);
     if (o&&typeof o.src==='string') legacy=o;
@@ -1052,6 +1224,7 @@ const baseName = s => String(s||'ragamroll').replace(/^.*[\/\\]/,'').replace(/\.
 // Load a whole new composition into the roll + editor (and persist / reshare).
 async function loadSrc(text, name){ hideToast(); if (mode==='draw') $('back').click(); stopPlayback();
   userGridMin = userGridMax = userGridBottom = null;   // new composition: start at auto/seed bounds, not a stale stretch
+  viewT = null;                                        // ...and at its beginning, not wherever the LAST piece was being read
   if (name) docName=name; buildModel(text); syncControls(); resizeCanvas(); render(); await rebuildShare(); }
 async function pasteLink(){ const inp=window.prompt('Paste a RagamRoll share link or pako token:'); if (!inp) return;
   const m=/pako:[A-Za-z0-9\-_]+/.exec(inp); const tok=m?m[0]:inp.trim().replace(/^#/,'');

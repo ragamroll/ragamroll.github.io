@@ -58,8 +58,26 @@ export function createRagamRoll(el, opts = {}) {
     pad.t = labelDepth(bounds.gridPitches);
   }
 
+  // How tall a length-unit is drawn: one CELL_PX per note of TYPICAL length.
+  //
+  // This divided by the SHORTEST note, so that note was always readable. But a minimum
+  // is an extreme, and one short note dragged the whole piece with it — shrink a note
+  // from 32 units to 1 while moving a seam and the scale went 0.75px to 24px per unit,
+  // a 32-fold inflation arriving continuously under the pointer. Nothing about the
+  // music changed; the reader simply lost their place.
+  //
+  // The median is the same number whenever notes share a length, which is every written
+  // piece, so nothing looks different there. It does not move when one note is edited:
+  // a seam drag trades time between two of them and leaves the middle of the
+  // distribution alone. A note far shorter than its neighbours now draws short, which
+  // is what it is — and the zoom control is there for reading it.
+  const medianDur = () => {
+    const d = model.notes.map((n) => n.dur).sort((a, b) => a - b);
+    const m = d.length >> 1;
+    return d.length % 2 ? d[m] : (d[m - 1] + d[m]) / 2;
+  };
   const pxPerUnit = () => (model.notes.length
-    ? CELL_PX / Math.max(0.25, Math.min(...model.notes.map((n) => n.dur)))
+    ? CELL_PX / Math.max(0.25, medianDur())
     : CELL_PX);
   const pxU = () => pxPerUnit() * view.zoom;
   const scrollTop = () => (view.mode === 'roll' ? holder.scrollTop : 0);

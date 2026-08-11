@@ -125,16 +125,22 @@ export function createRollEdit(canvas, opts) {
   }
   const timeAt = (g, y) => (g && g.anchorT != null ? g.anchorT + (y - g.anchorY) / g.pxPerUnit : 0);
 
-  // The far edge sets the length. The near edge moves the SEAM this note shares with
-  // whatever precedes it — a note has no start of its own, only the sum of what came
-  // before — so dragging it there trades with the neighbour and leaves this note's end
-  // where it is. `forced` comes from noteEdgeAt, which has already decided which.
-  function startGrab(i, y, pid, forced) {
+  // Both edges move a SEAM: the one this note shares with the neighbour on that side.
+  // A note has no start of its own, only the sum of what came before, so neither edge
+  // can move without the neighbour giving up or taking on the same time. Which edge it
+  // is travels with the intent as `edge`; `forced` comes from noteEdgeAt, which has
+  // already decided which one the pointer is on.
+  function startGrab(i, y, pid, forced, shift) {
     onGrabStart();
     const m = model();
     const kind = forced || 'move';
     const t0 = m.starts[i];
-    grab = { idx: i, tok: m.notes[i].tok, kind, oldStep: m.notes[i].step, oldDur: m.notes[i].dur,
+    // SHIFT means push, not trade: the edge changes a length and everything after it
+    // moves, instead of the neighbour giving up the same time. Read once, at grab
+    // start — a modifier that changes what a gesture means halfway through it is a
+    // gesture you cannot commit to. Same reason the time scale is frozen here.
+    grab = { idx: i, tok: m.notes[i].tok, kind, push: !!shift,
+      oldStep: m.notes[i].step, oldDur: m.notes[i].dur,
       oldT0: t0, ...frozenTime(y),
       cur: kind === 'move' ? m.notes[i].step : (kind === 'resize' ? m.notes[i].dur : t0), pid };
     own(pid);                 // a RESIZE is a vertical drag, exactly the axis 'pan-y' permits,
@@ -153,20 +159,39 @@ export function createRollEdit(canvas, opts) {
   function revert(g) {
     if (!g) return;
     if (g.kind === 'move') emit({ kind: 'move', phase: 'cancel', tok: g.tok, step: g.oldStep, from: g.oldStep });
-    else if (g.kind === 'boundary') emit({ kind: 'boundary', phase: 'cancel', tok: g.tok, t0: g.oldT0, from: g.oldT0 });
-    else emit({ kind: 'resize', phase: 'cancel', target: 'note', tok: g.tok, dur: g.oldDur, from: g.oldDur });
+    else if (g.kind === 'boundary') emit({ kind: 'boundary', phase: 'cancel', edge: 'near', push: g.push, tok: g.tok, t: g.oldT0, from: g.oldT0 });
+    else emit({ kind: 'boundary', phase: 'cancel', edge: 'far', push: g.push, tok: g.tok, t: g.oldT0 + g.oldDur, from: g.oldT0 + g.oldDur });
   }
 
   // ---- the pointer ----
+
+  // Splitting a note in two, on the gesture pitchy already uses for it: ctrl/cmd +
+  // shift-click, with alt-click as the fallback for the window managers that swallow
+  // the first. The same hand learns one gesture for both halves of the workflow —
+  // pitchy proposes the boundaries, draw corrects them.
+  const isSplitClick = (e) => ((e.ctrlKey || e.metaKey) && e.shiftKey) || e.altKey;
 
   const onDown = (e) => {
     if (!enabled()) return;
     const { x, y } = at(e);
 
+    // The split is decided BEFORE the edge handles are consulted. Holding the modifier
+    // says this click is a split and nothing else, and the edge zones reach a third of
+    // the way into a short note — without this, splitting a short note near its middle
+    // would silently start a resize instead.
+    if (isSplitClick(e)) {
+      const i = hitNote(x, y);
+      if (i < 0) return;                                   // not on a note: nothing to split
+      e.preventDefault();
+      justGrabbed = true;                                  // the click that follows is not "open me"
+      emit({ kind: 'split', tok: model().notes[i].tok, index: i, t: geometry().tAtY(y) });
+      return;
+    }
+
     // A note's edges first — but they only reach across the note's box, so the rest
     // band ending on the same row is still grabbable to either side of it.
     const ne = noteEdgeAt(x, y);
-    if (ne) { startGrab(ne.i, y, e.pointerId, ne.kind); return; }
+    if (ne) { startGrab(ne.i, y, e.pointerId, ne.kind, e.shiftKey); return; }
     const r = restEdgeAt(x, y);
     if (r) { startRestGrab(r, e.pointerId, y); return; }
 
@@ -182,8 +207,8 @@ export function createRollEdit(canvas, opts) {
     if (i < 0) return;                                     // empty grid: let it scroll
     pressXY = { x, y, id: e.pointerId };
     clearTimeout(pressTimer);
-    if (e.pointerType === 'mouse') { startGrab(i, y, e.pointerId); return; }   // desktop: no long-press
-    pressTimer = setTimeout(() => { if (pressXY) startGrab(i, y, e.pointerId); }, LONG_PRESS_MS);
+    if (e.pointerType === 'mouse') { startGrab(i, y, e.pointerId, null, e.shiftKey); return; }   // desktop: no long-press
+    pressTimer = setTimeout(() => { if (pressXY) startGrab(i, y, e.pointerId, null, e.shiftKey); }, LONG_PRESS_MS);
   };
 
   const onMove = (e) => {
@@ -219,12 +244,12 @@ export function createRollEdit(canvas, opts) {
       const t0 = snapTime(timeAt(grab, y));
       if (t0 === grab.cur) return;
       grab.cur = t0;
-      emit({ kind: 'boundary', phase: 'preview', tok: grab.tok, t0, from: grab.oldT0 });
+      emit({ kind: 'boundary', phase: 'preview', edge: 'near', push: grab.push, tok: grab.tok, t: t0, from: grab.oldT0 });
     } else {
       const dur = snapDur(timeAt(grab, y) - grab.oldT0);
       if (dur === grab.cur) return;
       grab.cur = dur;
-      emit({ kind: 'resize', phase: 'preview', target: 'note', tok: grab.tok, dur, from: grab.oldDur });
+      emit({ kind: 'boundary', phase: 'preview', edge: 'far', push: grab.push, tok: grab.tok, t: grab.oldT0 + dur, from: grab.oldT0 + grab.oldDur });
     }
   };
 
@@ -253,11 +278,11 @@ export function createRollEdit(canvas, opts) {
     } else if (g.kind === 'boundary') {
       if (g.cur === g.oldT0) { redraw(); return; }
       justGrabbed = true;
-      emit({ kind: 'boundary', phase: 'commit', tok: g.tok, t0: g.cur, from: g.oldT0 });
+      emit({ kind: 'boundary', phase: 'commit', edge: 'near', push: g.push, tok: g.tok, t: g.cur, from: g.oldT0 });
     } else {
       if (g.cur === g.oldDur) { redraw(); return; }
       justGrabbed = true;
-      emit({ kind: 'resize', phase: 'commit', target: 'note', tok: g.tok, dur: g.cur, from: g.oldDur });
+      emit({ kind: 'boundary', phase: 'commit', edge: 'far', push: g.push, tok: g.tok, t: g.oldT0 + g.cur, from: g.oldT0 + g.oldDur });
     }
   };
 
@@ -272,17 +297,31 @@ export function createRollEdit(canvas, opts) {
     if (grab) { revert(grab); grab = null; release(); redraw(); }
   };
 
-  // A tap selects. A note opens — it has a pitch and a curve to edit; a rest has only
-  // a length, so selecting one just marks it, for resizing or deleting.
+  // A tap SELECTS — a note exactly as much as a rest. It used to open a note's curve
+  // editor outright, which meant a note had no selected state at all: anything offered
+  // for "the thing you are pointing at", deleting first among them, was reachable only
+  // by entering an editor you did not ask for. Opening is the heavier action and takes
+  // the more deliberate gesture.
   const onClick = (e) => {
     if (!enabled()) return;
     if (justGrabbed) { justGrabbed = false; return; }
     onGrabStart();
     const { x, y } = at(e);
     const i = hitNote(x, y);
-    if (i >= 0) { emit({ kind: 'open', tok: model().notes[i].tok, index: i }); return; }
+    if (i >= 0) { emit({ kind: 'select', target: { type: 'note', tok: model().notes[i].tok, index: i } }); return; }
     const r = hitRest(x, y);
     emit({ kind: 'select', target: r ? { type: 'rest', tok: r.tok } : null });
+  };
+
+  // Double-click opens the note for curve editing. The two clicks that precede it have
+  // already selected it, which is what you want either way.
+  const onDblClick = (e) => {
+    if (!enabled()) return;
+    const { x, y } = at(e);
+    const i = hitNote(x, y);
+    if (i < 0) return;
+    e.preventDefault();
+    emit({ kind: 'open', tok: model().notes[i].tok, index: i });
   };
 
   canvas.addEventListener('pointerdown', onDown);
@@ -290,6 +329,7 @@ export function createRollEdit(canvas, opts) {
   canvas.addEventListener('pointerup', onUp);
   canvas.addEventListener('pointercancel', onCancel);
   canvas.addEventListener('click', onClick);
+  canvas.addEventListener('dblclick', onDblClick);
 
   return {
     hitNote, hitRest, restEdgeAt,
@@ -307,6 +347,7 @@ export function createRollEdit(canvas, opts) {
     consumedClick: () => justGrabbed,
     destroy() {
       clearTimeout(pressTimer);
+      canvas.removeEventListener('dblclick', onDblClick);
       canvas.removeEventListener('pointerdown', onDown);
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerup', onUp);

@@ -114,8 +114,18 @@ function sliceCurve(pts, from, to, step, flatEps, fill = 3) {
   // smoothstep re-parameterised over the shorter span is a different shape — the one
   // place this operation is not exact. So the cut segment, and only it, gets a few
   // interior points read from the original line. Anchors elsewhere are untouched.
-  const cutFill = (a, b) => {
+  // A flat segment needs no interior points: a smoothstep between two equal values is
+  // exactly constant, so every filled point would repeat its neighbours. Cutting into
+  // a held note is the common case at a note's far edge, and without this the absorbed
+  // note arrives wearing four identical anchors — noise in a file someone has to read.
+  // Exact equality only. Anything looser would be curve simplification, which is a
+  // different thing and does not belong here.
+  // The bounding values are passed IN rather than read back with pitchAt, because at a
+  // junction two anchors share an instant and pitchAt there answers with the earlier
+  // one — the pitch on the far side of a leap, not the one this segment starts from.
+  const cutFill = (a, b, va, vb) => {
     const out = [];
+    if (va === vb) return out;
     for (let k = 1; k <= fill; k++) { const t = a + (b - a) * (k / (fill + 1)); out.push([t, pitchAt(pts, t)]); }
     return out;
   };
@@ -126,8 +136,8 @@ function sliceCurve(pts, from, to, step, flatEps, fill = 3) {
   const endsMidSegment = !pts.some(([pt]) => Math.abs(pt - to) < 1e-9);
   // >= / <=, not > / <: the anchor bounding the cut segment is very often the slice's
   // own endpoint, and excluding that case skipped the fill on the side that needed it.
-  if (startsMidSegment) { const n = nextAnchorAfter(from); if (n && n[0] <= to) extra.push(...cutFill(from, n[0])); }
-  if (endsMidSegment) { const p = prevAnchorBefore(to); if (p && p[0] >= from) extra.push(...cutFill(p[0], to)); }
+  if (startsMidSegment) { const n = nextAnchorAfter(from); if (n && n[0] <= to) extra.push(...cutFill(from, n[0], pitchAt(pts, from), n[1])); }
+  if (endsMidSegment) { const p = prevAnchorBefore(to); if (p && p[0] >= from) extra.push(...cutFill(p[0], to, p[1], pitchAt(pts, to))); }
 
   const cur = [[0, pitchAt(pts, from)],
     ...[...inside, ...extra].sort((x, y) => x[0] - y[0]).map(([t, sv]) => [(t - from) / span, sv]),
@@ -144,10 +154,24 @@ function sliceCurve(pts, from, to, step, flatEps, fill = 3) {
  * the treatment an off-raga note already gets, where its offset from the nearest raga
  * step rides in the ornament rather than renaming the note.
  *
- * `prev` is null once the seam reaches the start and the first event has been
- * swallowed whole, its line now inside the survivor's curve.
+ * `swallow` says which side the seam is allowed to consume, and it is the caller's
+ * grip that decides. A note's edge trades with the NEIGHBOUR on that side, so the
+ * neighbour is what can disappear — never the note being held, which would delete the
+ * thing under the pointer. Holding the second of the pair (dragging its near edge back)
+ * means the first may go; holding the first (dragging its far edge on) means the
+ * second may. The side that survives always keeps at least `minDur`.
+ *
+ * The vanished side comes back null, its line already inside the survivor's curve.
  */
-export function resplitAt({ points, t0, end, seam, prevStep, nextStep, minDur = 1, flatEps = 0.02 }) {
+export function resplitAt({ points, t0, end, seam, prevStep, nextStep, minDur = 1, flatEps = 0.02, swallow = 'first' }) {
+  if (swallow === 'second') {
+    const cut = Math.min(end, Math.max(seam, t0 + minDur));
+    const gone = end - cut < minDur;
+    const to = gone ? end : cut;
+    const prev = { dur: to - t0, curve: sliceCurve(points, t0, to, prevStep, flatEps) };
+    if (gone) return { prev, next: null };
+    return { prev, next: { dur: end - cut, curve: sliceCurve(points, cut, end, nextStep, flatEps) } };
+  }
   const cut = Math.max(t0, Math.min(seam, end - minDur));
   const gone = cut - t0 < minDur;
   const from = gone ? t0 : cut;
