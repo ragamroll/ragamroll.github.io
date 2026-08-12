@@ -10,7 +10,7 @@ import { useRef } from '../vendor/hooks.module.js';
 // pointer leaves it — no window listeners to leak, and touch works (with
 // touch-action:none in CSS). pointercancel is handled so a gesture takeover
 // (touch pan, OS gesture) can't strand the drag with userSelect off.
-export function Splitter({ orientation, onResize }) {
+export function Splitter({ orientation, onResize, style }) {
   const dragging = useRef(false);
   const down = (e) => {
     e.preventDefault();
@@ -24,7 +24,7 @@ export function Splitter({ orientation, onResize }) {
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* not captured */ }
     document.body.style.userSelect = '';
   };
-  return html`<div class=${orientation === 'v' ? 'split-v' : 'split-h'}
+  return html`<div class=${orientation === 'v' ? 'split-v' : 'split-h'} style=${style}
                    onPointerDown=${down} onPointerMove=${move}
                    onPointerUp=${end} onPointerCancel=${end}
                    title="Drag to resize"></div>`;

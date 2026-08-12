@@ -47,14 +47,30 @@
     html, body { height:100%; }
     body { margin: 0; font-family: var(--sans); background:var(--bg); color:var(--ink); }
     #app { height:100vh; height:100dvh; display:flex; flex-direction:column; overflow:hidden; }
-    .toolbar { display:flex; gap:.5rem; align-items:center; padding:.5rem; border-bottom:1px solid var(--hair); }
-    .toolbar .readout { margin-left:auto; opacity:.7; font-size:.85rem; }
+    /* ONE ROW, always. The head holds a name, two links, a readout and fullscreen —
+       nothing that needs a second line, and the readout wrapping to full width pushed
+       the fullscreen button onto a row of its own. It shrinks and ellipses instead, so
+       the button stays in the corner beside the badge at every width. */
+    .toolbar { display:flex; gap:.5rem; align-items:center; padding:.5rem; border-bottom:1px solid var(--hair);
+      flex-wrap:nowrap; }
+    .toolbar .readout { margin-left:auto; opacity:.7; font-size:.85rem;
+      min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:right; }
     .toolbar .app-badge { font-weight:bold; font-size:.95rem; background:var(--panel2); border:1px solid var(--hair);
-      border-radius:10px; padding:.12rem .55rem; margin-right:.25rem; }
+      border-radius:10px; padding:.12rem .55rem; margin-right:.25rem;
+      /* Never breaks. On a narrow phone the name wrapped to two lines and took the whole
+         head with it — the readout is the only thing here that may give ground. */
+      white-space:nowrap; flex:0 0 auto; }
     .toolbar .help-link { display:inline-flex; align-items:center; justify-content:center; width:1.5rem; height:1.5rem;
       border-radius:50%; border:1px solid var(--hair); background:var(--panel2); color:var(--amber); text-decoration:none; font-weight:bold; font-size:.9rem; }
     .toolbar .help-link:hover { border-color:var(--amber); }
-    .transport { display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; padding:.35rem .5rem; border-bottom:1px solid var(--hair); }
+    /* Round, muted, the size of the help links beside it — the gamaka page's own icon
+       button. On the right, where that page keeps it. */
+    .toolbar .fs-btn { width:1.7rem; height:1.7rem; padding:0; border-radius:999px;
+      color:var(--muted); font-weight:600; display:inline-flex; align-items:center;
+      justify-content:center; font-size:.85rem; flex:0 0 auto; }
+    .toolbar .fs-btn[aria-pressed=true] { color:var(--amber); border-color:var(--amberSoft); }
+    /* At the BOTTOM now, so the rule that separates it from the roll is on top of it. */
+    .transport { display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; padding:.35rem .5rem; border-top:1px solid var(--hair); flex:0 0 auto; }
     .transport button { font-size:.95rem; padding:.3rem .6rem; }
     .transport .doc-btn { font-size:.82rem; padding:.28rem .6rem; }
     .transport .doc-btn.ok { border-color:var(--teal); color:var(--teal); }
@@ -239,13 +255,22 @@
     .scale-actions button.primary { background:#1c3a30; border-color:var(--teal); color:var(--teal); }
     .scale-actions button:disabled { opacity:.4; cursor:default; }
     .workspace { flex:1 1 0; min-height:0; display:flex; flex-direction:column; padding:.35rem .5rem; }
-    .cols { display:grid; gap:.3rem; align-items:stretch; min-height:0; }  /* flex-basis (topFrac) + columns set inline */
+    .cols { display:grid; gap:.3rem; align-items:stretch; min-height:0; min-width:0; }  /* tracks set inline; rows when stacked */
+    .cols > * { min-width:0; min-height:0; }
+    /* Stacked: the same three children in one column, which is the gamaka page's
+       portrait shape — the roll across the full width and the notation under it. */
+    .cols.stacked > .editor-pane, .cols.stacked > .pane { height:auto; }
     .editor, .pane {
       font-family: ui-monospace, "Menlo", "Consolas", monospace;
       font-size: 15px; line-height: 1.2; white-space: pre; overflow:auto;
       background:var(--panel2); color:var(--ink); border:1px solid var(--hair); border-radius:4px;
       padding:.5rem; margin:0;
     }
+    /* The card the roll sits on is the LIGHT surface, as it is on the gamaka page: that
+       page's .stage is --panel and the app's pane was --panel2, the darkest of the three,
+       which is the whole of why one looked dimmer than the other side by side. The
+       notation box stays --panel2 there too — a well is meant to read as sunk. */
+    .pane.roll { background:var(--panel); border-radius:13px; }
     .cols > .editor, .cols > .pane, .cols > .editor-pane { height:100%; min-height:0; }
     /* The notation box and its pickers are one pane, the way they are on the gamaka
        page: which raga you are in belongs beside the swaras, not two bars away. */
@@ -258,6 +283,21 @@
     .edittools input:disabled, .edittools select:disabled { opacity:.45; }
     .editor { width:100%; }
     .pane.notation { margin:.35rem 0 0; min-height:0; }  /* flex share set inline */
+    /* All the controls at the bottom, where a thumb is — the gamaka page's shape. The
+       head above keeps only what the page IS and what the piece is. */
+    .controlbar { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap;
+      padding:.4rem .5rem; border-top:1px solid var(--hair); flex:0 0 auto; }
+    .controlbar .timbre { display:inline-flex; align-items:center; gap:.3rem; }
+    /* The notation on a drawer: a grip, and a body whose height IS the drag. Shut is
+       height 0 and overflow hidden, so the textarea stays in the document. */
+    .editor-drawer { flex:0 0 auto; display:flex; flex-direction:column; padding:0 .5rem; }
+    .editor-drawer .grip { flex:0 0 auto; height:16px; display:flex; align-items:center;
+      justify-content:center; cursor:ns-resize; touch-action:none; }
+    .editor-drawer .grip span { width:44px; height:4px; border-radius:2px; background:var(--hair); }
+    .editor-drawer .grip:hover span { background:var(--amberSoft); }
+    .editor-drawer .drawer-body { overflow:hidden; display:flex; flex-direction:column; gap:.35rem; }
+    .editor-drawer.open .drawer-body { padding-bottom:.35rem; }
+    .editor-drawer .editor { flex:1 1 auto; min-height:0; }
     .split-v { width:6px; background:var(--hair); cursor:col-resize; border-radius:3px; touch-action:none; }
     .split-h { height:6px; margin:.15rem .5rem; background:var(--hair); cursor:row-resize; border-radius:3px; touch-action:none; }
     .split-v:hover, .split-h:hover { background:#66c; }
@@ -296,12 +336,10 @@
     .footer { display:flex; gap:.6rem; align-items:center; padding:.35rem .6rem; border-top:1px solid var(--hair); font-size:.75rem; opacity:.7; }
     .footer .build { margin-left:auto; }  /* build timestamp + version, pushed right */
     .footer .ver { color:var(--amber); font-family:ui-monospace,monospace; }
-    /* Mobile portrait: keep the toolbar uncrowded — no burger needed once Save/
-       Export moved to the transport and Open+Examples merged. Readout drops to
-       its own line. The version now lives in the footer, shown at every width. */
+    /* Mobile portrait. The head needs nothing here any more — it holds no controls
+       since they moved to the bottom, and it is a single non-wrapping row at every
+       width. Only the transport still has more than fits on one line. */
     @media (max-width:560px) {
-      .toolbar { flex-wrap:wrap; }
-      .toolbar .readout { margin-left:0; flex-basis:100%; }
       /* Portrait: don't right-pin the playback group — let it wrap to full width
          so nothing (Tala/Master/Drone) runs off the edge. */
       .transport-play { margin-left:0; flex-basis:100%; }

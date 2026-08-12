@@ -1,0 +1,55 @@
+import { html } from '../vendor/htm-preact.js';
+import { useRef } from '../vendor/hooks.module.js';
+import { Editor } from './Editor.js';
+import { EditTools } from './EditTools.js';
+
+// The notation, on a drawer. This is the gamaka page's grip, and its rules are the ones
+// that page has always used:
+//
+//   drag it        the drawer follows your finger, up to 60% of the window
+//   tap it         open to a third of the window, or shut if it is open
+//   it starts shut so the roll has the whole screen
+//
+// Drag and tap are told apart by whether the pointer moved more than 3px, which is what
+// makes one control do both: on a phone there is no room for a handle AND a button, and
+// a drawer you can only toggle cannot be sized to the phrase you are reading.
+//
+// Shut is height 0 rather than unmounted. The notation is the thing being edited — the
+// roll is a view of it — so it stays in the document, keyed and focusable, and a piece
+// loaded while the drawer is shut is already there when it opens.
+const MAX_FRAC = 0.6, OPEN_FRAC = 0.35, MOVED_PX = 3;
+
+export function EditorDrawer({ h, setH, text, onText, ragas, talas, raga, tala, blank, onRaga, onTala }) {
+  const drag = useRef(null);
+  const winH = () => window.innerHeight || 600;
+  const clamp = (v) => Math.max(0, Math.min(v, Math.round(winH() * MAX_FRAC)));
+
+  const down = (e) => {
+    e.preventDefault();
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* the gesture still works */ }
+    drag.current = { y: e.clientY, h, moved: false };
+    document.body.style.userSelect = 'none';
+  };
+  const move = (e) => {
+    const d = drag.current; if (!d) return;
+    const dy = d.y - e.clientY;                 // up is bigger, the drawer comes UP
+    if (Math.abs(dy) > MOVED_PX) d.moved = true;
+    setH(clamp(d.h + dy));
+  };
+  const up = () => {
+    const d = drag.current; if (!d) return;
+    drag.current = null; document.body.style.userSelect = '';
+    if (!d.moved) setH(h > 10 ? 0 : Math.round(winH() * OPEN_FRAC));
+  };
+
+  const open = h > 10;
+  return html`<div class=${'editor-drawer' + (open ? ' open' : '')}>
+    <div class="grip" title="Slide up for the srgm notation · tap to toggle"
+         onPointerDown=${down} onPointerMove=${move} onPointerUp=${up} onPointerCancel=${up}><span /></div>
+    <div class="drawer-body" style=${`height:${h}px`}>
+      <${EditTools} ragas=${ragas} talas=${talas} raga=${raga} tala=${tala}
+        blank=${blank} onRaga=${onRaga} onTala=${onTala} />
+      <${Editor} value=${text} onInput=${onText} />
+    </div>
+  </div>`;
+}

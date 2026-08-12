@@ -15,7 +15,8 @@ import { createSeamHost } from './core/roll-seam.js';
 import { stepFreq } from './core/shruti.js';
 import { sampleCurve, GAMAKA_SAMPLES } from './core/gamaka-inline.js';
 import { buildRagaSteps } from './core/detect-raga-helper.js';
-import { Toolbar } from './components/Toolbar.js';
+import { Toolbar, ControlBar } from './components/Toolbar.js';
+import { EditorDrawer } from './components/EditorDrawer.js';
 import { Diagnostics } from './components/Diagnostics.js';
 import { RagaDialog } from './components/RagaDialog.js';
 import { TalaDialog } from './components/TalaDialog.js';
@@ -40,6 +41,7 @@ const EXAMPLES_BASE = './examples';
 const EXAMPLES_FALLBACK = ['swaravali', 'hamsa', 'vathapi', 'varavina'];
 const LS_KEY = 'ragamroll.srgm';
 const LS_NAME = 'ragamroll.docname';
+const LS_SWAP = 'ragamroll.rollfirst';   // pane order, once the reader has said which they want
 const DEFAULT_NAME = 'ragamroll';
 
 // Derive a document base-name (no extension) from an opened file / example name.
@@ -649,12 +651,45 @@ function App({ examples }) {
   // notation itself is already on screen in the editor beside it. ---
   const colsRef = useRef(null);
   const wsRef = useRef(null);
-  const [leftPct, setLeftPct] = useState(50);    // editor width fraction of the top row
+  const [editorPct, setEditorPct] = useState(50);   // the NOTATION's share, whichever side it is on
+  // Stacked, the notation is not a pane at all — it is a drawer, and this is how far up
+  // it has been pulled. Shut to start with, so the roll opens with the whole window.
+  const [drawerH, setDrawerH] = useState(0);
+
+  // Two panes, two arrangements. Side by side is this page's shape; stacked is the gamaka
+  // page's, and a window holding half a screen is portrait-shaped, so putting the two up
+  // next to each other to compare them is exactly when this matters.
+  const [stacked, setStacked] = useState(() =>
+    window.matchMedia('(max-aspect-ratio: 1/1), (max-width: 700px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-aspect-ratio: 1/1), (max-width: 700px)');
+    const on = () => setStacked(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+
+  // Which pane comes first. The DEFAULT follows the arrangement — editor on the left side
+  // by side, roll on top when stacked, which is where each already belongs — and a swap
+  // makes the choice explicit and keeps it. null means "still following the arrangement",
+  // so someone who never touches the button gets the right order in both.
+  const [swapPref, setSwapPref] = useState(() => {
+    const v = localStorage.getItem(LS_SWAP); return v === null ? null : v === '1';
+  });
+  const rollFirst = swapPref === null ? stacked : swapPref;
+  const onSwap = useCallback(() => setSwapPref((_) => {
+    const next = !(swapPref === null ? stacked : swapPref);
+    localStorage.setItem(LS_SWAP, next ? '1' : '0');
+    return next;
+  }), [swapPref, stacked]);
+
+  // The divider reports the share of the FIRST column — which is the roll's when the panes
+  // are swapped, hence the flip. Side by side only: stacked has a drawer, not a divider.
   const onVDrag = useCallback((clientX) => {
     const el = colsRef.current; if (!el) return;
     const r = el.getBoundingClientRect();
-    setLeftPct(Math.max(15, Math.min(85, ((clientX - r.left) / r.width) * 100)));
-  }, []);
+    const first = Math.max(15, Math.min(85, ((clientX - r.left) / r.width) * 100));
+    setEditorPct(rollFirst ? 100 - first : first);
+  }, [rollFirst]);
 
   // Headless-guard surface, mirroring draw's window.__rr and pitchy's window.__pv:
   // what the roll is showing and where its playhead is, without scraping pixels.
@@ -669,15 +704,14 @@ function App({ examples }) {
       get playState() { return playState; },
       get tempo() { return loadedTempoRef.current; },
       get loadedTotal() { return loadedTotalRef.current; },
+      // Which arrangement is on screen and which pane leads it. In the deps below, so a
+      // guard that swaps the panes is not told about the layout from before the swap.
+      layout: () => ({ stacked, rollFirst, editorPct, drawerH }),
     };
-  }, [playState]);
+  }, [playState, stacked, rollFirst, editorPct, drawerH]);
 
   return html`
-    <${Toolbar} raga=${raga} tala=${tala} examples=${examples} exampleValue=${exampleValue}
-                onNew=${onNew} onOpen=${onOpen} onExample=${onExample} onOpenLink=${onOpenLink}
-                onOpenRagas=${onOpenRagas} onOpenTalas=${onOpenTalas}
-                onOpenScale=${onOpenScale} scaleActive=${!!scale} scaleLabel=${scaleLabel}
-                timbre=${timbre} onTimbre=${onTimbre} />
+    <${Toolbar} raga=${raga} tala=${tala} scaleLabel=${scaleLabel} />
     ${dialog === 'ragas' && html`<${RagaDialog} ragas=${getRagas()} player=${playerRef.current}
                                          saMidi=${saMidi} droneLevel=${droneLevel} ragaName=${ragaName}
                                          stopMain=${onStop} onClose=${onCloseDialog} />`}
@@ -686,26 +720,19 @@ function App({ examples }) {
                                          stopMain=${onStop} onClose=${onCloseDialog} />`}
     ${dialog === 'scale' && html`<${ScaleDialog} scale=${scale} onApply=${onApplyScale} onClose=${onCloseDialog}
                                                  ragas=${getRagas()} ragaName=${ragaName} />`}
-    <${Transport} state=${playState} canPlay=${noteCount > 0}
-                  onPlay=${onPlay} onPause=${onPause} onStop=${onStop} onRewind=${onRewind}
-                  compositionTempo=${compositionTempo} tempoOverride=${tempoOverride} onTempo=${onTempo} onResetTempo=${onResetTempo}
-                  saPitch=${saPitch} autoSaMidi=${autoSaMidi} onSetSa=${onSetSa}
-                  masterVol=${masterVol} onMasterVol=${onMasterVol}
-                  melodyMuted=${melodyMuted} onToggleMelody=${onToggleMelody}
-                  talaVol=${talaVol} onTalaVol=${onTalaVol} talaMuted=${talaMuted} onToggleTala=${onToggleTala}
-                  droneVol=${droneVol} onDroneVol=${onDroneVol} droneMuted=${droneMuted} onToggleDrone=${onToggleDrone}
-                  onSave=${onSave} onExportMidi=${onExportMidi} onShare=${onShare} shared=${shared} />
     <${Diagnostics} items=${model.diagnostics} />
     <div class="workspace" ref=${wsRef}>
-      <div class="cols" ref=${colsRef}
-           style=${`flex:1 1 0; grid-template-columns:${leftPct}fr 6px ${100 - leftPct}fr`}>
-        <div class="editor-pane">
+      <div class=${'cols' + (stacked ? ' stacked' : '')} ref=${colsRef}
+           style=${`flex:1 1 0; grid-template-rows:1fr; grid-template-columns:` + (stacked ? '1fr'
+             : `${rollFirst ? 100 - editorPct : editorPct}fr 6px ${rollFirst ? editorPct : 100 - editorPct}fr`)}>
+        ${!stacked && html`<div class="editor-pane" style=${`order:${rollFirst ? 3 : 1}`}>
           <${EditTools} ragas=${ragaNames} talas=${talaNames} raga=${ragaName} tala=${talaName}
             blank=${noteCount === 0} onRaga=${onPickRaga} onTala=${onPickTala} />
           <${Editor} value=${text} onInput=${setText} />
-        </div>
-        <${Splitter} orientation="v" onResize=${onVDrag} />
-        <${RollPane} model=${effModel} api=${rollApiRef} onIntent=${onRollIntent} allow=${ROLL_EDITS}
+        </div>`}
+        ${!stacked && html`<${Splitter} orientation="v" onResize=${onVDrag} style="order:2" />`}
+        <${RollPane} style=${`order:${rollFirst ? 1 : 3}`}
+          model=${effModel} api=${rollApiRef} onIntent=${onRollIntent} allow=${ROLL_EDITS}
           sel=${rollSel} zoom=${rollZoom} paint=${rollPaint}
           mode=${rollMode} curveIndex=${curveIdx} onCurveIntent=${onCurveIntent} snapping=${curveSnap}
           gamaka=${rollGamaka} onGamakaIntent=${onGamakaIntent}
@@ -723,8 +750,26 @@ function App({ examples }) {
             hz=${curveHz} span=${curveSpan}
             onSpan=${(d) => setCurveSpan((v) => Math.min(60, Math.max(10, v + d)))} />`} />
       </div>
-
     </div>
+    ${stacked && html`<${EditorDrawer} h=${drawerH} setH=${setDrawerH}
+      text=${text} onText=${setText}
+      ragas=${ragaNames} talas=${talaNames} raga=${ragaName} tala=${talaName}
+      blank=${noteCount === 0} onRaga=${onPickRaga} onTala=${onPickTala} />`}
+    <${Transport} state=${playState} canPlay=${noteCount > 0}
+                  onPlay=${onPlay} onPause=${onPause} onStop=${onStop} onRewind=${onRewind}
+                  compositionTempo=${compositionTempo} tempoOverride=${tempoOverride} onTempo=${onTempo} onResetTempo=${onResetTempo}
+                  saPitch=${saPitch} autoSaMidi=${autoSaMidi} onSetSa=${onSetSa}
+                  masterVol=${masterVol} onMasterVol=${onMasterVol}
+                  melodyMuted=${melodyMuted} onToggleMelody=${onToggleMelody}
+                  talaVol=${talaVol} onTalaVol=${onTalaVol} talaMuted=${talaMuted} onToggleTala=${onToggleTala}
+                  droneVol=${droneVol} onDroneVol=${onDroneVol} droneMuted=${droneMuted} onToggleDrone=${onToggleDrone}
+                  onSave=${onSave} onExportMidi=${onExportMidi} onShare=${onShare} shared=${shared} />
+    <${ControlBar} examples=${examples} exampleValue=${exampleValue}
+                onNew=${onNew} onOpen=${onOpen} onExample=${onExample} onOpenLink=${onOpenLink}
+                onOpenRagas=${onOpenRagas} onOpenTalas=${onOpenTalas}
+                onOpenScale=${onOpenScale} scaleActive=${!!scale}
+                timbre=${timbre} onTimbre=${onTimbre}
+                stacked=${stacked} rollFirst=${rollFirst} onSwap=${onSwap} />
     <${Footer} />
   `;
 }

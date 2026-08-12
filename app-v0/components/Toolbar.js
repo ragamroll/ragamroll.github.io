@@ -1,18 +1,69 @@
 import { html } from '../vendor/htm-preact.js';
+import { useState, useEffect, useCallback } from '../vendor/hooks.module.js';
 import { OpenMenu } from './OpenMenu.js';
 const TIMBRES = [
   ['soft-am', 'Soft'],
   ['bowed-fm', 'Bowed'],
-  ['reed', 'Reed'],
+  ['reed-fm', 'Reed'],
+  ['pluck', 'Pluck'],
 ];
 
-export function Toolbar({ raga, tala, onNew, onOpen, examples, exampleValue, onExample, onOpenLink, onOpenRagas, onOpenTalas, onOpenScale, scaleActive, scaleLabel, timbre, onTimbre }) {
+// Fullscreen, which on a phone is what gets rid of the address bar — the gamaka page's
+// button, and the reason it has one: that bar is 60-odd pixels of a roll you are trying
+// to read. Local state rather than the app's, because it belongs to the BROWSER, not the
+// piece; it listens for fullscreenchange so leaving by Escape is reflected here too.
+// webkit-prefixed fallbacks for older iOS Safari, where the unprefixed call is missing.
+function FullscreenButton() {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const sync = () => setOn(!!(document.fullscreenElement || document.webkitFullscreenElement));
+    document.addEventListener('fullscreenchange', sync);
+    document.addEventListener('webkitfullscreenchange', sync);
+    sync();
+    return () => {
+      document.removeEventListener('fullscreenchange', sync);
+      document.removeEventListener('webkitfullscreenchange', sync);
+    };
+  }, []);
+  const toggle = useCallback(() => {
+    const d = document, el = d.documentElement;
+    if (!d.fullscreenElement && !d.webkitFullscreenElement) {
+      (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el);
+    } else {
+      (d.exitFullscreen || d.webkitExitFullscreen || (() => {})).call(d);
+    }
+  }, []);
+  return html`<button class="fs-btn" onClick=${toggle} aria-pressed=${on}
+    title=${on ? 'Leave fullscreen' : 'Fullscreen — hides the address bar'}
+    aria-label="Fullscreen">${on ? '⤡' : '⛶'}</button>`;
+}
+
+// Two bars, and which one a thing belongs to is decided by what it IS.
+//
+// The head says what page you are on and what the piece is: a name, the two links out,
+// and the raga/tala readout. Nothing here changes anything. Everything that DOES — Open,
+// the browsers, the scale override, the voice, the pane order — is a control, and the
+// controls live at the bottom of the screen with the transport, where a thumb reaches
+// them. That is the gamaka page's shape, and the reason it holds a phone: the roll is
+// the whole middle of the window instead of what is left after the chrome.
+export function Toolbar({ raga, tala, scaleLabel }) {
   return html`<div class="toolbar">
     <span class="app-badge">RagaM-Roll</span>
     <a class="help-link" href="./help.html" target="_blank" rel="noopener"
        title="Help — notation guide &amp; features">?</a>
     <a class="help-link" href="./draw.html"
        title="Draw gamakas on a pitch roll (experimental)">✎</a>
+    <span class="readout">${scaleLabel
+      ? html`<span class="ovr">scale: ${scaleLabel}</span>`
+      : html`raga: ${raga || '—'}`} · tala: ${tala || '—'}</span>
+    <${FullscreenButton} />
+  </div>`;
+}
+
+export function ControlBar({ onNew, onOpen, examples, exampleValue, onExample, onOpenLink,
+  onOpenRagas, onOpenTalas, onOpenScale, scaleActive, timbre, onTimbre,
+  stacked, rollFirst, onSwap }) {
+  return html`<div class="controlbar">
     <${OpenMenu} examples=${examples} exampleValue=${exampleValue} onNew=${onNew} onOpen=${onOpen} onExample=${onExample} onOpenLink=${onOpenLink} />
     <button onClick=${onOpenRagas}>Ragas</button>
     <button onClick=${onOpenTalas}>Talas</button>
@@ -23,8 +74,7 @@ export function Toolbar({ raga, tala, onNew, onOpen, examples, exampleValue, onE
         ${TIMBRES.map(([v, label]) => html`<option key=${v} value=${v}>${label}</option>`)}
       </select>
     </label>
-    <span class="readout">${scaleLabel
-      ? html`<span class="ovr">scale: ${scaleLabel}</span>`
-      : html`raga: ${raga || '—'}`} · tala: ${tala || '—'}</span>
+    ${!stacked && html`<button class="swap-btn" onClick=${onSwap}
+            title=${rollFirst ? 'Swap: put the notation on the left' : 'Swap: put the roll on the left'}>⇄</button>`}
   </div>`;
 }
