@@ -41,6 +41,10 @@ const EXAMPLES_FALLBACK = ['swaravali', 'hamsa', 'vathapi', 'varavina'];
 const LS_KEY = 'ragamroll.srgm';
 const LS_NAME = 'ragamroll.docname';
 const LS_SWAP = 'ragamroll.rollfirst';   // pane order, once the reader has said which they want
+// What happens to a gamaka when its note is dragged to another pitch. The gamaka page's
+// key, deliberately: it is one reader's preference about one kind of edit, and the two
+// pages are the same editor — being asked twice would be the surprise.
+const LS_GMOVE = 'ragamroll.gamakaOnMove';
 const DEFAULT_NAME = 'ragamroll';
 
 // Derive a document base-name (no extension) from an opened file / example name.
@@ -234,6 +238,18 @@ function App({ examples }) {
   // ✎ : shape a gamaka in place, without opening the one-note editor. Mutually exclusive
   // with painting — both take a press on a note and mean different things by it.
   const [rollGamaka, setRollGamaka] = useState(false);
+
+  // Read through a ref by the move handler, which is mounted once and would otherwise
+  // close over whatever this was when the roll was created.
+  const [gmove, setGmove] = useState(() => localStorage.getItem(LS_GMOVE) || 'preserve-pitch');
+  const gmoveRef = useRef(gmove); gmoveRef.current = gmove;
+  // Offered only when the piece has an ornament for it to apply to: a control whose
+  // setting cannot change anything on screen is a question with no consequence.
+  // Read the way roll-model reads it: the inline gamaka is a note-relative array on the
+  // note event itself, not something under props. Asking the wrong shape made this always
+  // false, which hid the control on every piece — including the ones it exists for.
+  const hasCurves = useMemo(() => model.events.some((e) => e.type === 'note' && Array.isArray(e.gamaka) && e.gamaka.length), [model]);
+  const onGmove = useCallback((v) => { setGmove(v); try { localStorage.setItem(LS_GMOVE, v); } catch (_) { /* private mode */ } }, []);
 
   const [rollSel, setRollSel] = useState(null);   // { type:'note'|'rest', tok } | null
   // The roll draws one cell per note of typical length; zoom stretches time on top of
@@ -454,7 +470,10 @@ function App({ examples }) {
     const rm = r.model(); const n = rm.notes.find((x) => x.tok === it.tok);
     if (!n) return;
     if (it.phase !== 'commit') { n.step = it.step; r.render(); return; }
-    const { deriveOctave } = applyMove(n, it.from, ctxOf());
+    // The curve is stored ABSOLUTE, so 'preserve pitch' means leaving it alone — the
+    // notation emits shifted relative deltas — and 'move with note' shifts it by the
+    // same interval, so the deltas stay verbatim and the ornament rides the note.
+    const { deriveOctave } = applyMove(n, it.from, ctxOf(), gmoveRef.current);
     commitRoll({ changed: new Set([it.tok]), deriveOctave });
   }, [commitRoll]);
   const playheadRef = useRef(null);
@@ -627,12 +646,16 @@ function App({ examples }) {
 
   useEffect(() => () => { cancelAnimationFrame(rafRef.current); playerRef.current?.dispose(); }, []);
 
-  // Drone accompanies playback: it starts on Play and stops when the piece ends
-  // (or on Stop). While a piece is going it stays live-adjustable / re-voiced on
-  // Sa change; when stopped it's silent.
+  // Drone accompanies playback: it starts on Play, and stops whenever the music does —
+  // the end of the piece, Stop, or PAUSE. The drone is independent of the transport by
+  // contract (see audio/backend.js), so nothing pauses it unless this says so, and it
+  // used to hold its note through a pause: silence with a drone still sounding over it
+  // is not a pause, it is the piece dropping out. Resuming starts it again, because the
+  // effect runs on every change of state.
+  // While a piece is going it stays live-adjustable / re-voiced on Sa change.
   useEffect(() => {
     const p = playerRef.current;
-    if (playState !== 'stopped' && droneLevel > 0) p.setDrone(droneFreqs(saMidi), droneLevel);
+    if (playState === 'playing' && droneLevel > 0) p.setDrone(droneFreqs(saMidi), droneLevel);
     else p.droneOff();
   }, [playState, droneLevel, saMidi]);
 
@@ -700,6 +723,7 @@ function App({ examples }) {
   useEffect(() => {
     window.__app = {
       roll: () => rollApiRef.current,
+      player: () => playerRef.current,   // for guards that watch what reaches the audio layer
       intents: () => intentLog.current.map((i) => ({ ...i })),
       clearIntents: () => { intentLog.current.length = 0; },
       notes: () => (rollApiRef.current ? rollApiRef.current.model().notes.length : 0),
@@ -734,7 +758,8 @@ function App({ examples }) {
             blank=${noteCount === 0} onRaga=${onPickRaga} onTala=${onPickTala} />
           <${Editor} value=${text} onInput=${setText} />
         </div>`}
-        ${!stacked && html`<${Splitter} orientation="v" onResize=${onVDrag} style="order:2" />`}
+        ${!stacked && html`<${Splitter} orientation="v" onResize=${onVDrag} style="order:2"
+          onSwap=${onSwap} swapTitle=${rollFirst ? 'Swap: put the notation on the left' : 'Swap: put the roll on the left'} />`}
         <${RollPane} style=${`order:${rollFirst ? 1 : 3}`}
           model=${effModel} api=${rollApiRef} onIntent=${onRollIntent} allow=${ROLL_EDITS}
           sel=${rollSel} zoom=${rollZoom} paint=${rollPaint}
@@ -745,8 +770,8 @@ function App({ examples }) {
             canUndo=${canUndo} onUndo=${onRollUndo} zoom=${rollZoom} onZoom=${onRollZoom}
             paint=${rollPaint} onPaint=${() => { setRollPaint((v) => !v); setRollGamaka(false); }}
             gamaka=${rollGamaka} onGamaka=${() => { setRollGamaka((v) => !v); setRollPaint(false); }}
+            gmove=${gmove} onGmove=${hasCurves ? onGmove : null}
             snap=${curveSnap} onSnap=${() => setCurveSnap((v) => !v)}
-            hasSeg=${hasSeg} onClearMarks=${() => { setMarkA(0); setMarkB(0); }}
             mode=${rollMode} onBack=${() => { setCurveIdx(-1); setCurveTok(-1); }}
             hasCurve=${!!(curveIdx >= 0 && effModel && curveNote() && curveNote().curve)}
             canPaste=${!!curveClip} onClear=${onCurveClear} onCopy=${onCurveCopy} onPaste=${onCurvePaste}
@@ -772,8 +797,7 @@ function App({ examples }) {
                 onNew=${onNew} onOpen=${onOpen} onExample=${onExample} onOpenLink=${onOpenLink}
                 onOpenRagas=${onOpenRagas} onOpenTalas=${onOpenTalas}
                 onOpenScale=${onOpenScale} scaleActive=${!!scale}
-                timbre=${timbre} onTimbre=${onTimbre}
-                stacked=${stacked} rollFirst=${rollFirst} onSwap=${onSwap} />
+                timbre=${timbre} onTimbre=${onTimbre} />
     <${Footer} />
   `;
 }

@@ -11,7 +11,7 @@ import { html } from '../vendor/htm-preact.js';
 // state at all.
 export function RollTools({ sel, onDelete, canUndo, onUndo, zoom, onZoom, paint, onPaint,
   mode, onBack, hasCurve, canPaste, onClear, onCopy, onPaste, snap, onSnap, hz, span, onSpan,
-  hasSeg, onClearMarks, gamaka, onGamaka }) {
+  gamaka, onGamaka, gmove, onGmove }) {
   const what = sel ? (sel.type === 'rest' ? 'rest' : 'note') : '';
 
   // Shaping one note is a different job from arranging a piece, so the strip swaps
@@ -57,11 +57,19 @@ export function RollTools({ sel, onDelete, canUndo, onUndo, zoom, onZoom, paint,
       title=${canUndo ? 'Undo the last roll edit (Ctrl-Z)' : 'Nothing to undo — or the notation has been edited since'}>
       ↶ Undo
     </button>
-    <span class=${'rt-ab' + (hasSeg ? ' on' : '')}
-      title="Play part of the piece: drag in the margin at the left to sweep A–B, then drag a tab to nudge an end">
-      <b>A–B</b>
-      <button disabled=${!hasSeg} onClick=${onClearMarks} title="Play the whole piece again">⟲</button>
-    </span>
+    <!-- What a note-move does to that note's gamaka. An ornament is written against the
+         note it decorates, so moving the note can mean either thing honestly: keep the
+         ornament's own pitches where they were, or shift it by the same interval. Named
+         for the GESTURE rather than for the gamaka, because that is what the reader is
+         about to do and what the setting is a modifier of. Shown only when it can matter
+         — a piece with no gamakas has no answer. -->
+    ${onGmove && html`<label class="tog rt-gmove" title="Dragging a note to another pitch: keep the gamaka's own pitches, or shift it by the same interval">
+      note-move
+      <select value=${gmove} onChange=${(e) => onGmove(e.target.value)}>
+        <option value="preserve-pitch">keep pitch</option>
+        <option value="move-with-note">shift gamaka</option>
+      </select>
+    </label>`}
     <span class="rt-zoom" title="Stretch the time axis — a long note is easier to shape when it is tall">
       <button disabled=${zoom <= 1} onClick=${() => onZoom(-0.5)}>−</button>
       <b>${zoom}×</b>
@@ -70,6 +78,6 @@ export function RollTools({ sel, onDelete, canUndo, onUndo, zoom, onZoom, paint,
     <span class="rt-what">${paint
       ? 'drag grid = note · drag margin = rest'
       : gamaka ? 'drag a point · tap = remove · shift-drag = re-trace'
-      : (sel ? `${what} selected` : 'click = select · dbl-click = gamaka · margin = A–B')}</span>
+      : (sel ? `${what} selected` : 'click = select · dbl-click = gamaka')}</span>
   </div>`;
 }

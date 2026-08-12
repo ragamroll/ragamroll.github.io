@@ -78,3 +78,16 @@ export function hitGridHandle(handles, x, y, slop = 18) {
   }
   return null;
 }
+
+// ---- the A-B chip -------------------------------------------------------------------
+//
+// A-B belongs at the head of the lane it is swept in, next to the swara names, rather
+// than in the toolbar: it names the margin the way those name their pitch columns. It is
+// also the button that clears the range, which is why this box is shared with the
+// gesture — a label you can see in one place and press in another is the failure this
+// module exists to prevent.
+export function abChipBox(geo, padL, chipH = 14) {
+  const p = geo.plot;
+  return { x: 2, y: p.y - 6 - chipH, w: Math.max(22, padL - 6), h: chipH };
+}
+export const inBox = (b, x, y) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;

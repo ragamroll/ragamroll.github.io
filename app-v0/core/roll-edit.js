@@ -25,6 +25,7 @@
 // against the gestures it replaces.
 
 import { AB_TAB_H } from './roll-render.js';
+import { abChipBox, inBox } from './roll-geometry.js';
 
 const HANDLE_PX = 10;          // end-cap grab radius; ×1.4 in use, as draw had it
 const LONG_PRESS_MS = 300;     // touch: long-press to grab, so a plain drag still scrolls
@@ -63,6 +64,7 @@ export function createRollEdit(canvas, opts) {
   let grab = null;             // { tok, idx, kind:'move'|'resize', oldStep, oldDur, cur, pid }
   let paint = null;            // { ts, step?, rest?, dur, pid } — a note being drawn
   let ab = null;               // { end:'a'|'b'|'sweep', from, pid } — an A–B range being set
+  let abChipPress = null;      // the pointer holding the A–B chip, which clears the range
   let restGrab = null;         // { tok, oldDur, dur, pid }
   let pressXY = null, pressTimer = 0;
   let justGrabbed = false;     // a real edit happened: swallow the click that follows
@@ -191,9 +193,39 @@ export function createRollEdit(canvas, opts) {
   // pitchy proposes the boundaries, draw corrects them.
   const isSplitClick = (e) => ((e.ctrlKey || e.metaKey) && e.shiftKey) || e.altKey;
 
+  // A-B follows the pointer CONTINUOUSLY, with a magnet to the note boundaries near it.
+  // It used to land on the nearest akshara, which is a coarse grid to aim a phrase with —
+  // the range jumped between beats and could not be put where a note actually begins. The
+  // magnet is measured in PIXELS, so it stays a fixed reach on screen at any zoom.
+  const MAGNET_PX = 10;
+  function abTime(y) {
+    const g = geometry(), t = Math.max(0, g.tAtY(y));
+    const m = model();
+    let best = t, bd = MAGNET_PX;
+    for (let i = 0; i < m.notes.length; i++) {
+      for (const edge of [m.starts[i], m.starts[i] + m.notes[i].dur]) {
+        // Near in PIXELS, so the reach is the same on screen at any zoom — AND within a
+        // quarter of the note itself, so it stays a nudge rather than a grid. Ten pixels
+        // is five length-units at the default zoom, which swallowed most of a note: every
+        // point inside one landed on its edge, which is the snapping this replaces.
+        const dpx = Math.abs(g.Y(edge) - y);
+        if (dpx <= bd && Math.abs(edge - t) <= m.notes[i].dur * 0.25) { bd = dpx; best = edge; }
+      }
+    }
+    return Math.max(0, best);
+  }
+
+  // The A-B chip at the head of the margin: pressing it clears the range. Same box the
+  // renderer draws, from roll-geometry.
+  const onAbChip = (x, y) => allow('range') && inBox(abChipBox(geometry(), geometry().plot.x), x, y);
+
   const onDown = (e) => {
     if (!enabled()) return;
     const { x, y } = at(e);
+
+    // The chip first: it sits in the margin's header, where a press would otherwise be
+    // read as the start of a sweep.
+    if (onAbChip(x, y)) { abChipPress = e.pointerId; own(e.pointerId); return; }
 
     // The MARGIN, left of the grid, when painting is not armed: A–B lives there. Same
     // shape pitchy uses — grabbing a tab moves that end, pressing anywhere else sweeps a
@@ -201,7 +233,7 @@ export function createRollEdit(canvas, opts) {
     // nudge one end: every press would throw both markers away and start over.
     if (!paintArmed() && allow('range') && x < geometry().plot.x) {
       onGrabStart();
-      const gg = geometry(), t = Math.max(0, snapTime(gg.tAtY(y)));
+      const gg = geometry(), t = abTime(y);
       const m = marks();
       const near = (mm) => m.b > m.a && Math.abs(y - gg.Y(mm)) <= AB_TAB_H;
       ab = near(m.a) ? { end: 'a', pid: e.pointerId }
@@ -278,7 +310,7 @@ export function createRollEdit(canvas, opts) {
     if (ab) {
       if (e.pointerId !== ab.pid) return;
       ab.y = y; edgeScroll(y);
-      const t = Math.max(0, snapTime(geometry().tAtY(y)));
+      const t = abTime(y);
       const m = marks();
       // The ends may not meet, let alone cross: a zero-length range plays nothing, and
       // an end dragged onto the other would be indistinguishable from clearing.
@@ -348,6 +380,15 @@ export function createRollEdit(canvas, opts) {
       return;
     }
 
+    if (abChipPress === e.pointerId) {
+      abChipPress = null; release();
+      const m = marks();
+      // Only when there is something to clear: a press on a dark chip should not push a
+      // commit that the host would record as an edit.
+      if (m.b > m.a) { justGrabbed = true; emit({ kind: 'range', phase: 'commit', a: 0, b: 0 }); }
+      return;
+    }
+
     if (ab && e.pointerId === ab.pid) {
       const g = ab; ab = null; stopEdge(); release(); redraw();
       const m = marks();
@@ -395,6 +436,7 @@ export function createRollEdit(canvas, opts) {
     if (!enabled()) return;
     // An OS-interrupted paint must not leave the preview on screen with no gesture left
     // to dismiss it.
+    if (abChipPress === e.pointerId) { abChipPress = null; release(); return; }
     if (ab && e.pointerId === ab.pid) { ab = null; stopEdge(); release(); redraw(); return; }
     if (paint && e.pointerId === paint.pid) { paint = null; release(); redraw(); return; }
     if (restGrab && e.pointerId === restGrab.pid) {
@@ -456,7 +498,7 @@ export function createRollEdit(canvas, opts) {
     scrollBy(edgeDy);
     // The pointer has not moved — the GRID has — so the time under it is a new time, and
     // the range has to be re-emitted from the same y or the sweep stops at the old edge.
-    const t = Math.max(0, snapTime(geometry().tAtY(ab.y)));
+    const t = abTime(ab.y);
     const m = marks(), gap = snapDur(0) || 1;
     if (ab.end === 'sweep') emit({ kind: 'range', phase: 'preview', a: Math.min(ab.from, t), b: Math.max(ab.from, t) });
     else if (ab.end === 'a') emit({ kind: 'range', phase: 'preview', a: Math.min(t, m.b - gap), b: m.b });

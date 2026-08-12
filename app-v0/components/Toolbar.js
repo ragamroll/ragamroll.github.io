@@ -62,8 +62,7 @@ export function Toolbar({ docName, blank }) {
 }
 
 export function ControlBar({ onNew, onOpen, examples, exampleValue, onExample, onOpenLink,
-  onOpenRagas, onOpenTalas, onOpenScale, scaleActive, timbre, onTimbre,
-  stacked, rollFirst, onSwap }) {
+  onOpenRagas, onOpenTalas, onOpenScale, scaleActive, timbre, onTimbre }) {
   return html`<div class="controlbar">
     <${OpenMenu} examples=${examples} exampleValue=${exampleValue} onNew=${onNew} onOpen=${onOpen} onExample=${onExample} onOpenLink=${onOpenLink} />
     <button onClick=${onOpenRagas}>Ragas</button>
@@ -75,7 +74,5 @@ export function ControlBar({ onNew, onOpen, examples, exampleValue, onExample, o
         ${TIMBRES.map(([v, label]) => html`<option key=${v} value=${v}>${label}</option>`)}
       </select>
     </label>
-    ${!stacked && html`<button class="swap-btn" onClick=${onSwap}
-            title=${rollFirst ? 'Swap: put the notation on the left' : 'Swap: put the roll on the left'}>⇄</button>`}
   </div>`;
 }

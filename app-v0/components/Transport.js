@@ -53,8 +53,14 @@ export function Transport({ state, canPlay, onPlay, onPause, onStop,
 
     <span class="transport-play">
       <button title="Back to the start (of the A–B segment, if set)" onClick=${onRewind} disabled=${!canPlay}>⏮</button>
-      <button class="pri" title="Play" onClick=${onPlay}  disabled=${state === 'playing' || !canPlay}>▶</button>
-      <button title="Pause" onClick=${onPause} disabled=${state !== 'playing'}>⏸</button>
+      <!-- ONE button, as on the gamaka page. Play and Pause were never both available:
+           whichever one you could press, the other was greyed out beside it, so the pair
+           spent its width saying what you cannot do. It says Resume rather than Play
+           after a pause, because that is the difference the press will make — playback
+           carries on from where it stopped rather than from the top. -->
+      <button class="pri" onClick=${state === 'playing' ? onPause : onPlay}
+              title=${state === 'playing' ? 'Pause' : state === 'paused' ? 'Resume' : 'Play'}
+              disabled=${state !== 'playing' && !canPlay}>${state === 'playing' ? '⏸' : '▶'}</button>
       <button title="Stop"  onClick=${onStop}  disabled=${state === 'stopped'}>⏹</button>
 
       <span class=${'vol' + (droneMuted ? ' muted' : '')}>

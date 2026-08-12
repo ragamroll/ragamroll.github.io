@@ -289,6 +289,8 @@
     .controlbar { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap;
       padding:.4rem .5rem; border-top:1px solid var(--hair); flex:0 0 auto; }
     .controlbar .timbre { display:inline-flex; align-items:center; gap:.3rem; }
+    /* A–B and its reset used to live in the roll's tool strip; they are the chip at the
+       head of the margin now, drawn on the canvas beside the swara names. */
     /* The notation on a drawer: a grip, and a body whose height IS the drag. Shut is
        height 0 and overflow hidden, so the textarea stays in the document. */
     .editor-drawer { flex:0 0 auto; display:flex; flex-direction:column; padding:0 .5rem; }
@@ -299,7 +301,13 @@
     .editor-drawer .drawer-body { overflow:hidden; display:flex; flex-direction:column; gap:.35rem; }
     .editor-drawer.open .drawer-body { padding-bottom:.35rem; }
     .editor-drawer .editor { flex:1 1 auto; min-height:0; }
-    .split-v { width:6px; background:var(--hair); cursor:col-resize; border-radius:3px; touch-action:none; }
+    .split-v { width:6px; background:var(--hair); cursor:col-resize; border-radius:3px; touch-action:none;
+      position:relative; }
+    /* The swap button rides on the divider it operates. Overflowing the 6px bar is the
+       point — it has to be big enough to press. */
+    .split-v .swap-btn { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+      width:1.55rem; height:1.55rem; padding:0; border-radius:50%; font-size:.8rem;
+      display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:2; }
     .split-h { height:6px; margin:.15rem .5rem; background:var(--hair); cursor:row-resize; border-radius:3px; touch-action:none; }
     .split-v:hover, .split-h:hover { background:#66c; }
     /* The roll is a canvas now, so the pane holds no text and does its own scrolling:
@@ -324,11 +332,10 @@
     .roll-tools > * { flex:0 0 auto; }
     .roll-tools button { font-size:.75rem; padding:.2rem .55rem; border-radius:6px; }
     .roll-tools .rt-what { opacity:.6; flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; }
-    .roll-tools .rt-ab { display:flex; gap:.2rem; align-items:center; }
-    .roll-tools .rt-ab.on { color:var(--amber); }
-    .roll-tools .rt-ab.on button { border-color:var(--amberSoft); color:var(--amber); }
     .roll-tools .rt-hz { font-family:var(--mono); color:var(--teal); min-width:6.5em; }
     .roll-tools .rt-snap { display:flex; gap:.25rem; align-items:center; opacity:.85; }
+    .roll-tools .rt-gmove { gap:.25rem; }
+    .roll-tools .rt-gmove select { font-size:.72rem; padding:.05rem .2rem; }
     .roll-tools .rt-zoom { display:flex; gap:.25rem; align-items:center; }
     .roll-tools .rt-zoom b { font-weight:600; min-width:2.2em; text-align:center; opacity:.8; }
     .roll-holder { flex:1 1 auto; min-width:0; min-height:0; overflow-y:auto; overflow-x:hidden; }

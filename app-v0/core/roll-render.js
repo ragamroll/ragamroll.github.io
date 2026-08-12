@@ -18,7 +18,7 @@
 //
 // Each is handed the geometry, so an editor never recomputes coordinates the roll
 // has already worked out — the two cannot disagree about where a note is.
-import { rollGeometry, gridHandles } from './roll-geometry.js';
+import { rollGeometry, gridHandles, abChipBox } from './roll-geometry.js';
 import { EDO } from './shruti.js';
 
 // Height of the draggable A/B tabs in the left margin. Shared with the gesture layer,
@@ -143,6 +143,24 @@ export function renderRoll(ctx, m, v, hooks = {}) {
     ctx.fillText(gp.label, 0, .5);
     ctx.restore(); ctx.textBaseline = 'alphabetic';
     ctx.font = '11px ' + mono;
+  }
+
+  // A-B, at the head of the margin it is swept in — beside the swara names, which is
+  // what it is: the name of that lane. Lit when a segment is set, because that is when
+  // pressing it does something (it clears the range).
+  if (mode === 'roll' && v.labels !== false) {
+    const box = abChipBox(g, v.pad.l, v.chipH);
+    // Lit only for a REAL segment. The gamaka page says "no segment" as A=0 and B=the
+    // whole piece rather than as a zero-length range, and a chip lit on every piece that
+    // has never been swept says nothing.
+    const on = v.markerB > v.markerA && !(v.markerA <= 0 && v.markerB >= TOTAL);
+    ctx.fillStyle = on ? C.amber : C.panel2;
+    roundRect(ctx, box.x, box.y, box.w, box.h, 4); ctx.fill();
+    ctx.strokeStyle = on ? 'rgba(0,0,0,.25)' : C.hair; ctx.lineWidth = .5; ctx.stroke();
+    ctx.fillStyle = on ? C.panel2 : C.muted;
+    ctx.font = 'bold 10px ' + mono; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('A–B', box.x + box.w / 2, box.y + box.h / 2 + .5);
+    ctx.textBaseline = 'alphabetic'; ctx.font = '11px ' + mono;
   }
 
   const [vLo, vHi] = g.visibleTime;
