@@ -101,6 +101,12 @@ export function createRagamRoll(el, opts = {}) {
       tEnd: draw ? model.starts[view.sel] + model.notes[view.sel].dur : bounds.total,
       palette: palette(), sel: view.sel, selRest: view.selRest, grabIdx: view.grabIdx, playPos: view.playPos,
       markerA: view.markerA, markerB: view.markerB, labels: view.labels,
+      // The gesture layers' in-flight state, which the renderer draws: a paint being
+      // dragged, the margin armed to take one, a freehand stroke in progress, and the
+      // A–B tabs. This object is a WHITELIST — anything not named here is dropped on the
+      // way to the renderer, silently, and the feature simply never appears. Four of
+      // these were passed in by both apps and never arrived.
+      paint: view.paint, paintMode: view.paintMode, drawing: view.drawing, abTabs: view.abTabs,
       chipH: LABEL_CHIP_H, sample: sampleCurve };
   };
 

@@ -11,7 +11,7 @@ import { html } from '../vendor/htm-preact.js';
 // state at all.
 export function RollTools({ sel, onDelete, canUndo, onUndo, zoom, onZoom, paint, onPaint,
   mode, onBack, hasCurve, canPaste, onClear, onCopy, onPaste, snap, onSnap, hz, span, onSpan,
-  hasSeg, onMarkA, onMarkB, onClearMarks }) {
+  hasSeg, onClearMarks }) {
   const what = sel ? (sel.type === 'rest' ? 'rest' : 'note') : '';
 
   // Shaping one note is a different job from arranging a piece, so the strip swaps
@@ -51,9 +51,8 @@ export function RollTools({ sel, onDelete, canUndo, onUndo, zoom, onZoom, paint,
       ↶ Undo
     </button>
     <span class=${'rt-ab' + (hasSeg ? ' on' : '')}
-      title="Play only part of the piece: select a note and mark it as the start (A) or the end (B)">
-      <button disabled=${!sel || sel.type !== 'note'} onClick=${onMarkA}>A</button>
-      <button disabled=${!sel || sel.type !== 'note'} onClick=${onMarkB}>B</button>
+      title="Play part of the piece: drag in the margin at the left to sweep A–B, then drag a tab to nudge an end">
+      <b>A–B</b>
       <button disabled=${!hasSeg} onClick=${onClearMarks} title="Play the whole piece again">⟲</button>
     </span>
     <span class="rt-zoom" title="Stretch the time axis — a long note is easier to shape when it is tall">
@@ -62,7 +61,7 @@ export function RollTools({ sel, onDelete, canUndo, onUndo, zoom, onZoom, paint,
       <button disabled=${zoom >= 8} onClick=${() => onZoom(0.5)}>+</button>
     </span>
     <span class="rt-what">${paint
-      ? 'drag grid = note · drag left margin = rest'
-      : (sel ? `${what} selected` : 'click = select · double-click = shape gamaka')}</span>
+      ? 'drag grid = note · drag margin = rest'
+      : (sel ? `${what} selected` : 'click = select · dbl-click = gamaka · margin = A–B')}</span>
   </div>`;
 }

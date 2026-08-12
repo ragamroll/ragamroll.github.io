@@ -174,7 +174,7 @@ function App({ examples }) {
   // A host that ignores an intent still gets the gesture, so the pane is told what is
   // handled; anything not listed stays genuinely inert rather than starting a drag that
   // can only be cancelled.
-  const ROLL_EDITS = ['move', 'boundary', 'split', 'resize', 'select', 'paint', 'open'];
+  const ROLL_EDITS = ['move', 'boundary', 'split', 'resize', 'select', 'paint', 'open', 'range'];
   // The curve editor: the roll zooms onto ONE note and a drag shapes its gamaka.
   // `curveIdx` is an INDEX because that is what the renderer's one-note layout compares
   // against; it is re-found by token whenever the piece is re-parsed.
@@ -276,19 +276,10 @@ function App({ examples }) {
   // moves earlier — unlike an edge drag, which trades the time with a neighbour.
   // deriveOctave because a dropped token takes its octave marks with it, and the running
   // register every later verbatim note reads has to be re-stated.
-  // The markers are set from the SELECTED note — its start and its end. Draw sets them
-  // by right-clicking the gutter, which needs a gesture and a menu the app has neither
-  // of; a note is a thing already being pointed at, and a phrase is bounded by notes.
-  const selNote = () => {
-    const r = rollApiRef.current; const m = r && r.model();
-    if (!m || !rollSel || rollSel.type !== 'note') return null;
-    const i = m.notes.findIndex((n) => n.tok === rollSel.tok);
-    return i < 0 ? null : { start: m.starts[i], end: m.starts[i] + m.notes[i].dur };
-  };
-  const onMarkA = useCallback(() => { const n = selNote(); if (!n) return;
-    setMarkA(n.start); setMarkB((b) => (b > n.start ? b : n.end)); }, [rollSel]);
-  const onMarkB = useCallback(() => { const n = selNote(); if (!n) return;
-    setMarkB(n.end); setMarkA((a) => (a < n.end ? a : n.start)); }, [rollSel]);
+  // A–B is swept in the MARGIN, the way pitchy's gutter works: press and drag to set a
+  // range, grab a tab to nudge one end. Selecting a note to mark it was a workaround for
+  // not having a gesture, and it could only ever land on note boundaries.
+  const onRange = useCallback((it) => { setMarkA(it.a); setMarkB(it.b); }, []);
 
   const onRollDelete = useCallback(() => {
     if (!rollSel) return;
@@ -372,6 +363,7 @@ function App({ examples }) {
     const r = rollApiRef.current; if (!r) return;
     intentLog.current.push({ ...it }); if (intentLog.current.length > 200) intentLog.current.shift();
     if (it.kind === 'open') { setCurveIdx(it.index); setCurveTok(it.tok); setRollSel(null); return; }
+    if (it.kind === 'range') { onRange(it); return; }
     if (it.kind === 'select') { setRollSel(it.target ? { ...it.target } : null); return; }
     if (it.kind === 'paint') {
       const rm = r.model();
@@ -643,7 +635,7 @@ function App({ examples }) {
           tools=${html`<${RollTools} sel=${rollSel} onDelete=${onRollDelete}
             canUndo=${canUndo} onUndo=${onRollUndo} zoom=${rollZoom} onZoom=${onRollZoom}
             paint=${rollPaint} onPaint=${() => setRollPaint((v) => !v)}
-            hasSeg=${hasSeg} onMarkA=${onMarkA} onMarkB=${onMarkB} onClearMarks=${() => { setMarkA(0); setMarkB(0); }}
+            hasSeg=${hasSeg} onClearMarks=${() => { setMarkA(0); setMarkB(0); }}
             mode=${rollMode} onBack=${() => { setCurveIdx(-1); setCurveTok(-1); }}
             hasCurve=${!!(curveIdx >= 0 && effModel && curveNote() && curveNote().curve)}
             canPaste=${!!curveClip} onClear=${onCurveClear} onCopy=${onCurveCopy} onPaste=${onCurvePaste}

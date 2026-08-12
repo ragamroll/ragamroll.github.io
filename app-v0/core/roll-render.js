@@ -21,6 +21,10 @@
 import { rollGeometry } from './roll-geometry.js';
 import { EDO } from './shruti.js';
 
+// Height of the draggable A/B tabs in the left margin. Shared with the gesture layer,
+// which hit-tests a press against it.
+export const AB_TAB_H = 14;
+
 const roundRect = (ctx, x, y, w, h, r) => {
   r = Math.min(r, w / 2, h / 2);
   ctx.beginPath(); ctx.moveTo(x + r, y);
@@ -300,6 +304,22 @@ export function renderRoll(ctx, m, v, hooks = {}) {
       ctx.strokeStyle = C.amber; ctx.globalAlpha = .8; ctx.setLineDash([6, 4]); ctx.lineWidth = 1.4;
       ctx.beginPath(); ctx.moveTo(v.pad.l, y); ctx.lineTo(p.x + p.w, y); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; };
     mk(v.markerA); mk(v.markerB);
+    // Grabbable TABS in the margin, so one end of a range can be nudged. Without them
+    // every press in the margin throws both markers away and starts the sweep over —
+    // which is the lesson pitchy's gutter already learned. Drawn only where the host
+    // hosts the gesture; draw still has its own DOM handles.
+    if (v.abTabs) {
+      const tab = (mm, label) => {
+        const y = Y(mm); if (y < p.y - AB_TAB_H || y > v.h) return;
+        ctx.fillStyle = C.amber; ctx.globalAlpha = .9;
+        roundRect(ctx, 2, y - AB_TAB_H / 2, v.pad.l - 6, AB_TAB_H, 3); ctx.fill();
+        ctx.globalAlpha = 1; ctx.fillStyle = C.panel2; ctx.textAlign = 'center';
+        ctx.font = 'bold 10px ' + mono;
+        ctx.fillText(label, (v.pad.l - 4) / 2, y + 3.5);
+        ctx.font = '11px ' + mono;
+      };
+      if (hi > lo) { tab(lo, 'A'); tab(hi, 'B'); }
+    }
   }
   if (mode === 'roll' && v.playPos != null) {
     const y = Y(v.playPos);

@@ -35,6 +35,7 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
   const modeRef = useRef(mode), curveRef = useRef(onCurveIntent), snapRef = useRef(snapping), idxRef = useRef(curveIndex);
   modeRef.current = mode; curveRef.current = onCurveIntent; snapRef.current = snapping; idxRef.current = curveIndex;
   const pitchRef = useRef(onCurvePitch); pitchRef.current = onCurvePitch;
+  const marksRef = useRef({ a: markerA, b: markerB }); marksRef.current = { a: markerA, b: markerB };
 
   useEffect(() => {
     const hd = holder.current;
@@ -72,6 +73,7 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
       // the way to every redraw rather than mirrored in app state.
       redraw: () => r.setView({ paint: ed.painting() }).render(),
       painting: () => !!paintRef.current,
+      marks: () => marksRef.current,
       enabled: () => !!intentRef.current && modeRef.current === 'roll',
       allow: (kind) => (allowRef.current ? allowRef.current.includes(kind) : true),
       emit: (it) => { if (intentRef.current) intentRef.current(it); },
@@ -159,7 +161,7 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
   // The A–B band and its two lines are the renderer's; it only has to be told where.
   useEffect(() => {
     const r = roll.current; if (!r) return;
-    r.setView({ markerA, markerB }).render();
+    r.setView({ markerA, markerB, abTabs: true }).render();   // the app hosts the gesture, so it draws the tabs
   }, [markerA, markerB]);
 
   // Arming "+ note" shows the rest band, so the roll has to be told.

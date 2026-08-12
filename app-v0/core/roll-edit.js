@@ -24,6 +24,8 @@
 // editor. Each is the same shape and can follow; keeping them out keeps this reviewable
 // against the gestures it replaces.
 
+import { AB_TAB_H } from './roll-render.js';
+
 const HANDLE_PX = 10;          // end-cap grab radius; ×1.4 in use, as draw had it
 const LONG_PRESS_MS = 300;     // touch: long-press to grab, so a plain drag still scrolls
 const SLOP_PX = 8;             // movement that cancels a pending long-press
@@ -42,14 +44,16 @@ export function createRollEdit(canvas, opts) {
     // never asked for still gets the GESTURE — the grab, the handles, the redraw — and
     // a drag that visibly starts and then does nothing reads as broken rather than as
     // unimplemented. So a host declares what it handles and the rest stay inert.
-    allow = () => true,        // (kind) -> bool   'move'|'boundary'|'resize'|'open'|'split'|'paint'
+    allow = () => true,        // (kind) -> bool   'move'|'boundary'|'resize'|'open'|'split'|'paint'|'range'
     painting: paintArmed = () => false,   // () -> bool   the host's "+ note" toggle
+    marks = () => ({ a: 0, b: 0 }),       // () -> {a,b}  the A–B range, in length-units
     idleTouchAction = 'pan-y',
     onGrabStart = () => {},    // e.g. unlock audio before a drag makes a sound
   } = opts;
 
   let grab = null;             // { tok, idx, kind:'move'|'resize', oldStep, oldDur, cur, pid }
   let paint = null;            // { ts, step?, rest?, dur, pid } — a note being drawn
+  let ab = null;               // { end:'a'|'b'|'sweep', from, pid } — an A–B range being set
   let restGrab = null;         // { tok, oldDur, dur, pid }
   let pressXY = null, pressTimer = 0;
   let justGrabbed = false;     // a real edit happened: swallow the click that follows
@@ -182,6 +186,23 @@ export function createRollEdit(canvas, opts) {
     if (!enabled()) return;
     const { x, y } = at(e);
 
+    // The MARGIN, left of the grid, when painting is not armed: A–B lives there. Same
+    // shape pitchy uses — grabbing a tab moves that end, pressing anywhere else sweeps a
+    // new range, and the two ends may not cross. Without the tabs there is no way to
+    // nudge one end: every press would throw both markers away and start over.
+    if (!paintArmed() && allow('range') && x < geometry().plot.x) {
+      onGrabStart();
+      const gg = geometry(), t = Math.max(0, snapTime(gg.tAtY(y)));
+      const m = marks();
+      const near = (mm) => m.b > m.a && Math.abs(y - gg.Y(mm)) <= AB_TAB_H;
+      ab = near(m.a) ? { end: 'a', pid: e.pointerId }
+        : near(m.b) ? { end: 'b', pid: e.pointerId }
+        : { end: 'sweep', from: t, pid: e.pointerId };
+      if (ab.end === 'sweep') emit({ kind: 'range', phase: 'preview', a: t, b: t });
+      own(e.pointerId); redraw();
+      return;
+    }
+
     // Painting comes FIRST and takes the whole canvas: while it is armed, a press is
     // placing something new, never grabbing what is already there. The two gestures
     // start the same way, so they cannot both be live.
@@ -244,6 +265,19 @@ export function createRollEdit(canvas, opts) {
     if (!enabled()) return;
     const { x, y } = at(e);
 
+    if (ab) {
+      if (e.pointerId !== ab.pid) return;
+      const t = Math.max(0, snapTime(geometry().tAtY(y)));
+      const m = marks();
+      // The ends may not meet, let alone cross: a zero-length range plays nothing, and
+      // an end dragged onto the other would be indistinguishable from clearing.
+      const gap = snapDur(0) || 1;
+      if (ab.end === 'sweep') emit({ kind: 'range', phase: 'preview', a: Math.min(ab.from, t), b: Math.max(ab.from, t) });
+      else if (ab.end === 'a') emit({ kind: 'range', phase: 'preview', a: Math.min(t, m.b - gap), b: m.b });
+      else emit({ kind: 'range', phase: 'preview', a: m.a, b: Math.max(t, m.a + gap) });
+      return;
+    }
+
     if (paint) {
       if (e.pointerId !== paint.pid) return;
       const dur = snapDur(geometry().tAtY(y) - paint.ts);
@@ -303,6 +337,18 @@ export function createRollEdit(canvas, opts) {
       return;
     }
 
+    if (ab && e.pointerId === ab.pid) {
+      const g = ab; ab = null; release(); redraw();
+      const m = marks();
+      // A SWEEP that never moved is a press, not a range: cleared rather than left as a
+      // zero-length segment that would play nothing. A tab drag is never a clear —
+      // dragging an end is how a range is adjusted, not how it is thrown away.
+      justGrabbed = true;
+      const dead = g.end === 'sweep' && !(m.b > m.a);
+      emit({ kind: 'range', phase: 'commit', a: dead ? 0 : m.a, b: dead ? 0 : m.b });
+      return;
+    }
+
     if (paint && e.pointerId === paint.pid) {
       const p = paint; paint = null; release(); redraw();
       // Disarmed mid-drag: abort rather than commit something the user stopped asking
@@ -338,6 +384,7 @@ export function createRollEdit(canvas, opts) {
     if (!enabled()) return;
     // An OS-interrupted paint must not leave the preview on screen with no gesture left
     // to dismiss it.
+    if (ab && e.pointerId === ab.pid) { ab = null; release(); redraw(); return; }
     if (paint && e.pointerId === paint.pid) { paint = null; release(); redraw(); return; }
     if (restGrab && e.pointerId === restGrab.pid) {
       emit({ kind: 'resize', phase: 'cancel', target: 'rest', tok: restGrab.tok, dur: restGrab.oldDur, from: restGrab.oldDur });
@@ -385,7 +432,7 @@ export function createRollEdit(canvas, opts) {
   return {
     hitNote, hitRest, restEdgeAt,
     /** True while a gesture is in flight — the host should not fight it. */
-    busy: () => !!(grab || restGrab || paint),
+    busy: () => !!(grab || restGrab || paint || ab),
     /** The note being dragged, for drawing its handle. -1 when none. */
     grabbedIndex: () => (grab ? grab.idx : -1),
     /** The paint in progress, for the renderer to preview. null when none. */
