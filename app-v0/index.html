@@ -97,9 +97,15 @@
     /* Unified Open ▾ menu */
     .openmenu { position:relative; display:inline-flex; }
     .openmenu-btn { cursor:pointer; }
-    .openmenu-pop { position:absolute; top:100%; left:0; margin-top:.25rem; z-index:900;
+    /* UPWARDS. The controls sit at the foot of the screen now, so a menu that drops from
+       the button hangs off the bottom edge — which is where this one spent a release,
+       with most of the examples unreachable. It opens above its button instead, and its
+       own height is capped so a long list of examples scrolls INSIDE it rather than
+       running past the top of the window. */
+    .openmenu-pop { position:absolute; bottom:100%; left:0; margin-bottom:.3rem; z-index:900;
       background:var(--panel); border:1px solid var(--hair); border-radius:6px; min-width:11rem; padding:.25rem;
-      display:flex; flex-direction:column; box-shadow:0 8px 30px rgba(0,0,0,.5); }
+      display:flex; flex-direction:column; box-shadow:0 -8px 30px rgba(0,0,0,.5);
+      max-height:min(70vh, 30rem); overflow-y:auto; overscroll-behavior:contain; }
     .openmenu-item { display:block; width:100%; text-align:left; background:none; border:0; color:var(--ink);
       padding:.35rem .5rem; border-radius:4px; cursor:pointer; font:inherit; }
     .openmenu-item:hover { background:var(--panel2); }
