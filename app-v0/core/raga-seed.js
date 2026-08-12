@@ -49,15 +49,53 @@ export function chooseSeed(name, draftsMap, extForName, ragasMap) {
 // from a local curation run; a total failure is NOT memoized, so the next pick retries
 // rather than being told forever that there are no drafts.
 let _draftsPromise = null;
-export function loadDrafts(urls = ['./ragas/drafts.json', '../tools/out/drafts.json']) {
+
+/**
+ * The corpus: every raga that has been notated from a recording, what it is, and the
+ * recordings themselves. This is what the file holds now — a v2 document — because the
+ * app's raga browser needs the rows and not only the seeds, and shipping a second file
+ * would have duplicated every srgm string.
+ *
+ * Returns null when there is no corpus (a fresh clone, or a dev tree where the
+ * generator has never run) and when the file is still the old shape.
+ */
+function fetchDoc(urls) {
   if (!_draftsPromise) {
     _draftsPromise = (async () => {
       for (const url of urls) {
         try { const r = await fetch(url); if (r.ok) return await r.json(); } catch (_) { /* try the next */ }
       }
-      _draftsPromise = null;
-      return {};
+      _draftsPromise = null;              // a total failure is not memoized: the next pick retries
+      return null;
     })();
   }
   return _draftsPromise;
+}
+
+export function loadCorpus(urls = ['./ragas/drafts.json', '../tools/out/drafts.json']) {
+  return fetchDoc(urls).then((j) => (j && j.v === 2 ? j : null));
+}
+
+/**
+ * The per-raga seed map, fetched once and shared by every page that offers a raga picker.
+ *
+ * DERIVED from the corpus rather than stored beside it: the seed is the aroha with the
+ * signature's note lines appended, which is assembleSeed, and computing it here means the
+ * file cannot carry a seed that disagrees with the rows it was made from. The old shape —
+ * a plain {raga: srgm} map — is still read, so a stale drafts.json on a cached page keeps
+ * working rather than silently offering no seeds.
+ */
+export function loadDrafts(urls = ['./ragas/drafts.json', '../tools/out/drafts.json']) {
+  return fetchDoc(urls).then((j) => {     // the same one fetch the corpus uses
+    if (!j) return {};
+    if (j.v !== 2) return j;               // the old map, verbatim
+    const map = {};
+    for (const r of j.ragas || []) {
+      const a = (r.rows || []).find((x) => x.kind === 'aroha');
+      if (!a) continue;                    // no aroha -> the picker falls back to the plain scale
+      const sig = (r.rows || []).find((x) => x.kind === 'signature');
+      map[r.raga] = assembleSeed(a.srgm, sig ? sig.srgm : null);
+    }
+    return map;
+  });
 }

@@ -25,7 +25,7 @@ const beatOf = (r) => { const m = r.model(); return m && m.tala ? m.tala.beat : 
 
 const cssvar = (k) => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
 
-export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom = 1, paint,
+export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom = 1, paint, chrome = true,
   mode = 'roll', curveIndex = -1, onCurveIntent, snapping, onCurvePitch, drawSpan = 22,
   markerA = 0, markerB = 0, gamaka, onGamakaIntent }) {
   const holder = useRef(null), content = useRef(null), canvas = useRef(null), gutter = useRef(null);
@@ -38,6 +38,7 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
   modeRef.current = mode; curveRef.current = onCurveIntent; snapRef.current = snapping; idxRef.current = curveIndex;
   const pitchRef = useRef(onCurvePitch); pitchRef.current = onCurvePitch;
   const marksRef = useRef({ a: markerA, b: markerB }); marksRef.current = { a: markerA, b: markerB };
+  const chromeRef = useRef(chrome); chromeRef.current = chrome;
   const gamaRef = useRef(gamaka), gamaIntentRef = useRef(onGamakaIntent);
   gamaRef.current = gamaka; gamaIntentRef.current = onGamakaIntent;
 
@@ -141,7 +142,7 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
       snapTime: (t) => snapToAkshara(t, beatOf(r) || 1),
       beat: () => beatOf(r) || 1,
       measure: () => { const m = r.model(); return m && m.tala ? m.tala.measure : 0; },
-      enabled: () => modeRef.current === 'roll' && !paintRef.current && !gamaRef.current,
+      enabled: () => chromeRef.current && modeRef.current === 'roll' && !paintRef.current && !gamaRef.current,
       redraw: () => r.render(),
       emit: (it) => {
         if (it.which === 'pmin') r.setUser({ min: it.step });
@@ -234,9 +235,12 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
     const r = roll.current; if (!r) return;
     // `handles`: the stretch tabs are drawn in roll mode only — the one-note layout has
     // no grid to widen, and a tab left on it would be a control that does nothing.
-    r.setView({ mode, drawSpan, handles: mode === 'roll' });   // `sel` belongs to the effect below, which owns both meanings
+    // `chrome`: a preview roll draws NO controls. The stretch tabs and the A–B chip are
+    // things to press, and a roll nobody can edit — the raga browser's — must not offer
+    // them. `handles`: roll mode only, since the one-note layout has no grid to widen.
+    r.setView({ mode, drawSpan, handles: chrome && mode === 'roll', abChip: chrome });   // `sel` belongs to the effect below, which owns both meanings
     r.resize();
-  }, [mode, curveIndex, drawSpan]);
+  }, [mode, curveIndex, drawSpan, chrome]);
 
   // The A–B band and its two lines are the renderer's; it only has to be told where.
   useEffect(() => {

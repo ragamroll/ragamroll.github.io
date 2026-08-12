@@ -122,7 +122,7 @@
     .dialog-head { display:flex; justify-content:space-between; align-items:center;
       padding:.6rem .8rem; border-bottom:1px solid var(--hair); }
     .dialog-head button { cursor:pointer; background:var(--hair); color:var(--ink); border:1px solid var(--hair); border-radius:4px; }
-    .dialog-body { overflow:auto; padding:.5rem .8rem; }
+    .dialog-body { position:relative; overflow:hidden; padding:.5rem .8rem; display:flex; flex-direction:column; min-height:0; }
     /* Sticky control strip: stays put while the raga list scrolls beneath it.
        Negative margins + matching padding let its background cover the
        dialog-body padding so scrolled rows never peek above it. Room here for
@@ -207,6 +207,64 @@
     .raga-list .ref-aroha { color:var(--muted); font-size:.78rem; font-family:ui-monospace,monospace; }
     /* Raga browser v2: 22-shruti grid header + per-row X footprint, sharing one
        column template so swaras line up under their shrutis. */
+    /* ---- the raga browser: a card per raga, a row per recording ---- */
+    /* The switchboard diagram, drawn by core/raga-switchboard.js. Its classes carry no
+       colours of their own, so it is painted here in the app's own palette — the wires
+       teal like everything else that means "this is the music". */
+    .rg-kbd { margin:.3rem 0 .1rem; }
+    .rg-kbd .kbd { display:block; width:100%; max-width:420px; height:auto; overflow:visible; }
+    .rg-kbd .kbd .k { fill:var(--panel2); stroke:var(--hair); stroke-width:.6; }
+    .rg-kbd .kbd .k.bk { fill:#3c3c44; }
+    .rg-kbd .kbd .kl { font:600 10px var(--mono); fill:var(--ink); text-anchor:middle; dominant-baseline:central; }
+    .rg-kbd .kbd .kl.onbk { fill:#f0f0f2; }
+    .rg-kbd .kbd .wire path { fill:none; stroke:var(--teal); stroke-width:1.6; stroke-linecap:round; }
+    /* The post is not a wire: nothing travels along it, it is the key's own stem holding
+       the points wires plug into. Dashed and grey, so it is never read as a phrase. */
+    .rg-kbd .kbd .wire path.post { stroke:var(--muted); stroke-width:.9; stroke-dasharray:2 2; opacity:.7; }
+    .rg-kbd .kbd .wire circle.anchor { fill:var(--panel); stroke:var(--muted); stroke-width:1.1; }
+    .rg-kbd .kbd .wire path.ah { fill:var(--teal); stroke:none; }   /* outranks the wire's fill:none */
+    .rg-scroll { overflow:auto; flex:1 1 auto; min-height:0; padding:.25rem .1rem .5rem; }
+    .rg-nocorpus { margin:.4rem .1rem; padding:.5rem .6rem; border:1px solid var(--hair); border-radius:8px;
+      color:var(--muted); font-size:.82rem; }
+    .rg-nocorpus code { background:var(--panel2); padding:.05em .35em; border-radius:4px; }
+    .rg-card { border:1px solid var(--hair); border-radius:10px; padding:.5rem .6rem; margin:.4rem .1rem; }
+    .rg-card.cur { border-color:var(--amberSoft); }
+    .rg-hd { display:flex; align-items:baseline; gap:.5rem; }
+    .rg-name { font-size:1rem; text-transform:capitalize; }
+    .rg-mela { color:var(--muted); font-size:.75rem; }
+    .rg-scale { font-family:var(--mono); font-size:.78rem; color:var(--muted); margin:.1rem 0 .3rem; }
+    .rg-scale .rg-sep { margin:0 .4rem; opacity:.6; }
+    .rg-row { border:1px solid var(--hair); border-radius:9px; padding:.3rem .4rem; margin:.25rem 0; }
+    .rg-row.open { border-color:var(--tealSoft); }
+    /* Play, then the drone right beside it: the two controls a row has, together, so one
+       hand works both without crossing the card. */
+    .rg-rowhd { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+    .rg-play { padding:.15rem .5rem; font-size:.85rem; }
+    .rg-play.on { background:var(--teal); color:#08110d; border-color:var(--teal); }
+    .rg-drone { display:inline-flex; align-items:center; }
+    .rg-drone input[type=range] { width:5rem; accent-color:var(--teal); cursor:pointer; }
+    .rg-kind { font-size:.8rem; }
+    .rg-meta { color:var(--muted); font-size:.72rem; font-family:var(--mono); }
+    /* The dialog SPLITS: the list of ragas above, the roll below. Not an overlay — a
+       floating sheet let the card you were listening to slide underneath it the moment
+       the list was scrolled, which is the one card that has to stay visible. Two parts,
+       each with its own room, and only the top one scrolls. */
+    .rg-sheet { flex:0 0 auto; display:flex; flex-direction:column; height:min(46vh, 340px);
+      background:var(--bg); border-top:1px solid var(--hair);
+      /* Bleeds through the dialog's padding so the rule between the two parts runs the
+         full width — a division of the dialog, not a box sitting inside it. */
+      margin:0 -.8rem -.5rem; padding:0 .3rem .3rem; }
+    /* ONE ROW, always. The list scrolls the played raga out of sight, so the roll says
+       which one it is — and the name is the only thing here that may give ground, because
+       a wrapped header puts the close button on a line of its own. */
+    .rg-sheethd { display:flex; align-items:center; gap:.5rem; padding:.4rem .6rem; flex:0 0 auto;
+      flex-wrap:nowrap; }
+    .rg-sheethd > .rg-play, .rg-sheethd > .rg-drone, .rg-sheethd > button { flex:0 0 auto; }
+    .rg-sheetname { text-transform:capitalize; flex:1 1 auto; min-width:0;
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .rg-sheethd button { font-size:.8rem; padding:.2rem .55rem; }
+    .rg-sheet .pane.roll { flex:1 1 auto; min-height:0; margin:0 .5rem .5rem; }
+    .rg-row.open { border-color:var(--teal); }
     .raga2-box { width:min(96vw, 760px); max-width:96vw; --rr-gutter:11rem; }
     .rr-scroll { overflow:auto; max-height:66vh; border:1px solid var(--panel2); border-radius:6px; }
     .rr-grid, .rr-raga { display:grid;

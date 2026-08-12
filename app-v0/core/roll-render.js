@@ -148,7 +148,7 @@ export function renderRoll(ctx, m, v, hooks = {}) {
   // A-B, at the head of the margin it is swept in — beside the swara names, which is
   // what it is: the name of that lane. Lit when a segment is set, because that is when
   // pressing it does something (it clears the range).
-  if (mode === 'roll' && v.labels !== false) {
+  if (mode === 'roll' && v.labels !== false && v.abChip !== false) {
     const box = abChipBox(g, v.pad.l, v.chipH);
     // Lit only for a REAL segment. The gamaka page says "no segment" as A=0 and B=the
     // whole piece rather than as a zero-length range, and a chip lit on every piece that
