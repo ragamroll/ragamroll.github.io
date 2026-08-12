@@ -1,4 +1,6 @@
 import { BOXES, EDO, defaultShrutiStep } from './shruti.js';
+import { CURVE_KEY } from './gamaka-inline.js';
+import { NOTATION_VERSION } from './parser.js';
 import { formatMark } from './marks.js';
 
 // Sa reference pitch -> MIDI note name. Ragamroll convention: MIDI 60 = C5
@@ -282,8 +284,8 @@ export function buildSrgm(points, duration) {
     `% Generated from an audio pitch contour by pitchy.html\n` +
     `% One Sa note; gamaka = detected pitch relative to the first voiced ` +
     `frame (Sa = ${saRef.toFixed(1)} Hz), ${clean.length} points.\n` +
-    `T120\nRaga=c12,0\nTala=adi,1\nO=5 L=1\n` +
-    `S${len}{gamaka:[${vec}]}\n`
+    `V=${NOTATION_VERSION}\nT120\nRaga=c12,0\nTala=adi,1\nO=5 L=1\n` +
+    `S${len}{${CURVE_KEY}:[${vec}]}\n`
   );
 }
 
@@ -534,7 +536,7 @@ export function notesToSrgm(notes, { includeGamaka = true, ragaName, useRaga, ra
     const len = Math.max(1, Math.round(n.t1 * RES) - qCursor);
     qCursor += len;
     let tok = oct + letter + len;
-    if (gam && gam.length >= 2) tok += `{gamaka:[${gam.map(([u, d]) => `[${u},${d}]`).join(',')}]}`;
+    if (gam && gam.length >= 2) tok += `{${CURVE_KEY}:[${gam.map(([u, d]) => `[${u},${d}]`).join(',')}]}`;
     toks.push({ tok, t: n.t0, u: uStart });
   }
   // Each note is preceded by where it starts — written in every unit that matters,
@@ -561,5 +563,5 @@ export function notesToSrgm(notes, { includeGamaka = true, ragaName, useRaga, ra
     lines.push(tok);
   }
   flush();
-  return `T${tempo}\nRaga=${ragaName || 'c12'},0\nTala=adi,1\nO=5 L=1\n${lines.join('\n')}\n`;
+  return `V=${NOTATION_VERSION}\nT${tempo}\nRaga=${ragaName || 'c12'},0\nTala=adi,1\nO=5 L=1\n${lines.join('\n')}\n`;
 }

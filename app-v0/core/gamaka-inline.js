@@ -102,14 +102,46 @@ const isWs = (c) => c === ' ' || c === '\t' || c === '\n' || c === '\r' || c ===
 // caller keys by that same ordinal; the draw model records it per note. Each
 // counted token's {…} is rewritten to carry the given gamaka (dropped when
 // absent), preserving other attributes (e.g. sahitya) and all surrounding text.
+// ---- the curve attribute's name -------------------------------------------------------
+//
+// It is `gcurve` now and was `gamaka` before. "gamaka" names the MUSICAL IDEA — an
+// ornament — and what the brace actually holds is one way of writing one down: a pitch
+// curve in points. When the second way arrives (a named oscillation, a shorthand for a
+// kampita) it will want the word back.
+//
+// READ BOTH, FOREVER. Every file, every share link and every curated notation written
+// before this says `gamaka`, and a reader who hand-types the old key is not wrong, only
+// old. WRITE ONE: everything this project serialises says `gcurve`, and a piece is
+// stamped V=2 the moment it is written (see notationVersion in core/parser.js).
+export const CURVE_KEY = 'gcurve';
+const LEGACY_CURVE_KEY = 'gamaka';
+
+/** The curve an attribute block carries, under either name, or null. */
+export function curveOf(attrs) {
+  if (!attrs) return null;
+  const c = Array.isArray(attrs[CURVE_KEY]) ? attrs[CURVE_KEY]
+    : (Array.isArray(attrs[LEGACY_CURVE_KEY]) ? attrs[LEGACY_CURVE_KEY] : null);
+  return c && c.length ? c : null;
+}
+
+/**
+ * The attributes to write for a note: its curve under the current name, then everything
+ * else it already carried. BOTH names are dropped first — a file that said `gamaka` must
+ * not come back saying both, which would leave two curves for one note and no rule about
+ * which wins.
+ */
+export function withCurve(attrs, curve) {
+  const rest = { ...(attrs || {}) };
+  delete rest[CURVE_KEY]; delete rest[LEGACY_CURVE_KEY];
+  return (curve && curve.length) ? { [CURVE_KEY]: curve, ...rest } : rest;
+}
+
 export function serializeInline(srcText, curves) {
   return walkTokens(srcText, (t) => {
     if (!t.isNote) return undefined;
     let attrs = {};
     if (t.hadBrace) { try { attrs = parseAttrs(t.body); } catch { attrs = {}; } }
-    const cur = curves[t.ordinal];
-    const rest = { ...attrs }; delete rest.gamaka;
-    const merged = (cur && cur.length) ? { gamaka: cur, ...rest } : rest;
+    const merged = withCurve(attrs, curves[t.ordinal]);
     const s = stringifyAttrs(merged);
     return t.head + (s ? '{' + s + '}' : '');
   });

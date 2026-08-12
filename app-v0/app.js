@@ -27,7 +27,8 @@ import { createPlayer } from './audio/player.js';
 import { scheduleEvents, totalSeconds, midiToFreq } from './audio/schedule.js';
 import { droneFreqs } from './audio/drone.js';
 import { saBaseOf, applyPlaybackPitch } from './core/retune.js';
-import { shareUrl, readSharedSource, sourceFromShareInput } from './core/share.js';
+import { shareUrl, readSharedSource, sourceFromShareInput, parseSharedPayload, mixLevels } from './core/share.js';
+import { inlineLegacyCurves } from './core/share-legacy.js';
 import { Transport } from './components/Transport.js';
 import { Splitter } from './components/Splitter.js';
 import { Footer } from './components/Footer.js';
@@ -175,18 +176,25 @@ function App({ examples }) {
   // success so the menu can close / show an error.
   const onOpenLink = useCallback(async (input) => {
     try {
-      const src = await sourceFromShareInput(input);
-      stopRef.current(); newDoc(); setExampleValue(''); setDocName('shared'); setText(src);
+      openSharedRef.current(await sourceFromShareInput(input), 'shared');
       return true;
     } catch { return false; }
   }, []);
   // Opening a "#pako:" link loads the shared source into the editor, then clears
   // the hash so later edits (persisted to localStorage) aren't overridden on reload.
+  // A share link can be older than this app. Three shapes exist — plain notation, the
+  // gamaka page's {v:2, srgm, mix}, and a legacy {v, src, g} whose gamakas are keyed by
+  // note index — and a link is forever, so all three open. openShared is where that is
+  // decided, once, for the hash and for a pasted link alike.
+  //
+  // Declared as a ref because the two callers are a mount effect and a callback declared
+  // above the state it needs; the levels it sets belong to the transport, further down.
+  const openSharedRef = useRef(null);
   useEffect(() => {
     let cancelled = false;
     readSharedSource().then((src) => {
       if (cancelled || src == null) return;
-      stopRef.current(); newDoc(); setExampleValue(''); setDocName('shared'); setText(src);
+      openSharedRef.current(src, 'shared');
       try { history.replaceState(null, '', location.pathname + location.search); } catch { /* ignore */ }
     });
     return () => { cancelled = true; };
@@ -528,6 +536,24 @@ function App({ examples }) {
   const onDroneVol = useCallback((v) => { setDroneVol(v); setDroneMuted(false); }, []);
   const onToggleDrone = useCallback(() => setDroneMuted((m) => !m), []);
   const droneLevel = droneMuted ? 0 : droneVol;
+
+  // Opening a shared piece, whatever shape the link is in. Declared HERE, below the mixer
+  // levels it sets and the document state it replaces — the two callers reach it through
+  // the ref above, which is what lets this sit where its dependencies are.
+  //
+  // A legacy link's index-keyed gamakas are converted to inline notation on the way in,
+  // so a reader who opens an old link and saves it has a file in today's format without
+  // being told anything about either.
+  openSharedRef.current = (decoded, name) => {
+    const p = parseSharedPayload(decoded);
+    const src = p.kind === 'legacy' ? inlineLegacyCurves(p.srgm, p.curves) : p.srgm;
+    const mix = mixLevels(p.mix);
+    // A link may set a level; it may not decide that you wanted it muted. Setting the
+    // level and clearing the mute is exactly what the sliders do.
+    if (mix.drone != null) { setDroneVol(mix.drone); setDroneMuted(false); }
+    if (mix.tala != null) { setTalaVol(mix.tala); setTalaMuted(false); }
+    stopRef.current(); newDoc(); setExampleValue(''); setDocName(name || 'shared'); setText(src);
+  };
   // Melody instrument voice (applies on the next Play — the synth is rebuilt at load).
   const [timbre, setTimbre] = useState('soft-am');
   const onTimbre = useCallback((t) => setTimbre(t), []);

@@ -1,7 +1,13 @@
 import { noteToMidi } from './tuning.js';
 import { swaraMap, resolveRagaName } from './raga-base.js';
 import { GM } from './midi/gm.js';
-import { parseAttrs } from './gamaka-inline.js';
+import { parseAttrs, curveOf } from './gamaka-inline.js';
+
+/**
+ * The version of the notation this app WRITES. Files without a V= are version 1: the era
+ * when a note's curve was written under `gamaka` rather than `gcurve`.
+ */
+export const NOTATION_VERSION = 2;
 
 // Split into whitespace-delimited tokens, but keep a note's trailing {…} block
 // attached (brace-balanced; whitespace/newlines inside preserved) as one token.
@@ -84,7 +90,7 @@ export function parse(input) {
   let curRagaSwaras = new Set(Object.keys(curSrgAbcMap));
 
   const events = [];
-  const meta = { tempo: null, instrument: null };
+  const meta = { tempo: null, instrument: null, version: 1 };
   const diagnostics = [];
   events.push({ type: 'raga', key: ragaKeyTuple });
   events.push({ type: 'tala', props: talaElem(['adi', '4']) });
@@ -147,7 +153,8 @@ export function parse(input) {
       if (!attrs) {
         diagnostics.push({ token, index: tokenIndex, message: `malformed attributes on "${token}" — playing the plain note` });
       } else {
-        if (Array.isArray(attrs.gamaka)) ev.gamaka = attrs.gamaka;
+        const cv = curveOf(attrs);      // `gcurve`, or `gamaka` from before it was renamed
+        if (cv) ev.gamaka = cv;
         if (typeof attrs.sahitya === 'string') ev.sahitya = attrs.sahitya;
       }
       events.push(ev);
@@ -179,6 +186,28 @@ export function parse(input) {
         case 'L': case 'l': {
           const f = Number(val);
           if (!Number.isNaN(f) && f > 0) curLengthMod = f;
+          break;
+        }
+        // V= — which version of THIS NOTATION the file is written in. Absent means 1, the
+        // era when a note's curve was written under `gamaka`; 2 is `gcurve`, which is what
+        // anything written from now on says. A version is not a gate: the reader accepts
+        // both keys whatever the file claims, because a hand-typed file may say either and
+        // neither is wrong. It is a stamp — so a LATER change with two possible readings
+        // (the deferred one to how >/< octave marks scope) can be told apart from a file
+        // written before it.
+        case 'V': case 'v': {
+          const vv = decodeInt(val);
+          if (Number.isNaN(vv) || vv < 1) {
+            diagnostics.push({ token, index: tokenIndex, message: `notation version "${val}" is not a number — reading this as version 1` });
+            break;
+          }
+          meta.version = vv;
+          // A file from the future is read as best we can rather than refused: every
+          // version so far has been a superset, and refusing would lose a piece over a
+          // number. The diagnostic is what says the reading may be incomplete.
+          if (vv > NOTATION_VERSION) {
+            diagnostics.push({ token, index: tokenIndex, message: `notation version ${vv} is newer than this app understands (${NOTATION_VERSION}) — reading it anyway` });
+          }
           break;
         }
         case 'O': case 'o': {

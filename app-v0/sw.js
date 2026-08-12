@@ -1,4 +1,4 @@
-const CACHE = 'ragamroll-1888411';
+const CACHE = 'ragamroll-ad1f204';
 const ASSETS = [
   './', './index.html', './help.html', './draw.html', './draw.js', './pitchy.html', './app.js', './worker.js', './version.js', './manifest.webmanifest',
   './vendor/preact.module.js', './vendor/hooks.module.js', './vendor/htm.module.js', './vendor/htm-preact.js',
@@ -10,7 +10,7 @@ const ASSETS = [
   './components/RagaDialog.js',
   './audio/schedule.js', './audio/drone.js', './audio/backend.js', './audio/backends/tone.js', './audio/backends/webaudio.js', './audio/player.js',
   './core/parser.js', './core/gamaka-inline.js', './core/gamaka-curve.js', './core/tuning.js', './core/raga-base.js', './core/raga-db.json', './core/reference.js',
-  './core/shruti.js', './core/melakarta.js', './core/tala-preview.js', './core/raga-shruti.js', './core/share.js',
+  './core/shruti.js', './core/melakarta.js', './core/tala-preview.js', './core/raga-shruti.js', './core/share.js', './core/share-legacy.js',
   './core/raga-ext.js', './core/raga-preview.js', './core/retune.js',
   './core/detect.js', './core/detect-raga-helper.js', './core/note-edit.js', './core/raga-seed.js', './core/raga-switchboard.js',
   './core/roll-geometry.js', './core/roll-render.js', './core/roll-model.js', './core/ragamroll.js', './core/roll-audio.js', './core/marks.js', './core/roll-edit.js', './core/curve-edit.js', './core/gamaka-edit.js', './core/grid-stretch.js', './core/roll-pan.js', './core/note-split.js', './core/roll-seam.js',

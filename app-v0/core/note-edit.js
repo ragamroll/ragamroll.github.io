@@ -4,8 +4,9 @@
 // hand-authored annotations (comments, sahitya, whitespace, directives) by token
 // ordinal. Deriving octave from the absolute model — instead of patching the
 // relative marks in place — removes octave-boundary ripple at the root.
-import { walkTokens, parseAttrs, stringifyAttrs } from './gamaka-inline.js';
+import { walkTokens, parseAttrs, stringifyAttrs, withCurve, curveOf } from './gamaka-inline.js';
 import { stepToSwara } from './detect.js';
+import { NOTATION_VERSION } from './parser.js';
 import { EDO } from './shruti.js';
 
 export function octMarks(dOct) {
@@ -41,12 +42,10 @@ function noteToken(n, { verbatimOct, verbatimBody, deriveOctave, curL, curOct, c
   const marks = deriveOctave ? octMarks(octave - curOct.v) : verbatimOct;
   if (deriveOctave) curOct.v = octave;
   const len = Math.max(1, Math.round(n.dur / curL.v));
-  // Attributes: keep non-gamaka attrs from the original body; re-derive gamaka.
+  // Attributes: keep the note's other attrs from the original body; re-derive its curve.
   let attrs = {};
   if (verbatimBody) { try { attrs = parseAttrs(verbatimBody); } catch { attrs = {}; } }
-  const rest = { ...attrs }; delete rest.gamaka;
-  const cur = (n.curve && n.curve.length) ? relCurve(n.curve, n.step) : null;
-  const merged = cur ? { gamaka: cur, ...rest } : rest;
+  const merged = withCurve(attrs, (n.curve && n.curve.length) ? relCurve(n.curve, n.step) : null);
   const s = stringifyAttrs(merged);
   const lenStr = len > 1 ? len : '';
   return marks + letter + lenStr + (s ? '{' + s + '}' : '');
@@ -60,6 +59,44 @@ function noteToken(n, { verbatimOct, verbatimBody, deriveOctave, curL, curOct, c
 // saved notation and two adjacent deletes widen it twice. srgm is whitespace-separated,
 // so collapsing a run of spaces changes nothing except how it reads — except inside a
 // COMMENT, where the spacing is someone's text and not ours to tidy.
+/**
+ * Stamp the notation version onto a piece this app has written.
+ *
+ * Every edit re-serialises the notes it touched, and those come back with their curve
+ * under `gcurve` — so the file IS version 2 the moment anything is committed to it, and
+ * saying so is not optional. A file that already declares a version keeps what it says,
+ * including a version from the future: this app has rewritten some of its notes, not
+ * decided what the rest of it means.
+ *
+ * The directive goes at the very top, above the raga, because it says how to read
+ * everything below it — including the raga line.
+ */
+export function stampVersion(src, version = NOTATION_VERSION) {
+  if (/(^|\n)\s*[Vv]=/.test(src)) return src;
+  return `V=${version}\n` + src;
+}
+
+/**
+ * Bring older notation up to the current version: the curve attribute renamed, and the
+ * version stamped. Both are the file saying what it already said in today's words.
+ *
+ * It goes through the notation's own tokeniser rather than a text substitution, because
+ * the word "gamaka" appears in COMMENTS all over the curated corpus, describing what was
+ * heard. Only a note's attribute block is rewritten.
+ *
+ * READING does not need this — the parser accepts either name whatever the file says. It
+ * is for the files and fixtures that should be WRITTEN the current way.
+ */
+export function migrateNotation(src) {
+  return stampVersion(walkTokens(String(src), (t) => {
+    if (!t.isNote || !t.hadBrace) return undefined;
+    let attrs;
+    try { attrs = parseAttrs(t.body); } catch { return undefined; }   // leave what cannot be read
+    const a = stringifyAttrs(withCurve(attrs, curveOf(attrs)));
+    return t.head + (a ? '{' + a + '}' : '');
+  }));
+}
+
 export function tidySpaces(src) {
   return src.split('\n')
     .map((l) => (l.trimStart().startsWith('%') ? l : l.replace(/[ \t]{2,}/g, ' ').replace(/[ \t]+$/, '')))
@@ -156,7 +193,7 @@ export function applyMove(note, oldStep, ctx, mode = 'preserve-pitch') {
 export function applyEdit(srcText, { model, changed = new Set(), inserts = new Map(),
   deletes = new Set(), deriveOctave = false, ctx, restDurs } = {}) {
   const out = serializeModel(srcText, { model, changed, inserts, deletes, deriveOctave, ctx, restDurs });
-  return deletes.size ? tidySpaces(out) : out;
+  return stampVersion(deletes.size ? tidySpaces(out) : out);
 }
 
 export function serializeModel(srcText, { model, changed, inserts, deletes, deriveOctave, ctx, restDurs }) {
