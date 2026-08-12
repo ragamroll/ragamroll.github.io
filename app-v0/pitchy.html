@@ -361,7 +361,7 @@
     // offline and the shippable raga bundle needs no network. Update: re-fetch from
     // https://esm.sh/pitchy@4.1.0/es2022/pitchy.mjs + its fft.js dep, rewrite the import.
     import { PitchDetector } from './vendor/pitchy.mjs';
-    // Local, same-origin: pack the generated srgm into a #pako: link that draw.html opens.
+    // Local, same-origin: pack the generated srgm into a #pako: link that the app opens.
     import { encodeShareToken, decodeShareToken } from './core/share.js';
     // The 22 shrutis (53-EDO steps in an octave) for the pitch-axis grid.
     import { BOXES, EDO, nameForSlot, defaultShrutiStep, stepFreq, P_STEP } from './core/shruti.js';
@@ -2423,7 +2423,7 @@
       const srgm = (notationDirty ? $('notation').value.trim() : notesToSrgm(true)) || buildSrgm(cleanedPoints, audioDuration);
       if (!srgm) { statusMsg.textContent = 'Draw some notes (or load audio) first.'; return; }
       const token = await encodeShareToken(srgm);
-      window.open('draw.html#' + token, '_blank');
+      window.open('index.html#' + token, '_blank');
     });
 
     // ---- Playhead synced to audio playback ----------------------------------

@@ -125,6 +125,7 @@ function App({ examples }) {
   // the new (misleading) panes — so stop playback on any content swap. onStop is
   // defined later; reach it through a ref that's kept current below.
   const stopRef = useRef(() => {});
+  const playRef = useRef(() => {});
   const onOpen = useCallback(async (file) => { stopRef.current(); newDoc(); setExampleValue(''); setDocName(baseName(file.name)); setText(await file.text()); }, []);
   // Blank / New: the skeleton draw writes — a raga, a tala, an octave and a length, and
   // no notes. A piece with no notes is what gives the roll its WIDE grid (two avartanas
@@ -628,10 +629,13 @@ function App({ examples }) {
   const onRewind = useCallback(() => {
     const at = hasSeg ? markA : 0;
     const wasPlaying = playState === 'playing';
-    onStop();
+    onStop();                     // also clears a PAUSE: a rewind is not a resume point
     playheadRef.current = at;
     if (rollApiRef.current) rollApiRef.current.setPlayhead(at).render();
-    if (wasPlaying) setPlayState('playing');
+    // Playing, it plays AGAIN from there. Setting the state back to 'playing' was a lie:
+    // onStop had already stopped the audio and cancelled the frame loop, so the app said
+    // it was playing while nothing sounded and the playhead sat still.
+    if (wasPlaying) playRef.current();
   }, [hasSeg, markA, playState, onStop]);
 
   stopRef.current = onStop;   // let onOpen/onExample (defined earlier) stop playback on a content swap
@@ -675,6 +679,12 @@ function App({ examples }) {
       onStop();
     }
   }, [effModel, playState, loop, onStop, talaLevel, scale, saBase, shift, hasSeg, markA, markB]);
+
+  // Same reason as stopRef, and the same trap: onRewind is declared ABOVE onPlay and has
+  // to reach it, so the assignment goes HERE — below onPlay — not up beside stopRef.
+  // Reading `onPlay` before its own line runs is a temporal-dead-zone crash that takes the
+  // app down before it renders, which this file has now paid for five times.
+  playRef.current = onPlay;
 
   const onPause = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
