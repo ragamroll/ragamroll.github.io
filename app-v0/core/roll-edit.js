@@ -177,6 +177,22 @@ export function createRollEdit(canvas, opts) {
     redraw();
   }
 
+  // ARM, don't grab — on touch. A finger that lands and drags is SCROLLING; only a finger
+  // that stays put for a moment is reaching for the thing under it.
+  //
+  // This rule already existed, for moving a note, and the edge grabs jumped ahead of it
+  // and started on contact. A rest spans the whole width, so its edge is a full-width
+  // strip and any touch near it resized the silence instead of scrolling the piece; a
+  // note's edge band is a few pixels, which a fingertip covers whole. One rule for every
+  // grab now, and the mouse keeps its immediacy — a pointer is precise and a click is
+  // not a scroll.
+  function arm(e, x, y, run) {
+    if (e.pointerType === 'mouse') { run(); return; }
+    pressXY = { x, y, id: e.pointerId, run };
+    clearTimeout(pressTimer);
+    pressTimer = setTimeout(() => { if (pressXY && pressXY.run) pressXY.run(); }, LONG_PRESS_MS);
+  }
+
   // Undo an in-flight change without recording anything.
   function revert(g) {
     if (!g) return;
@@ -282,9 +298,9 @@ export function createRollEdit(canvas, opts) {
     // An edge the host cannot act on is not an edge: fall through, so the press lands
     // on the note itself rather than starting a drag that can only be cancelled.
     const ne = allow('boundary') ? noteEdgeAt(x, y) : null;
-    if (ne) { startGrab(ne.i, y, e.pointerId, ne.kind, e.shiftKey); return; }
+    if (ne) { arm(e, x, y, () => startGrab(ne.i, y, e.pointerId, ne.kind, e.shiftKey)); return; }
     const r = allow('resize') ? restEdgeAt(x, y) : null;
-    if (r) { startRestGrab(r, e.pointerId, y); return; }
+    if (r) { arm(e, x, y, () => startRestGrab(r, e.pointerId, y)); return; }
 
     // Defensive: a missed pointerup/cancel (an OS interruption) can leave a stale
     // grab from a previous touch. Undo it before starting a new press, or an early
@@ -296,11 +312,9 @@ export function createRollEdit(canvas, opts) {
 
     const i = hitNote(x, y);
     if (i < 0) return;                                     // empty grid: let it scroll
-    pressXY = { x, y, id: e.pointerId };
     clearTimeout(pressTimer);
     if (!allow('move')) { pressXY = null; return; }         // nothing to drag a note into
-    if (e.pointerType === 'mouse') { startGrab(i, y, e.pointerId, null, e.shiftKey); return; }   // desktop: no long-press
-    pressTimer = setTimeout(() => { if (pressXY) startGrab(i, y, e.pointerId, null, e.shiftKey); }, LONG_PRESS_MS);
+    arm(e, x, y, () => startGrab(i, y, e.pointerId, null, e.shiftKey));
   };
 
   const onMove = (e) => {

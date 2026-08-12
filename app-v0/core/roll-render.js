@@ -216,16 +216,11 @@ export function renderRoll(ctx, m, v, hooks = {}) {
     const h = Math.max(2, y1 - y0);
     ctx.fillStyle = selNow ? 'rgba(216,161,63,.20)' : 'rgba(154,146,128,.16)';
     ctx.fillRect(p.x, y0, p.w, h);
-    // Hatched, not just tinted. A flat wash of this weight reads as one more grid
-    // band among the tala's own; diagonals read as "nothing here", which is what a
-    // rest is, and cannot be confused with a note however faint the tint.
-    ctx.save();
-    ctx.beginPath(); ctx.rect(p.x, y0, p.w, h); ctx.clip();
-    ctx.strokeStyle = selNow ? C.amber : C.muted;
-    ctx.globalAlpha = selNow ? .35 : .22; ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let d = -h; d < p.w; d += 9) { ctx.moveTo(p.x + d, y1); ctx.lineTo(p.x + d + h, y0); }
-    ctx.stroke(); ctx.restore(); ctx.globalAlpha = 1;
+    // Tint and edges, no hatching. The diagonals were there to stop a flat wash reading
+    // as one more band among the tala's own — but the roll now draws 53 pitch lines, the
+    // shrutis, the octave bands and the tala's accents, and another set of strokes over
+    // all of that was one pattern too many. The tint plus the dashed boundaries say
+    // "nothing here" on a grid this busy.
     ctx.strokeStyle = selNow ? C.amber : C.muted;
     ctx.globalAlpha = selNow ? .9 : .35; ctx.lineWidth = selNow ? 1.6 : 1;
     ctx.setLineDash([5, 4]);

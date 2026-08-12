@@ -23,6 +23,7 @@ import { pointsToAnchors, addAnchor, removeAnchor, moveAnchor } from './core/gam
 import { createCurveEdit } from './core/curve-edit.js';
 import { createGamakaEdit } from './core/gamaka-edit.js';
 import { createGridStretch } from './core/grid-stretch.js';
+import { createRollPan } from './core/roll-pan.js';
 import { buildSequence } from './core/midi/sequence.js';
 import { writeSMF } from './core/midi/smf.js';
 import { serializeModel, applyEdit, applyMove, paintEdit, snapToRagaRow, snapToAkshara, placePaint, splitSpans, octMarks } from './core/note-edit.js';
@@ -261,7 +262,9 @@ const rollEdit = createRollEdit(cv, {
   snapTime: (t) => snapToAkshara(t, talaBeat || 1),
   marks: () => ({ a: markerA, b: markerB }),
   redraw: () => render(),
-  enabled: () => mode === 'roll' && !gamakaMode,
+  // NOT while a pan is in flight: that finger is dragging the paper, not pressing on
+  // the note under it.
+  enabled: () => mode === 'roll' && !gamakaMode && !rollPan.busy(),
   painting: () => paintMode,
   idleTouchAction: ROLL_TOUCH_ACTION,
   // The only scrolling a gesture may cause: an A–B sweep dragged past the top or bottom
@@ -389,6 +392,16 @@ const gamakaEdit = createGamakaEdit(cv, {
     scheduleShare();
   },
 });
+// Panning the pitch axis: one finger, sideways. Time already pans — the roll scrolls and
+// the browser owns that gesture with its own momentum — and pitch could not travel at all.
+const rollPan = createRollPan(cv, {
+  geometry: () => geo(),
+  bounds: () => ({ stepMin, stepMax }),
+  setPitchView: (v) => { roll.setPitchView(v); },
+  enabled: () => mode === 'roll' && !paintMode && !gamakaMode,
+  redraw: () => render(),
+});
+
 // Discoverability: hovering a stretch-handle shows a resize cursor (idle only — a cursor
 // that changes mid-drag says the drag has been taken over).
 cv.addEventListener('pointermove', e=>{ if (mode!=='roll' || gridStretch.busy() || rollEdit.busy()) return;

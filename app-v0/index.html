@@ -392,11 +392,27 @@
     .roll-tools .rt-what { opacity:.6; flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; }
     .roll-tools .rt-hz { font-family:var(--mono); color:var(--teal); min-width:6.5em; }
     .roll-tools .rt-snap { display:flex; gap:.25rem; align-items:center; opacity:.85; }
+    /* On a phone the strip has to hold seven controls across ~340px, so the padding
+       goes before anything gets clipped. */
+    @media (max-width:430px) {
+      .roll-tools { gap:.3rem; padding:.25rem .25rem; }
+      .roll-tools button { padding:.2rem .4rem; }
+      .roll-tools .rt-gmove select { padding:.05rem .1rem; }
+    }
     .roll-tools .rt-gmove { gap:.25rem; }
     .roll-tools .rt-gmove select { font-size:.72rem; padding:.05rem .2rem; }
     .roll-tools .rt-zoom { display:flex; gap:.25rem; align-items:center; }
     .roll-tools .rt-zoom b { font-weight:600; min-width:2.2em; text-align:center; opacity:.8; }
+    /* The roll's body: the scroll window, with the time-zoom slider down its right edge.
+       The pitch-zoom slider sits under both, along the bottom of the pane. */
+    .roll-body { flex:1 1 auto; min-height:0; display:flex; align-items:stretch; }
     .roll-holder { flex:1 1 auto; min-width:0; min-height:0; overflow-y:auto; overflow-x:hidden; }
+    .roll-zt { flex:0 0 auto; width:1.4rem; margin:.2rem .1rem; writing-mode:vertical-lr; direction:rtl;
+      accent-color:var(--teal); cursor:pointer; touch-action:none; }
+    /* Reversed: dragging RIGHT narrows the range, which is zooming IN — the direction a
+       reader expects a zoom control to travel. */
+    .roll-zp { flex:0 0 auto; height:1.2rem; margin:.1rem .5rem .2rem 2.6rem; direction:rtl;
+      accent-color:var(--teal); cursor:pointer; touch-action:none; }
     .roll-holder > div { position:relative; width:100%; }
     /* The margin strip — see RollPane. Transparent, above the canvas, and the one place
        on the roll where a touch may not start a scroll. */

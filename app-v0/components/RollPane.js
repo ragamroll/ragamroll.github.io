@@ -1,11 +1,12 @@
 import { html } from '../vendor/htm-preact.js';
-import { useRef, useEffect } from '../vendor/hooks.module.js';
+import { useRef, useEffect, useState } from '../vendor/hooks.module.js';
 import { createRagamRoll } from '../core/ragamroll.js';
 import { buildRollModel } from '../core/roll-model.js';
 import { createRollEdit } from '../core/roll-edit.js';
 import { createCurveEdit } from '../core/curve-edit.js';
 import { createGamakaEdit } from '../core/gamaka-edit.js';
 import { createGridStretch } from '../core/grid-stretch.js';
+import { createRollPan } from '../core/roll-pan.js';
 import { sampleCurve } from '../core/gamaka-inline.js';
 import { snapToRagaRow, snapToAkshara } from '../core/note-edit.js';
 import { EDO } from '../core/shruti.js';
@@ -25,7 +26,7 @@ const beatOf = (r) => { const m = r.model(); return m && m.tala ? m.tala.beat : 
 
 const cssvar = (k) => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
 
-export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom = 1, paint, chrome = true,
+export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom = 1, onSetZoom, paint, chrome = true,
   mode = 'roll', curveIndex = -1, onCurveIntent, snapping, onCurvePitch, drawSpan = 22,
   markerA = 0, markerB = 0, gamaka, onGamakaIntent }) {
   const holder = useRef(null), content = useRef(null), canvas = useRef(null), gutter = useRef(null);
@@ -39,6 +40,17 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
   const pitchRef = useRef(onCurvePitch); pitchRef.current = onCurvePitch;
   const marksRef = useRef({ a: markerA, b: markerB }); marksRef.current = { a: markerA, b: markerB };
   const chromeRef = useRef(chrome); chromeRef.current = chrome;
+  const zoomRef = useRef(zoom); zoomRef.current = zoom;
+  const setZoomRef = useRef(onSetZoom); setZoomRef.current = onSetZoom;
+  // The slider shows the span the roll is ACTUALLY drawing, so a pan or a stretch-tab
+  // drag moves it too rather than leaving it describing a range nobody is looking at.
+  const [pitchSpan, setPitchSpan] = useState(0);
+  // The pitch window as the READER set it — centre and span, in floats — kept apart from
+  // what the roll draws, which is rounded to whole steps. Rounding is for drawing; a
+  // control that reads its own rounded output back accumulates the error.
+  const pitchWin = useRef(null);          // { c, span } | null — null = the grid's own bounds
+  const naturalPitch = useRef({ c: 0, span: 1 });   // what the grid gives this piece
+  const returnTo = useRef(null);          // the moment to come back to when the editor closes
   const gamaRef = useRef(gamaka), gamaIntentRef = useRef(onGamakaIntent);
   gamaRef.current = gamaka; gamaIntentRef.current = onGamakaIntent;
 
@@ -66,7 +78,7 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
     // however many octaves are drawn; snapToRagaRow rebuilds the octave from the step
     // it is given, so it must be handed single-octave classes or the octave counts
     // twice.
-    let ed, ced;
+    let ed, ced, pan;
     ed = createRollEdit(canvas.current, {
       // The canvas and the no-pan margin strip are siblings; their parent is where a
       // press on either one can be heard.
@@ -86,7 +98,10 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
       // the roll gestures run too started a note-move alongside the trace — two commits
       // in one gesture, the second re-serialising against notation the first had already
       // replaced. Draw has always had this guard; the app was missing it.
-      enabled: () => !!intentRef.current && modeRef.current === 'roll' && !gamaRef.current,
+      // NOT while a pan is in flight: that finger is dragging the paper, not pressing
+      // on the note under it.
+      enabled: () => !!intentRef.current && modeRef.current === 'roll' && !gamaRef.current
+        && !(pan && pan.busy()),
       allow: (kind) => (allowRef.current ? allowRef.current.includes(kind) : true),
       // The only scrolling a gesture is allowed to cause: an A–B sweep dragged past the
       // top or bottom of the window, so a range longer than the window can be marked.
@@ -167,6 +182,23 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
         r.render();
       },
     });
+    // Panning the pitch axis: one finger, sideways. Time already pans — the roll scrolls
+    // and the browser owns that gesture — and pitch could not travel at all, which only
+    // became a problem once the axis could be zoomed into.
+    pan = createRollPan(canvas.current, {
+      geometry: () => r.geometry(),
+      bounds: () => r.bounds(),
+      setPitchView: (v) => {
+        // A pan moves the centre and keeps the span; carried in floats for the same
+        // reason the zoom carries it.
+        pitchWin.current = { c: (v.min + v.max) / 2, span: v.max - v.min };
+        r.setPitchView(v); setPitchSpan(Math.round(v.max - v.min));
+      },
+      enabled: () => chromeRef.current && modeRef.current === 'roll'
+        && !paintRef.current && !gamaRef.current && !ed.busy(),
+      redraw: () => r.render(),
+    });
+
     // Discoverability: a resize cursor over a tab, and only while nothing else is in
     // flight — a cursor that changes mid-drag says the drag has been taken over.
     const onHover = (e) => {
@@ -184,27 +216,44 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
     ro.observe(hd);
     r.resize(); fitGutter();
     return () => { hd.removeEventListener('scroll', onScroll); canvas.current && canvas.current.removeEventListener('pointermove', onHover);
-      ed.destroy(); ced.destroy(); ged.destroy(); gst.destroy(); ro.disconnect(); roll.current = null; if (api && api.current === r) api.current = null; };
+      ed.destroy(); ced.destroy(); ged.destroy(); gst.destroy(); pan.destroy(); ro.disconnect(); roll.current = null; if (api && api.current === r) api.current = null; };
   }, []);
 
   useEffect(() => {
     const r = roll.current; if (!r || !model) return;
     try { r.setModel(buildRollModel(model)); } catch { return; }   // a half-typed piece: keep the last good roll
     r.setPlayhead(null).resize();
+    // The pitch slider describes the axis as DRAWN, so it starts wherever the piece put
+    // it — and follows a stretch tab or a new piece rather than describing a range nobody
+    // is looking at.
+    // What the grid gives THIS piece: the widest the slider goes, and where the axis
+    // returns to. Without it there is no way back — a zoomed-in reader who cannot find
+    // the notes again has lost the piece.
+    if (!r.pitchView()) {
+      const b = r.bounds();
+      naturalPitch.current = { c: (b.stepMin + b.stepMax) / 2, span: b.stepMax - b.stepMin };
+      setPitchSpan(Math.round(naturalPitch.current.span));
+    }
   }, [model]);
 
   // Zoom stretches the time axis, so the scroll offset means a different moment
-  // afterwards. What is preserved is the TIME at the top of the viewport, not the
-  // pixel — keeping the pixel is what makes a zoom feel like the piece jumped. Read
+  // afterwards. What is preserved is the moment at the CENTRE of the viewport — read
   // before the rescale, written after it.
+  //
+  // It used to be the moment at the TOP, which is right for a zoom driven from the top of
+  // the page and wrong for one driven from a slider beside the middle of the roll: you
+  // zoom in on the phrase you are looking at, and the top edge is not what you are looking
+  // at. Keeping the PIXEL rather than either moment is what makes a zoom feel like the
+  // piece jumped.
   useEffect(() => {
     const r = roll.current; if (!r) return;
     const hd = holder.current;
     const pad = r.pad ? r.pad.t : 0;
-    const was = r.pxPerUnit() > 0 ? (hd.scrollTop - pad) / r.pxPerUnit() : 0;
+    const mid = hd.clientHeight / 2;
+    const was = r.pxPerUnit() > 0 ? (hd.scrollTop + mid - pad) / r.pxPerUnit() : 0;
     r.setView({ zoom }).resize();
     const u = r.pxPerUnit();
-    if (u > 0) hd.scrollTop = Math.max(0, Math.min(Math.max(0, r.virtH() - hd.clientHeight), pad + was * u));
+    if (u > 0) hd.scrollTop = Math.max(0, Math.min(Math.max(0, r.virtH() - hd.clientHeight), pad + was * u - mid));
     r.render();
   }, [zoom]);
 
@@ -238,8 +287,28 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
     // `chrome`: a preview roll draws NO controls. The stretch tabs and the A–B chip are
     // things to press, and a roll nobody can edit — the raga browser's — must not offer
     // them. `handles`: roll mode only, since the one-note layout has no grid to widen.
+    // Where to come back to. The one-note layout has no scroll of its own — resize()
+    // zeroes it — so returning from the editor landed at the top of the piece, however
+    // far down the note you had opened was. Remembered as a TIME rather than a scroll
+    // offset, because the zoom can change while you are in there and pixels would then
+    // mean a different moment.
+    if (mode === 'draw' && returnTo.current == null) {
+      const m = r.model();
+      returnTo.current = (curveIndex >= 0 && m.starts[curveIndex] != null)
+        ? m.starts[curveIndex]
+        : r.geometry().tAtY(holder.current.clientHeight / 2);
+    }
     r.setView({ mode, drawSpan, handles: chrome && mode === 'roll', abChip: chrome });   // `sel` belongs to the effect below, which owns both meanings
     r.resize();
+    if (mode === 'roll' && returnTo.current != null) {
+      const hd = holder.current, t = returnTo.current;
+      returnTo.current = null;
+      // A little above centre, so the note you were editing is on screen with what
+      // follows it — you came back to put it in context.
+      hd.scrollTop = Math.max(0, Math.min(Math.max(0, r.virtH() - hd.clientHeight),
+        r.yVirt(t) - hd.clientHeight * 0.4));
+      r.render();
+    }
   }, [mode, curveIndex, drawSpan, chrome]);
 
   // The A–B band and its two lines are the renderer's; it only has to be told where.
@@ -260,8 +329,36 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
     r.setView({ gamakaMode: !!gamaka }).render();
   }, [gamaka]);
 
+  // The two zoom sliders, framing the roll: time down the right edge, pitch along the
+  // bottom. Both keep the CENTRE of what is on screen where it is — the moment and the
+  // pitch in the middle of the viewport stay in the middle while the scale changes around
+  // them, which is the one thing a zoom has to promise.
+  // The slider only names the scale. Holding the centre is the zoom effect's job below —
+  // doing it here as well meant two anchors racing, the effect winning, and the slider's
+  // work being thrown away a frame later.
+  const zoomTime = (z) => { if (setZoomRef.current) setZoomRef.current(z); };
+  const zoomPitch = (span) => {
+    const r = roll.current; if (!r) return;
+    // The centre is CARRIED, not re-read. Reading it back from the roll each time meant
+    // reading a rounded number and re-centring on it: setPitchView rounds to whole steps,
+    // so every slider event lost up to half a step and the window crept left — a slider
+    // dragged across its travel fires dozens of them, and the notes walked off the side.
+    const nat = naturalPitch.current;
+    if (span >= nat.span) {            // back to the widest: hand the axis back to the grid
+      pitchWin.current = null;
+      r.setPitchView(null).resize();
+      setPitchSpan(nat.span);
+      return;
+    }
+    const c = pitchWin.current ? pitchWin.current.c : nat.c;
+    pitchWin.current = { c, span };
+    r.setPitchView({ min: c - span / 2, max: c + span / 2 }).resize();
+    setPitchSpan(Math.round(span));
+  };
+
   return html`<div class="pane roll" style=${style}>
     ${tools}
+    <div class="roll-body">
     <div class="roll-holder" ref=${holder}><div ref=${content}>
       <canvas ref=${canvas}></canvas>
       <!-- The margin strip: hit-testable, and it forbids panning. touch-action is read
@@ -271,5 +368,15 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
            gestures listen. -->
       <div class="roll-gutter" ref=${gutter}></div>
     </div></div>
+    ${chrome && html`<input class="roll-zt" type="range" orient="vertical" min="1" max="8" step="0.1"
+      value=${zoom} title="Zoom time — the moment at the centre stays there"
+      aria-label="Zoom time" onInput=${(e) => zoomTime(parseFloat(e.target.value))} />`}
+    </div>
+    <!-- The pitch slider runs from the piece's own range (left, where the axis is the
+         grid's again) to nine steps (right, a couple of swaras filling the screen). The
+         value IS the span, reversed by direction so that right means closer. -->
+    ${chrome && html`<input class="roll-zp" type="range" min="9" max=${Math.max(10, Math.round(naturalPitch.current.span))} step="1"
+      value=${pitchSpan} title="Zoom pitch — the pitch at the centre stays there"
+      aria-label="Zoom pitch" onInput=${(e) => zoomPitch(parseFloat(e.target.value))} />`}
   </div>`;
 }

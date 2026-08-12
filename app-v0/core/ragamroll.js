@@ -52,9 +52,21 @@ export function createRagamRoll(el, opts = {}) {
     return Math.max(PAD_T_MIN, Math.round(x + 8) + 12);
   };
 
+  // A pitch VIEW, as against the grid's bounds.
+  //
+  // user bounds only ever widen — gridBounds mins the reader's low with the lowest note
+  // and maxes the high with the highest, so no note can be cut off the paper. That is
+  // right for the stretch tabs, which are about how much empty grid to write into, and
+  // wrong for zooming: magnifying a fifth to place a gamaka by eye MEANS the notes above
+  // and below leave the screen. So a view range overrides the bounds outright, and is
+  // safe because panning can always reach what it pushed off.
+  let pitchView = null;   // { min, max } | null — null = the grid's own bounds
+
   function recompute() {
     const b = gridBounds(model, user);
-    bounds = { ...b, gridPitches: gridPitches(model.notes, b.stepMin, b.stepMax, model.raga) };
+    const lo = pitchView ? pitchView.min : b.stepMin;
+    const hi = pitchView ? pitchView.max : b.stepMax;
+    bounds = { ...b, stepMin: lo, stepMax: hi, gridPitches: gridPitches(model.notes, lo, hi, model.raga) };
     pad.t = labelDepth(bounds.gridPitches);
   }
 
@@ -121,6 +133,16 @@ export function createRagamRoll(el, opts = {}) {
     setModel(m) { model = m || EMPTY; recompute(); return api; },
     // Bounds a reader has stretched to by hand. These only ever widen.
     setUser(u) { user = { ...user, ...u }; recompute(); return api; },
+    /**
+     * The pitch window to draw, overriding the grid's own bounds — for zooming and
+     * panning the pitch axis, which the grid's bounds deliberately refuse to do. null
+     * hands the axis back to them. Never widened silently: what is asked for is drawn.
+     */
+    setPitchView(v) {
+      pitchView = v && v.max > v.min ? { min: Math.round(v.min), max: Math.round(v.max) } : null;
+      recompute(); return api;
+    },
+    pitchView: () => (pitchView ? { ...pitchView } : null),
     setView(v) {
       const reBound = v.zoom != null && v.zoom !== view.zoom;
       view = { ...view, ...v };

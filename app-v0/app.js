@@ -256,8 +256,10 @@ function App({ examples }) {
   // that, for shaping a long note or reading a crowded phrase. Same range and step draw
   // uses, and the halves are rounded off or 0.5 steps accumulate a float tail.
   const [rollZoom, setRollZoom] = useState(1);
-  const onRollZoom = useCallback((d) => setRollZoom((z) =>
-    Math.min(8, Math.max(1, Math.round((z + d) * 10) / 10))), []);
+  // Absolute: the slider names a scale rather than nudging one. The − 1× + buttons it
+  // replaced nudged, which is why they had to exist in pairs.
+  const onRollZoomTo = useCallback((z) =>
+    setRollZoom(Math.min(8, Math.max(1, Math.round(z * 10) / 10))), []);
   // A selection is a token, and tokens do not survive a piece being retyped or reopened.
   // Kept while it still points at something — so it lives through the app's own edits —
   // and dropped the moment it does not, because Delete acting on a stale token would
@@ -420,6 +422,16 @@ function App({ examples }) {
     // versions of the notation are in hand, so there is nothing to do until then.
     if (it.phase === 'commit') commitCurve();
   }, [commitCurve]);
+  // Leaving the editor keeps the note SELECTED. You were just working on it, and the roll
+  // you come back to is a wall of notes — the highlight is what says which one you were
+  // in. It also keeps Delete in reach, instead of putting it back out of reach the moment
+  // you step out of an editor you only opened to look. The gamaka page has always done
+  // this; the app dropped the selection on the way out.
+  const onCurveBack = useCallback(() => {
+    if (curveTok >= 0) setRollSel({ type: 'note', tok: curveTok });
+    setCurveIdx(-1); setCurveTok(-1);
+  }, [curveTok]);
+
   const onCurveClear = useCallback(() => { const n = curveNote(); if (!n) return; n.curve = null; commitCurve(); }, [commitCurve, curveIdx]);
   const onCurveCopy = useCallback(() => { const n = curveNote(); if (!n || !n.curve) return;
     // Stored RELATIVE to its note's step, so pasting re-anchors it onto the target's
@@ -762,17 +774,17 @@ function App({ examples }) {
           onSwap=${onSwap} swapTitle=${rollFirst ? 'Swap: put the notation on the left' : 'Swap: put the roll on the left'} />`}
         <${RollPane} style=${`order:${rollFirst ? 1 : 3}`}
           model=${effModel} api=${rollApiRef} onIntent=${onRollIntent} allow=${ROLL_EDITS}
-          sel=${rollSel} zoom=${rollZoom} paint=${rollPaint}
+          sel=${rollSel} zoom=${rollZoom} onSetZoom=${onRollZoomTo} paint=${rollPaint}
           mode=${rollMode} curveIndex=${curveIdx} onCurveIntent=${onCurveIntent} snapping=${curveSnap}
           gamaka=${rollGamaka} onGamakaIntent=${onGamakaIntent}
           onCurvePitch=${onCurvePitch} drawSpan=${curveSpan} markerA=${markA} markerB=${markB}
           tools=${html`<${RollTools} sel=${rollSel} onDelete=${onRollDelete}
-            canUndo=${canUndo} onUndo=${onRollUndo} zoom=${rollZoom} onZoom=${onRollZoom}
+            canUndo=${canUndo} onUndo=${onRollUndo}
             paint=${rollPaint} onPaint=${() => { setRollPaint((v) => !v); setRollGamaka(false); }}
             gamaka=${rollGamaka} onGamaka=${() => { setRollGamaka((v) => !v); setRollPaint(false); }}
             gmove=${gmove} onGmove=${hasCurves ? onGmove : null}
             snap=${curveSnap} onSnap=${() => setCurveSnap((v) => !v)}
-            mode=${rollMode} onBack=${() => { setCurveIdx(-1); setCurveTok(-1); }}
+            mode=${rollMode} onBack=${onCurveBack}
             hasCurve=${!!(curveIdx >= 0 && effModel && curveNote() && curveNote().curve)}
             canPaste=${!!curveClip} onClear=${onCurveClear} onCopy=${onCurveCopy} onPaste=${onCurvePaste}
             snap=${curveSnap} onSnap=${() => setCurveSnap((v) => !v)}
