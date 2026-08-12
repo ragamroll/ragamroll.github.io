@@ -48,6 +48,15 @@ export function createRollEdit(canvas, opts) {
     painting: paintArmed = () => false,   // () -> bool   the host's "+ note" toggle
     marks = () => ({ a: 0, b: 0 }),       // () -> {a,b}  the A–B range, in length-units
     idleTouchAction = 'pan-y',
+    // Scroll the roll's own window by dy pixels. Sweeping A–B past the top or bottom of
+    // the viewport is the ONLY thing that scrolls during a gesture — the host owns the
+    // scroller, so it is asked rather than reached for.
+    scrollBy = null,           // (dy) -> void
+    // Where the pointer listeners actually go. The canvas by default; a host that puts a
+    // no-pan strip over the margin passes their common parent instead, so a press on
+    // EITHER arrives here. Coordinates are still measured against the canvas, so nothing
+    // downstream can tell the difference.
+    surface = canvas,
     onGrabStart = () => {},    // e.g. unlock audio before a drag makes a sound
   } = opts;
 
@@ -59,7 +68,7 @@ export function createRollEdit(canvas, opts) {
   let justGrabbed = false;     // a real edit happened: swallow the click that follows
 
   const at = (e) => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
-  const own = (pid) => { canvas.style.touchAction = 'none'; try { canvas.setPointerCapture(pid); } catch (_) { /* not captured: the gesture still works */ } };
+  const own = (pid) => { canvas.style.touchAction = 'none'; try { surface.setPointerCapture(pid); } catch (_) { /* not captured: the gesture still works */ } };
   const release = () => { canvas.style.touchAction = idleTouchAction; };
 
   // ---- what is under the pointer ----
@@ -198,6 +207,7 @@ export function createRollEdit(canvas, opts) {
       ab = near(m.a) ? { end: 'a', pid: e.pointerId }
         : near(m.b) ? { end: 'b', pid: e.pointerId }
         : { end: 'sweep', from: t, pid: e.pointerId };
+      ab.y = y;
       if (ab.end === 'sweep') emit({ kind: 'range', phase: 'preview', a: t, b: t });
       own(e.pointerId); redraw();
       return;
@@ -267,6 +277,7 @@ export function createRollEdit(canvas, opts) {
 
     if (ab) {
       if (e.pointerId !== ab.pid) return;
+      ab.y = y; edgeScroll(y);
       const t = Math.max(0, snapTime(geometry().tAtY(y)));
       const m = marks();
       // The ends may not meet, let alone cross: a zero-length range plays nothing, and
@@ -338,7 +349,7 @@ export function createRollEdit(canvas, opts) {
     }
 
     if (ab && e.pointerId === ab.pid) {
-      const g = ab; ab = null; release(); redraw();
+      const g = ab; ab = null; stopEdge(); release(); redraw();
       const m = marks();
       // A SWEEP that never moved is a press, not a range: cleared rather than left as a
       // zero-length segment that would play nothing. A tab drag is never a clear —
@@ -384,7 +395,7 @@ export function createRollEdit(canvas, opts) {
     if (!enabled()) return;
     // An OS-interrupted paint must not leave the preview on screen with no gesture left
     // to dismiss it.
-    if (ab && e.pointerId === ab.pid) { ab = null; release(); redraw(); return; }
+    if (ab && e.pointerId === ab.pid) { ab = null; stopEdge(); release(); redraw(); return; }
     if (paint && e.pointerId === paint.pid) { paint = null; release(); redraw(); return; }
     if (restGrab && e.pointerId === restGrab.pid) {
       emit({ kind: 'resize', phase: 'cancel', target: 'rest', tok: restGrab.tok, dur: restGrab.oldDur, from: restGrab.oldDur });
@@ -422,12 +433,51 @@ export function createRollEdit(canvas, opts) {
     emit({ kind: 'open', tok: model().notes[i].tok, index: i });
   };
 
-  canvas.addEventListener('pointerdown', onDown);
-  canvas.addEventListener('pointermove', onMove);
-  canvas.addEventListener('pointerup', onUp);
-  canvas.addEventListener('pointercancel', onCancel);
-  canvas.addEventListener('click', onClick);
-  canvas.addEventListener('dblclick', onDblClick);
+  // ---- sweeping past the edge ----
+  //
+  // A drag in the margin marks A–B; it does not scroll. But a range longer than the
+  // window has to be reachable, so the ONE thing that does scroll is the drag arriving
+  // at the top or bottom edge — and then it scrolls for as long as it stays there,
+  // rather than one notch per pixel of finger movement there is no room left to make.
+  const EDGE_PX = 30;          // how near the edge counts as "at" it
+  const EDGE_MAX = 14;         // px per frame at full tilt
+  let edgeRaf = 0, edgeDy = 0;
+
+  function edgeScroll(y) {
+    const h = canvas.getBoundingClientRect().height;
+    const over = y < EDGE_PX ? y - EDGE_PX : (y > h - EDGE_PX ? y - (h - EDGE_PX) : 0);
+    // Proportional: just past the edge creeps, right off it runs.
+    edgeDy = over === 0 ? 0 : Math.max(-EDGE_MAX, Math.min(EDGE_MAX, over / 2));
+    if (edgeDy && !edgeRaf && scrollBy) edgeRaf = requestAnimationFrame(edgeStep);
+  }
+  function edgeStep() {
+    edgeRaf = 0;
+    if (!ab || !edgeDy || !scrollBy) return;
+    scrollBy(edgeDy);
+    // The pointer has not moved — the GRID has — so the time under it is a new time, and
+    // the range has to be re-emitted from the same y or the sweep stops at the old edge.
+    const t = Math.max(0, snapTime(geometry().tAtY(ab.y)));
+    const m = marks(), gap = snapDur(0) || 1;
+    if (ab.end === 'sweep') emit({ kind: 'range', phase: 'preview', a: Math.min(ab.from, t), b: Math.max(ab.from, t) });
+    else if (ab.end === 'a') emit({ kind: 'range', phase: 'preview', a: Math.min(t, m.b - gap), b: m.b });
+    else emit({ kind: 'range', phase: 'preview', a: m.a, b: Math.max(t, m.a + gap) });
+    edgeRaf = requestAnimationFrame(edgeStep);
+  }
+  const stopEdge = () => { if (edgeRaf) cancelAnimationFrame(edgeRaf); edgeRaf = 0; edgeDy = 0; };
+
+  // touch-action is read when the finger LANDS, so setting it to 'none' in pointerdown is
+  // already too late for the gesture that press begins: the browser has committed to
+  // panning and the sweep rides a scrolling page. Cancelling the touch itself is what
+  // actually stops it, and it must be non-passive to be allowed to.
+  const onTouchMove = (e) => { if (ab || grab || paint || restGrab) e.preventDefault(); };
+  surface.addEventListener('touchmove', onTouchMove, { passive: false });
+
+  surface.addEventListener('pointerdown', onDown);
+  surface.addEventListener('pointermove', onMove);
+  surface.addEventListener('pointerup', onUp);
+  surface.addEventListener('pointercancel', onCancel);
+  surface.addEventListener('click', onClick);
+  surface.addEventListener('dblclick', onDblClick);
 
   return {
     hitNote, hitRest, restEdgeAt,
@@ -446,13 +496,15 @@ export function createRollEdit(canvas, opts) {
     /** A real edit just finished; the click that follows is not a selection. */
     consumedClick: () => justGrabbed,
     destroy() {
+      stopEdge();
+      surface.removeEventListener('touchmove', onTouchMove);
       clearTimeout(pressTimer);
-      canvas.removeEventListener('dblclick', onDblClick);
-      canvas.removeEventListener('pointerdown', onDown);
-      canvas.removeEventListener('pointermove', onMove);
-      canvas.removeEventListener('pointerup', onUp);
-      canvas.removeEventListener('pointercancel', onCancel);
-      canvas.removeEventListener('click', onClick);
+      surface.removeEventListener('dblclick', onDblClick);
+      surface.removeEventListener('pointerdown', onDown);
+      surface.removeEventListener('pointermove', onMove);
+      surface.removeEventListener('pointerup', onUp);
+      surface.removeEventListener('pointercancel', onCancel);
+      surface.removeEventListener('click', onClick);
     },
   };
 }

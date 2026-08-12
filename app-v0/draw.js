@@ -22,6 +22,7 @@ import { createSeamHost } from './core/roll-seam.js';
 import { pointsToAnchors, addAnchor, removeAnchor, moveAnchor } from './core/gamaka-curve.js';
 import { createCurveEdit } from './core/curve-edit.js';
 import { createGamakaEdit } from './core/gamaka-edit.js';
+import { createGridStretch } from './core/grid-stretch.js';
 import { buildSequence } from './core/midi/sequence.js';
 import { writeSMF } from './core/midi/smf.js';
 import { serializeModel, applyEdit, applyMove, paintEdit, snapToRagaRow, snapToAkshara, placePaint, splitSpans, octMarks } from './core/note-edit.js';
@@ -112,11 +113,10 @@ let mode='roll', sel=-1, drawSpan=22;   // the curve gesture's own state lives i
 let paintMode=false, gamakaMode=false;   // the press/drag gestures themselves live in core/roll-edit.js
 const HANDLE_PX=18;
 const ROLL_TOUCH_ACTION='pan-y';   // touchAction roll mode uses when idle (matches resizeCanvas below)
-// Grid stretch-handles (pitch-low/pitch-high/time-bottom) — shared sizing between
-// the render() draw and hitGridHandle()'s hit-test so they stay in lockstep.
-const GRIP_THICK=14, GRIP_LEN=HANDLE_PX*2.6;
-let handleDrag=null;   // {which:'pmin'|'pmax'|'tbottom', pid}
-// TEMP DEBUG (grid-handle grab diagnosis) — remove after diagnosing.
+// The grid stretch-handles are core/grid-stretch.js's gesture and core/roll-render.js's
+// drawing now, so the app widens the same grid the same way. What used to be here was
+// two copies of the tab arithmetic — one to draw, one to hit-test — each with a comment
+// saying it must match the other.
 let zoom = 1;   // expand multiplier the roll scales time by (1 = shortest note cell at its minimum readable height)
 const yVirt = t => { syncView(); return roll.yVirt(t); };   // roll virtual y (content coords, pre-scroll) — the gutter handles sit at these
 const pxU = () => { syncView(); return roll.pxPerUnit(); };   // pixels per length-unit
@@ -133,7 +133,7 @@ const roll = createRagamRoll({ holder: document.getElementById('holder'), conten
   palette: () => ({ amber:cssvar('--amber'), amberS:cssvar('--amberSoft'), teal:cssvar('--teal'),
     terra:cssvar('--terra'), hair:cssvar('--hair2'), muted:cssvar('--muted'),
     panel2:cssvar('--panel2'), mono:cssvar('--mono'), bg:cssvar('--bg'), sans:cssvar('--sans') }),
-  hooks: { underGrid: drawRestGutter, overNotes: drawEditChrome, top: drawHandles },
+  hooks: { underGrid: drawRestGutter, overNotes: drawEditChrome },
 });
 const ctx = roll.ctx, PAD = roll.pad;
 // Hit-testing reads the coordinates the roll actually drew with, so a note cannot be
@@ -186,7 +186,10 @@ function syncView(){
     // The rest gutter and the in-progress paint box are the shared renderer's now, so
     // they are told rather than drawn here — both apps aim at the same band.
     paintMode: mode==='roll' && paintMode, paint: rollEdit ? rollEdit.painting() : null,
-    drawing: curveEdit ? curveEdit.drawing() : false, gamakaMode: mode==='roll' && gamakaMode });
+    drawing: curveEdit ? curveEdit.drawing() : false, gamakaMode: mode==='roll' && gamakaMode,
+    // The stretch tabs, drawn by the shared renderer now. Roll mode only: the one-note
+    // layout has no grid to widen.
+    handles: mode==='roll' });
 }
 // ---- editing chrome ----
 // Painted through the roll's hooks, because it is interleaved with the roll's own
@@ -204,63 +207,12 @@ function drawEditChrome(g){ const p=g.plot, X=g.X, Y=g.Y, C=roll.ctx, teal=cssva
   // In-roll gamaka anchors are the shared renderer's now.
   // The curve editor's anchors and its empty-note prompt are the shared renderer's now.
 }
-function drawHandles(){ if (mode==='roll') drawGridHandles(cssvar('--teal')); }
-
 function render(){ syncView(); roll.render(); positionHandles(); }
-// Grip dots inside a handle tab, perpendicular to its drag axis (a row of dots
-// along the axis you CAN'T drag hints "grab and slide the other way").
-function gripDots(cx,cy,axis){ ctx.fillStyle='#08110d';
-  for (let i=-1;i<=1;i++){ if (axis==='h') ctx.fillRect(cx-1, cy+i*4-1, 2, 2); else ctx.fillRect(cx+i*4-1, cy-1, 2, 2); } }
-// The 3 grid stretch-handles: pitch-low/pitch-high (drag horizontally — resize the
-// pitch axis) and time-bottom (drag vertically — resize the time axis; the top of
-// the time axis stays pinned at t=0). Positions here MUST match hitGridHandle()'s
-// hit-test math exactly (shared GRIP_THICK/GRIP_LEN constants).
-function drawGridHandles(teal){ const p=plot();
-  const drawTab=(cx,cy,w,h,axis)=>{ ctx.fillStyle=teal; ctx.globalAlpha=.85; roundRect(cx-w/2,cy-h/2,w,h,4); ctx.fill(); ctx.globalAlpha=1;
-    ctx.strokeStyle='rgba(0,0,0,.3)'; ctx.lineWidth=.6; ctx.stroke(); gripDots(cx,cy,axis); };
-  const yMid=p.y+p.h/2;
-  // pitch-low: nudged a few px right of the plot edge so it clears the A/B gutter border.
-  drawTab(Math.max(p.x+GRIP_THICK/2+3, X(stepMin)), yMid, GRIP_THICK, GRIP_LEN, 'h');
-  // pitch-high.
-  drawTab(X(stepMax), yMid, GRIP_THICK, GRIP_LEN, 'h');
-  // time-bottom: a STICKY '+ time' button pinned to the bottom of the viewport (always
-  // visible; click-to-extend — no scrolling to find it). Drawn last so it sits on top.
-  const yBot=roll.size().h-GRIP_THICK/2-6;
-  drawTab(p.x+p.w/2, yBot, GRIP_LEN, GRIP_THICK, 'v');
-  ctx.fillStyle='#031'; ctx.font='bold 12px '+cssvar('--mono'); ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText('+ time', p.x+p.w/2, yBot); ctx.textBaseline='alphabetic'; ctx.font='11px '+cssvar('--mono');
-}
-// Hit-test the 3 grid handles (roll mode only); returns 'pmin'|'pmax'|'tbottom'|null.
-// Mirrors drawGridHandles()'s positions with a generous (HANDLE_PX) touch radius.
-function hitGridHandle(x,y){ if (mode!=='roll') return null; const p=plot();
-  const yMid=p.y+p.h/2, halfLen=GRIP_LEN/2+HANDLE_PX*0.4, halfThick=GRIP_THICK/2+HANDLE_PX;
-  const xLo=Math.max(p.x+GRIP_THICK/2+3, X(stepMin));
-  const xHi=X(stepMax);
-  const yBot=roll.size().h-GRIP_THICK/2-6;   // STICKY: pinned to the viewport bottom, always present
-  if (Math.abs(x-xLo)<=halfThick && Math.abs(y-yMid)<=halfLen) return 'pmin';
-  if (Math.abs(x-xHi)<=halfThick && Math.abs(y-yMid)<=halfLen) return 'pmax';
-  if (Math.abs(y-yBot)<=halfThick && Math.abs(x-(p.x+p.w/2))<=halfLen) return 'tbottom';
-  return null;
-}
-// Time-bottom handle is CLICK-to-extend (not drag): each click adds one avartana
-// (or 8 units with no tala) of empty grid and scrolls the roll so the new bottom —
-// with the handle on it — sits near the viewport bottom, ready for the next click.
-function extendTime(){ const inc=talaMeasure>0?talaMeasure:8;
-  userGridBottom=(userGridBottom!=null?userGridBottom:TOTAL)+inc;
-  recomputeGridBounds(); resizeCanvas();
-  const hd=document.getElementById('holder');
-  hd.scrollTop=Math.max(0, Math.min(Math.max(0,virtH()-hd.clientHeight), PAD.t + TOTAL*pxU() - (hd.clientHeight-40)));
-  render(); }
-function startHandleDrag(which,e){ const {x}=evtPos(e);
-  handleDrag={ which, pid:e.pointerId, startX:x, startStepMin:stepMin, startStepMax:stepMax,
-    pxPerStep: plot().w/Math.max(1,(stepMax-stepMin)) };   // FROZEN px-per-step at grab start
-  cv.style.touchAction='none'; try{ cv.setPointerCapture(e.pointerId); }catch(_){}; render(); }
 // Position the draggable A/B gutter handles at their marker times. The gutter is
 // absolute-in-content (scrolls with the roll), so handles sit at VIRTUAL y and stay
 // aligned with their marker lines as you scroll.
 function positionHandles(){ const g=$('gutter'); if (mode!=='roll'){ g.style.display='none'; return; } g.style.display='';
   $('mkA').style.top=yVirt(markerA)+'px'; $('mkB').style.top=yVirt(markerB)+'px'; }
-function roundRect(x,y,w,h,r){ r=Math.min(r,w/2,h/2); ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
 
 // ---------- interaction ----------
 function evtPos(e){ const r=cv.getBoundingClientRect(); return { x:e.clientX-r.left, y:e.clientY-r.top }; }
@@ -299,27 +251,55 @@ function syncCurveButtons(){ const has = !!(sel >= 0 && NOTES[sel] && NOTES[sel]
 //
 // preview: in flight, shown but not recorded. commit: recorded. cancel: put it back.
 const rollEdit = createRollEdit(cv, {
+  // Listening on #content, not on the canvas: the margin strip over it is a sibling of
+  // the canvas and forbids panning, and a press there has to reach the same gestures.
+  surface: document.getElementById('content'),
   geometry: () => geo(),
   model: () => ({ notes: NOTES, starts, rests: RESTS, stepMin, stepMax }),
   snapStep: (step) => snapToRagaRow(step, ragaRowSteps()),
   snapDur: (d) => { const beat = talaBeat || 1; return Math.max(beat, snapToAkshara(d, beat)); },
   snapTime: (t) => snapToAkshara(t, talaBeat || 1),
+  marks: () => ({ a: markerA, b: markerB }),
   redraw: () => render(),
   enabled: () => mode === 'roll' && !gamakaMode,
   painting: () => paintMode,
   idleTouchAction: ROLL_TOUCH_ACTION,
+  // The only scrolling a gesture may cause: an A–B sweep dragged past the top or bottom
+  // of the window, so a range longer than the window can still be marked.
+  scrollBy: (dy) => { const hd=document.getElementById('holder'); hd.scrollTop += dy; },
   onGrabStart: () => ensureAudio(),
   emit: (it) => applyIntent(it),
 });
 
-// The grid stretch-handles are draw's, not the roll's — they resize the VIEW, not the
-// music. Capture phase so a press on a handle is claimed before roll-edit reads it as
-// a note.
-cv.addEventListener('pointerdown', e=>{ if (mode!=='roll' || paintMode || gamakaMode) return;
-  const {x,y}=evtPos(e); const gh=hitGridHandle(x,y); if (!gh) return;
-  e.stopPropagation();
-  if (gh==='tbottom') extendTime(); else startHandleDrag(gh,e);
-}, true);
+// Widening the grid: core/grid-stretch.js's gesture, hosted here. It resizes the VIEW,
+// not the music, so nothing it emits is ever serialised — userGrid* are not saved and
+// not shared.
+const gridStretch = createGridStretch(cv, {
+  geometry: () => geo(),
+  size: () => roll.size(),
+  bounds: () => ({ stepMin, stepMax, total: TOTAL }),
+  snapStep: (step) => snapToRagaRow(step, ragaRowSteps()),
+  snapTime: (t) => snapToAkshara(t, talaBeat||1),
+  beat: () => talaBeat||1,
+  measure: () => talaMeasure,
+  enabled: () => mode==='roll' && !paintMode && !gamakaMode,
+  idleTouchAction: ROLL_TOUCH_ACTION,
+  redraw: () => render(),
+  emit: (it) => {
+    if (it.which==='pmin') userGridMin=it.step;
+    else if (it.which==='pmax') userGridMax=it.step;
+    else if (it.which==='bottom') userGridBottom=it.bottom;
+    else if (it.which==='extend') userGridBottom=(userGridBottom!=null?userGridBottom:TOTAL)+it.by;
+    recomputeGridBounds();
+    const hd=document.getElementById('holder'), content=document.getElementById('content');
+    content.style.height=virtH()+'px';
+    // Keep the edge being pulled under the finger pulling it; on a tap, park the new
+    // bottom near the viewport bottom so the tab is where the next tap will be.
+    if (it.which==='bottom') hd.scrollTop=Math.max(0, Math.min(Math.max(0,virtH()-hd.clientHeight), PAD.t + TOTAL*pxU() - it.y));
+    else if (it.which==='extend'){ resizeCanvas(); hd.scrollTop=Math.max(0, Math.min(Math.max(0,virtH()-hd.clientHeight), PAD.t + TOTAL*pxU() - (hd.clientHeight-40))); }
+    render();
+  },
+});
 
 // Whatever ends where this note begins — a note or a rest. Token order is the
 // composition's order, rests included, so the neighbour is simply the highest tok
@@ -348,6 +328,17 @@ async function applyIntent(it) {
     syncDelete(); render(); return;
   }
   if (it.kind === 'open') { selRest = -1; syncDelete(); enterDraw(it.index); return; }
+  // Sweeping A–B in the margin. The gesture has been live here since roll-edit grew it,
+  // but nothing was listening: the commit reads back the host's CURRENT marks to decide
+  // whether a sweep is a range or a clear, and with no marks() and no handler every
+  // sweep previewed correctly and then committed as {0,0}. A clear means the whole piece
+  // here — this page has always used A=0, B=TOTAL for "no segment" rather than a
+  // zero-length one.
+  if (it.kind === 'range') {
+    if (it.phase === 'commit' && !(it.b > it.a)) { markerA = 0; markerB = TOTAL; }
+    else { markerA = it.a; markerB = it.b; }
+    setPlayIdle(); render(); return;
+  }
   if (it.kind === 'split') { await seamHost.handle(it); return; }
   if (it.kind === 'paint') {
     const place = placePaint({ ts: it.ts, dur: it.dur, notes: NOTES, starts, durs: NOTES.map((n) => n.dur), total: TOTAL });
@@ -398,36 +389,11 @@ const gamakaEdit = createGamakaEdit(cv, {
     scheduleShare();
   },
 });
-// Grid stretch-handle drag (pitch-low/pitch-high/time-bottom). These are separate
-// listeners (not folded into grab/paint) because a handle-drag must fire in BOTH
-// normal and paint mode — startHandleDrag() is invoked from the top of both roll
-// pointerdowns above, before their own mode-specific logic runs. No-op unless
-// handleDrag is set, so they coexist peacefully with the grab/paint handlers.
-cv.addEventListener('pointermove', e=>{ if (!handleDrag || e.pointerId!==handleDrag.pid) return; const {x,y}=evtPos(e);
-  const hd=document.getElementById('holder'), content=document.getElementById('content');
-  if (handleDrag.which==='tbottom'){
-    userGridBottom=Math.max(snapToAkshara(tAtY(y), talaBeat||1), (talaBeat||1));
-    recomputeGridBounds(); content.style.height=virtH()+'px';
-    // Fix 3 scroll-follow: glue the bottom edge under the cursor so the new time is visible live.
-    hd.scrollTop=Math.max(0, Math.min(Math.max(0,virtH()-hd.clientHeight), PAD.t + TOTAL*pxU() - y));
-  } else {
-    // Frozen-scale: bound = start bound + cursor pixel-travel / start px-per-step. Independent of
-    // the live (rescaling) stepMin/stepMax, so no feedback loop pins the value.
-    const dSteps=(x-handleDrag.startX)/handleDrag.pxPerStep;
-    const base=(handleDrag.which==='pmin')?handleDrag.startStepMin:handleDrag.startStepMax;
-    const st=snapToRagaRow(Math.round(base+dSteps), ragaRowSteps());
-    if (handleDrag.which==='pmin') userGridMin=st; else userGridMax=st;
-    recomputeGridBounds(); content.style.height=virtH()+'px';
-  }
-  render(); });
-cv.addEventListener('pointerup', e=>{ if (!handleDrag || e.pointerId!==handleDrag.pid) return; handleDrag=null; cv.style.touchAction=ROLL_TOUCH_ACTION; });
-cv.addEventListener('pointercancel', e=>{ if (!handleDrag || e.pointerId!==handleDrag.pid) return; handleDrag=null; cv.style.touchAction=ROLL_TOUCH_ACTION; render(); });
-// Discoverability: hover the grid stretch-handles shows a resize cursor (idle only —
-// not while any drag/grab/paint gesture is in progress). No log param -> hitGridHandle
-// stays silent here, so this high-frequency listener doesn't flood the console (Fix 5).
-cv.addEventListener('pointermove', e=>{ if (mode!=='roll' || handleDrag || rollEdit.busy()) return;
-  const {x,y}=evtPos(e); const h=hitGridHandle(x,y);
-  cv.style.cursor = h ? (h==='tbottom'?'pointer':'col-resize') : (paintMode?'crosshair':''); });
+// Discoverability: hovering a stretch-handle shows a resize cursor (idle only — a cursor
+// that changes mid-drag says the drag has been taken over).
+cv.addEventListener('pointermove', e=>{ if (mode!=='roll' || gridStretch.busy() || rollEdit.busy()) return;
+  const {x,y}=evtPos(e); const h=gridStretch.hit(x,y);
+  cv.style.cursor = h ? (h==='bottom'?'pointer':'col-resize') : (paintMode?'crosshair':''); });
 // A moved note is committed with the current gamaka-on-move default; if it carried
 // a gamaka, a toast offers the other behaviour for ~4s. The model stores the curve
 // ABSOLUTE, so 'preserve pitch' = leave the curve (serialize emits shifted relative
@@ -893,7 +859,8 @@ $('fileinput').onchange=async e=>{ const f=e.target.files[0]; e.target.value='';
 function download(name, data, type){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([data],{type})); a.download=name; a.click(); URL.revokeObjectURL(a.href); }
 $('save').onclick=()=>download(docName+'.srgm', srcText, 'text/plain');
 $('exportmidi').onclick=()=>{ try{ download(docName+'.mid', writeSMF(buildSequence(parse(srcText))), 'audio/midi'); }catch(e){ window.alert('MIDI export failed: '+e.message); } };
-window.__rr = { notes:()=>NOTES, rests:()=>RESTS.map(r=>({...r})), get selRest(){ return selRest; },
+window.__rr = { roll:()=>roll,   // the roll instance, so a guard can ask it what it worked out — same shape as the app's __app.roll()
+  notes:()=>NOTES, rests:()=>RESTS.map(r=>({...r})), get selRest(){ return selRest; },
   intents:()=>INTENT_LOG.map(i=>({...i})), clearIntents:()=>{ INTENT_LOG.length=0; }, get mode(){ return mode; }, get gamakaMode(){ return gamakaMode; },
   get delEnabled(){ return !$('delbtn').disabled; }, restEdgeY:(tok)=>{ const r=RESTS.find(x=>x.tok===tok); return r?Y(r.t0+r.dur):null; },
   yRange:()=>geo().yRange, restMidY:(tok)=>{ const r=RESTS.find(x=>x.tok===tok); return r?Y(r.t0+r.dur/2):null; }, X, Y, starts:()=>starts, get playing(){ return playing; }, get paused(){ return paused; }, get stepMin(){ return stepMin; }, get stepMax(){ return stepMax; }, get padTop(){ return PAD.t; }, gridSteps:()=>gridPitches.map(g=>g.step), labelChipW:()=>14, get shareLink(){ return shareLink; }, get playPos(){ return playPos; }, get markerA(){ return markerA; }, get markerB(){ return markerB; }, get talaMeasure(){ return talaMeasure; }, get talaAccents(){ return talaAccents; }, get droneVol(){ return droneVol; }, get talaVol(){ return talaVol; }, inlineSrc:()=>inlineSrc(), rebuild:()=>rebuildShare(), get src(){ return srcText; } };

@@ -40,22 +40,23 @@ function FullscreenButton() {
 
 // Two bars, and which one a thing belongs to is decided by what it IS.
 //
-// The head says what page you are on and what the piece is: a name, the two links out,
-// and the raga/tala readout. Nothing here changes anything. Everything that DOES — Open,
+// The head says what page you are on and WHICH PIECE is open: its name — the one Save
+// and Export MIDI will use — or "blank / new" when there is nothing in it yet. It used
+// to report the raga and the tala instead, which the notation box now says directly,
+// above the swaras they apply to, and which the roll draws as rows and accents. Nothing
+// here changes anything. Everything that DOES — Open,
 // the browsers, the scale override, the voice, the pane order — is a control, and the
 // controls live at the bottom of the screen with the transport, where a thumb reaches
 // them. That is the gamaka page's shape, and the reason it holds a phone: the roll is
 // the whole middle of the window instead of what is left after the chrome.
-export function Toolbar({ raga, tala, scaleLabel }) {
+export function Toolbar({ docName, blank }) {
   return html`<div class="toolbar">
     <span class="app-badge">RagaM-Roll</span>
     <a class="help-link" href="./help.html" target="_blank" rel="noopener"
        title="Help — notation guide &amp; features">?</a>
     <a class="help-link" href="./draw.html"
        title="Draw gamakas on a pitch roll (experimental)">✎</a>
-    <span class="readout">${scaleLabel
-      ? html`<span class="ovr">scale: ${scaleLabel}</span>`
-      : html`raga: ${raga || '—'}`} · tala: ${tala || '—'}</span>
+    <span class=${'readout' + (blank ? ' blank' : '')}>${blank ? 'blank / new' : docName}</span>
     <${FullscreenButton} />
   </div>`;
 }

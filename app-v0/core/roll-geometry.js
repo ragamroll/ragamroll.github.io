@@ -44,3 +44,37 @@ export function rollGeometry(v) {
 
   return { plot, xRange, yRange, X, stepAtX, Y, tAtY, yVirt, virtH, visibleTime };
 }
+
+// ---- the three grid stretch-handles -------------------------------------------------
+//
+// Where the tabs that WIDEN the grid sit. One function, because the gamaka page had two
+// copies of this arithmetic — one to draw them, one to hit-test them — with a comment
+// on each saying it must match the other exactly. A tab you can see at one place and
+// grab at another is the same failure this module exists to prevent for notes.
+//
+//   pmin / pmax   at the two pitch edges, mid-height, dragged sideways
+//   bottom        "+ time", pinned to the bottom of the VIEWPORT rather than to the end
+//                 of the piece, so it is reachable without scrolling to find it
+export const GRIP_THICK = 14, GRIP_LEN = 47;   // 47 = the 18px touch unit × 2.6, rounded
+
+export function gridHandles(geo, size, bounds) {
+  const p = geo.plot, yMid = p.y + p.h / 2;
+  return {
+    // Nudged clear of the plot edge so it does not sit on the A–B gutter's border.
+    pmin: { x: Math.max(p.x + GRIP_THICK / 2 + 3, geo.X(bounds.stepMin)), y: yMid, w: GRIP_THICK, h: GRIP_LEN, axis: 'h' },
+    pmax: { x: geo.X(bounds.stepMax), y: yMid, w: GRIP_THICK, h: GRIP_LEN, axis: 'h' },
+    bottom: { x: p.x + p.w / 2, y: size.h - GRIP_THICK / 2 - 6, w: GRIP_LEN, h: GRIP_THICK, axis: 'v' },
+  };
+}
+
+// Which handle is under (x, y), or null. A generous radius, and the same boxes the
+// renderer drew — the touch slop is the only thing this adds.
+export function hitGridHandle(handles, x, y, slop = 18) {
+  for (const which of ['pmin', 'pmax', 'bottom']) {
+    const t = handles[which];
+    const halfW = t.w / 2 + (t.axis === 'h' ? slop : slop * 0.4);
+    const halfH = t.h / 2 + (t.axis === 'h' ? slop * 0.4 : slop);
+    if (Math.abs(x - t.x) <= halfW && Math.abs(y - t.y) <= halfH) return which;
+  }
+  return null;
+}

@@ -53,8 +53,10 @@
        the button stays in the corner beside the badge at every width. */
     .toolbar { display:flex; gap:.5rem; align-items:center; padding:.5rem; border-bottom:1px solid var(--hair);
       flex-wrap:nowrap; }
-    .toolbar .readout { margin-left:auto; opacity:.7; font-size:.85rem;
+    /* The open piece's name. Mono, because it is a filename. */
+    .toolbar .readout { margin-left:auto; opacity:.8; font-size:.85rem; font-family:var(--mono);
       min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:right; }
+    .toolbar .readout.blank { opacity:.55; font-style:italic; }
     .toolbar .app-badge { font-weight:bold; font-size:.95rem; background:var(--panel2); border:1px solid var(--hair);
       border-radius:10px; padding:.12rem .55rem; margin-right:.25rem;
       /* Never breaks. On a narrow phone the name wrapped to two lines and took the whole
@@ -86,7 +88,6 @@
     .transport .tempo.on .tempo-state { color:var(--teal); opacity:.9; }
     .transport .tempo .tempo-reset { cursor:pointer; padding:.1rem .4rem; font-size:.85rem;
       border-radius:4px; padding:0 .3rem; font-size:.8rem; }
-    .toolbar .readout .ovr { color:var(--teal); }
     .transport .vol { display:inline-flex; align-items:center; gap:.3rem; font-size:.8rem;
       margin-left:.5rem; white-space:nowrap; opacity:.9; }
     .transport .vol input[type=range] { width:5rem; cursor:pointer; accent-color:var(--teal); }
@@ -332,6 +333,9 @@
     .roll-tools .rt-zoom b { font-weight:600; min-width:2.2em; text-align:center; opacity:.8; }
     .roll-holder { flex:1 1 auto; min-width:0; min-height:0; overflow-y:auto; overflow-x:hidden; }
     .roll-holder > div { position:relative; width:100%; }
+    /* The margin strip — see RollPane. Transparent, above the canvas, and the one place
+       on the roll where a touch may not start a scroll. */
+    .roll-gutter { position:absolute; top:0; left:0; height:100%; width:0; z-index:3; touch-action:none; }
     .roll-holder canvas { display:block; position:sticky; top:0; width:100%; }
     .footer { display:flex; gap:.6rem; align-items:center; padding:.35rem .6rem; border-top:1px solid var(--hair); font-size:.75rem; opacity:.7; }
     .footer .build { margin-left:auto; }  /* build timestamp + version, pushed right */

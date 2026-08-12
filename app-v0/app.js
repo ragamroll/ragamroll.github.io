@@ -26,7 +26,6 @@ import { writeSMF } from './core/midi/smf.js';
 import { createPlayer } from './audio/player.js';
 import { scheduleEvents, totalSeconds, midiToFreq } from './audio/schedule.js';
 import { droneFreqs } from './audio/drone.js';
-import { melaOfScale } from './core/melakarta.js';
 import { saBaseOf, applyPlaybackPitch } from './core/retune.js';
 import { shareUrl, readSharedSource, sourceFromShareInput } from './core/share.js';
 import { Transport } from './components/Transport.js';
@@ -97,9 +96,7 @@ function App({ examples }) {
     () => (tempoOverride ? { ...model, meta: { ...model.meta, tempo: tempoOverride } } : model),
     [model, tempoOverride]);
 
-  const raga = useMemo(() => { const e = [...model.events].reverse().find(e => e.type === 'raga'); return e ? e.key.join(',') : ''; }, [model]);
   const ragaName = useMemo(() => { const e = [...model.events].reverse().find(e => e.type === 'raga'); return e ? e.key[0] : ''; }, [model]);
-  const tala = useMemo(() => { const e = [...model.events].reverse().find(e => e.type === 'tala'); return e ? `beat ${e.props.beat}` : ''; }, [model]);
   // The quick raga/tala pickers above the notation box. They apply to a BLANK piece
   // only: changing the raga under written swaras would re-spell every one of them.
   const talaName = useMemo(() => { const e = [...model.events].reverse().find((x) => x.type === 'tala'); return e && e.key ? e.key[0] : ''; }, [model]);
@@ -112,11 +109,18 @@ function App({ examples }) {
   // suggest the same base name instead of a fixed "ragamroll".
   // Examples dropdown is controlled so Open (or any load) can reset it to the placeholder.
   const [exampleValue, setExampleValue] = useState('');
+  // Bumped whenever a DIFFERENT piece arrives — new, opened, an example, a share link.
+  // A grid someone stretched by hand belongs to the piece they stretched it around, and
+  // carrying it onto the next one opens it inside acres of empty staves. The reset lives
+  // in an effect below rather than in these handlers because the roll instance is created
+  // by the pane, and these are declared before it exists.
+  const [docEpoch, setDocEpoch] = useState(0);
+  const newDoc = useCallback(() => setDocEpoch((n) => n + 1), []);
   // Loading a new composition while playing would leave the old audio playing over
   // the new (misleading) panes — so stop playback on any content swap. onStop is
   // defined later; reach it through a ref that's kept current below.
   const stopRef = useRef(() => {});
-  const onOpen = useCallback(async (file) => { stopRef.current(); setExampleValue(''); setDocName(baseName(file.name)); setText(await file.text()); }, []);
+  const onOpen = useCallback(async (file) => { stopRef.current(); newDoc(); setExampleValue(''); setDocName(baseName(file.name)); setText(await file.text()); }, []);
   // Blank / New: the skeleton draw writes — a raga, a tala, an octave and a length, and
   // no notes. A piece with no notes is what gives the roll its WIDE grid (two avartanas
   // of empty time, the middle octave with half an octave either side, from gridBounds),
@@ -128,7 +132,7 @@ function App({ examples }) {
   // is one click away. Declared beside onOpen because it closes over ragaName/talaName
   // (declared above) and nothing from the roll state below.
   const onNew = useCallback(() => {
-    stopRef.current(); setExampleValue(''); setDocName('untitled');
+    stopRef.current(); newDoc(); setExampleValue(''); setDocName('untitled');
     const r = ragaName || ragaNames[0] || 'c12';
     setText(`Raga=${r},0\nTala=${talaName || 'adi'},4\nO=5 L=1\n`);
   }, [ragaName, talaName, ragaNames]);
@@ -149,7 +153,7 @@ function App({ examples }) {
   }, [model, docName]);
   const onExample = useCallback(async (name) => {
     if (!name) { setExampleValue(''); return; }
-    stopRef.current();
+    stopRef.current(); newDoc();
     const r = await fetch(`${EXAMPLES_BASE}/${name}.srgm`); setExampleValue(name); setDocName(baseName(name)); setText(await r.text());
   }, []);
   // Share: copy a self-contained "#pako:" link (the source, zlib-deflated) to the
@@ -168,7 +172,7 @@ function App({ examples }) {
   const onOpenLink = useCallback(async (input) => {
     try {
       const src = await sourceFromShareInput(input);
-      stopRef.current(); setExampleValue(''); setDocName('shared'); setText(src);
+      stopRef.current(); newDoc(); setExampleValue(''); setDocName('shared'); setText(src);
       return true;
     } catch { return false; }
   }, []);
@@ -178,7 +182,7 @@ function App({ examples }) {
     let cancelled = false;
     readSharedSource().then((src) => {
       if (cancelled || src == null) return;
-      stopRef.current(); setExampleValue(''); setDocName('shared'); setText(src);
+      stopRef.current(); newDoc(); setExampleValue(''); setDocName('shared'); setText(src);
       try { history.replaceState(null, '', location.pathname + location.search); } catch { /* ignore */ }
     });
     return () => { cancelled = true; };
@@ -188,6 +192,13 @@ function App({ examples }) {
   const playerRef = useRef(null);
   if (!playerRef.current) playerRef.current = createPlayer('tone');
   const rollApiRef = useRef(null);   // the roll instance, driven imperatively (see RollPane)
+  // A hand-stretched grid is view state and does not survive a different piece. resize()
+  // rather than render(), because the scroll window is sized from the grid and a narrower
+  // grid leaves the div taller than there is anything to show.
+  useEffect(() => {
+    const r = rollApiRef.current; if (!r) return;
+    r.setUser({ min: null, max: null, bottom: null }).resize();
+  }, [docEpoch]);
 
   // Editing the roll. The gesture layer says what a drag MEANS; this decides what it
   // costs — which here is a new notation string, because the notation is the source of
@@ -490,13 +501,6 @@ function App({ examples }) {
   const [timbre, setTimbre] = useState('soft-am');
   const onTimbre = useCallback((t) => setTimbre(t), []);
   const saBase = useMemo(() => saBaseOf(model, getRagas()), [model]);
-  // When a scale override is active, the toolbar shows IT (the mela) instead of
-  // the composition's raga — the pitches you actually hear.
-  const scaleLabel = useMemo(() => {
-    if (!scale) return null;
-    const m = melaOfScale(getRagas(), scale);
-    return m ? `${m.n} · ${m.name}` : 'custom';
-  }, [scale]);
   // Sa reference pitch: null = auto (the raga's natural Sa, MIDI 60+saBase, so
   // playback is unshifted and goldens/MIDI stay exact); a MIDI number pins Sa to
   // an absolute 12-EDO note and transposes all audio (melody+drone+retune) to it.
@@ -711,7 +715,7 @@ function App({ examples }) {
   }, [playState, stacked, rollFirst, editorPct, drawerH]);
 
   return html`
-    <${Toolbar} raga=${raga} tala=${tala} scaleLabel=${scaleLabel} />
+    <${Toolbar} docName=${docName} blank=${noteCount === 0} />
     ${dialog === 'ragas' && html`<${RagaDialog} ragas=${getRagas()} player=${playerRef.current}
                                          saMidi=${saMidi} droneLevel=${droneLevel} ragaName=${ragaName}
                                          stopMain=${onStop} onClose=${onCloseDialog} />`}

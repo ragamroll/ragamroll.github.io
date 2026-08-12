@@ -38,7 +38,11 @@ h1{font-family:var(--serif);font-weight:600;font-size:clamp(1.1rem,3.2vw,1.5rem)
 #holder{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden}
 #content{position:relative;width:100%}
 canvas{display:block;position:sticky;top:0;width:100%;border-radius:9px;touch-action:none;cursor:crosshair}
-#gutter{position:absolute;top:0;left:0;width:40px;height:100%;z-index:3;pointer-events:none}
+/* The margin strip. It is HIT-TESTABLE and forbids panning: touch-action is read when
+   the finger lands, so a sweep that marks A-B has to land somewhere the browser was
+   never going to scroll. The press bubbles to #content, which is where the roll's
+   gestures listen. */
+#gutter{position:absolute;top:0;left:0;width:40px;height:100%;z-index:3;touch-action:none}
 .mk{position:absolute;left:2px;width:34px;height:19px;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;
   font:bold 11px var(--mono);color:#08110d;background:var(--amber);border:0;border-radius:4px 11px 11px 4px;
   cursor:grab;pointer-events:auto;touch-action:none;box-shadow:0 1px 3px rgba(0,0,0,.45)}

@@ -5,6 +5,7 @@ import { buildRollModel } from '../core/roll-model.js';
 import { createRollEdit } from '../core/roll-edit.js';
 import { createCurveEdit } from '../core/curve-edit.js';
 import { createGamakaEdit } from '../core/gamaka-edit.js';
+import { createGridStretch } from '../core/grid-stretch.js';
 import { sampleCurve } from '../core/gamaka-inline.js';
 import { snapToRagaRow, snapToAkshara } from '../core/note-edit.js';
 import { EDO } from '../core/shruti.js';
@@ -27,7 +28,7 @@ const cssvar = (k) => getComputedStyle(document.documentElement).getPropertyValu
 export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom = 1, paint,
   mode = 'roll', curveIndex = -1, onCurveIntent, snapping, onCurvePitch, drawSpan = 22,
   markerA = 0, markerB = 0, gamaka, onGamakaIntent }) {
-  const holder = useRef(null), content = useRef(null), canvas = useRef(null);
+  const holder = useRef(null), content = useRef(null), canvas = useRef(null), gutter = useRef(null);
   const roll = useRef(null);
   // The gesture layer reads these through refs, not through its closure: it is mounted
   // once alongside the roll, while the host's handler is a new function on every render.
@@ -66,6 +67,9 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
     // twice.
     let ed, ced;
     ed = createRollEdit(canvas.current, {
+      // The canvas and the no-pan margin strip are siblings; their parent is where a
+      // press on either one can be heard.
+      surface: content.current,
       geometry: () => r.geometry(),
       model: () => { const m = r.model(); const b = r.bounds();
         return { notes: m.notes, starts: m.starts, rests: m.rests, stepMin: b.stepMin, stepMax: b.stepMax }; },
@@ -83,6 +87,9 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
       // replaced. Draw has always had this guard; the app was missing it.
       enabled: () => !!intentRef.current && modeRef.current === 'roll' && !gamaRef.current,
       allow: (kind) => (allowRef.current ? allowRef.current.includes(kind) : true),
+      // The only scrolling a gesture is allowed to cause: an A–B sweep dragged past the
+      // top or bottom of the window, so a range longer than the window can be marked.
+      scrollBy: (dy) => { hd.scrollTop += dy; },
       emit: (it) => { if (intentRef.current) intentRef.current(it); },
     });
 
@@ -122,10 +129,61 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
       emit: (it) => { if (gamaIntentRef.current) gamaIntentRef.current(it); },
     });
 
-    const ro = new ResizeObserver(() => r.resize());
+    // The three grid stretch-handles. This is VIEW state — how far a reader has widened
+    // the grid to write into — so it is applied here and never reaches the notation or a
+    // share link. Capture phase, and it stops the event: a tab sits ON the grid, and to
+    // the note layer underneath a press on one looks like a press on empty space.
+    const gst = createGridStretch(canvas.current, {
+      geometry: () => r.geometry(),
+      size: () => r.size(),
+      bounds: () => r.bounds(),
+      snapStep: (step) => snapToRagaRow(step, [...new Set(r.bounds().gridPitches.map((g) => ((g.step % EDO) + EDO) % EDO))]),
+      snapTime: (t) => snapToAkshara(t, beatOf(r) || 1),
+      beat: () => beatOf(r) || 1,
+      measure: () => { const m = r.model(); return m && m.tala ? m.tala.measure : 0; },
+      enabled: () => modeRef.current === 'roll' && !paintRef.current && !gamaRef.current,
+      redraw: () => r.render(),
+      emit: (it) => {
+        if (it.which === 'pmin') r.setUser({ min: it.step });
+        else if (it.which === 'pmax') r.setUser({ max: it.step });
+        else if (it.which === 'bottom') r.setUser({ bottom: it.bottom });
+        else if (it.which === 'extend') r.setUser({ bottom: (r.bounds().total || 0) + it.by });
+        // The scroll window is sized from the grid, so a taller grid has to be told to
+        // the div before the roll is redrawn into it — otherwise the new time exists and
+        // cannot be scrolled to.
+        content.current.style.height = r.virtH() + 'px';
+        if (it.which === 'bottom') {
+          // Glue the new bottom edge under the finger dragging it, so the time being
+          // added is visible while it is being added.
+          hd.scrollTop = Math.max(0, Math.min(Math.max(0, r.virtH() - hd.clientHeight),
+            r.yVirt(r.bounds().total) - it.y));
+        } else if (it.which === 'extend') {
+          // A tap adds an avartana BELOW the fold; scroll so the new bottom — with the
+          // tab still on it — is where the next tap will be.
+          hd.scrollTop = Math.max(0, Math.min(Math.max(0, r.virtH() - hd.clientHeight),
+            r.yVirt(r.bounds().total) - (hd.clientHeight - 40)));
+        }
+        r.render();
+      },
+    });
+    // Discoverability: a resize cursor over a tab, and only while nothing else is in
+    // flight — a cursor that changes mid-drag says the drag has been taken over.
+    const onHover = (e) => {
+      if (gst.busy() || ed.busy()) return;
+      const b = canvas.current.getBoundingClientRect();
+      const h = gst.hit(e.clientX - b.left, e.clientY - b.top);
+      canvas.current.style.cursor = h ? (h === 'bottom' ? 'pointer' : 'col-resize') : '';
+    };
+    canvas.current.addEventListener('pointermove', onHover);
+
+    // The strip is exactly as wide as the roll's left margin, which changes with the
+    // labels, so it is measured from the roll rather than guessed at.
+    const fitGutter = () => { if (gutter.current) gutter.current.style.width = r.geometry().plot.x + 'px'; };
+    const ro = new ResizeObserver(() => { r.resize(); fitGutter(); });
     ro.observe(hd);
-    r.resize();
-    return () => { hd.removeEventListener('scroll', onScroll); ed.destroy(); ced.destroy(); ged.destroy(); ro.disconnect(); roll.current = null; if (api && api.current === r) api.current = null; };
+    r.resize(); fitGutter();
+    return () => { hd.removeEventListener('scroll', onScroll); canvas.current && canvas.current.removeEventListener('pointermove', onHover);
+      ed.destroy(); ced.destroy(); ged.destroy(); gst.destroy(); ro.disconnect(); roll.current = null; if (api && api.current === r) api.current = null; };
   }, []);
 
   useEffect(() => {
@@ -174,7 +232,9 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
   // same layout draw uses — so it is told which note and left to it.
   useEffect(() => {
     const r = roll.current; if (!r) return;
-    r.setView({ mode, drawSpan });   // `sel` belongs to the effect below, which owns both meanings
+    // `handles`: the stretch tabs are drawn in roll mode only — the one-note layout has
+    // no grid to widen, and a tab left on it would be a control that does nothing.
+    r.setView({ mode, drawSpan, handles: mode === 'roll' });   // `sel` belongs to the effect below, which owns both meanings
     r.resize();
   }, [mode, curveIndex, drawSpan]);
 
@@ -198,6 +258,14 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
 
   return html`<div class="pane roll" style=${style}>
     ${tools}
-    <div class="roll-holder" ref=${holder}><div ref=${content}><canvas ref=${canvas}></canvas></div></div>
+    <div class="roll-holder" ref=${holder}><div ref=${content}>
+      <canvas ref=${canvas}></canvas>
+      <!-- The margin strip: hit-testable, and it forbids panning. touch-action is read
+           when the finger LANDS, so an A-B sweep has to start somewhere the browser was
+           never going to scroll — setting it on the canvas once the press has arrived is
+           already too late. Presses on it bubble to this div, which is where the roll's
+           gestures listen. -->
+      <div class="roll-gutter" ref=${gutter}></div>
+    </div></div>
   </div>`;
 }

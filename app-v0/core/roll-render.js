@@ -18,7 +18,7 @@
 //
 // Each is handed the geometry, so an editor never recomputes coordinates the roll
 // has already worked out — the two cannot disagree about where a note is.
-import { rollGeometry } from './roll-geometry.js';
+import { rollGeometry, gridHandles } from './roll-geometry.js';
 import { EDO } from './shruti.js';
 
 // Height of the draggable A/B tabs in the left margin. Shared with the gesture layer,
@@ -341,6 +341,36 @@ export function renderRoll(ctx, m, v, hooks = {}) {
     ctx.strokeStyle = C.teal; ctx.globalAlpha = .95; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(p.x, y); ctx.lineTo(p.x + p.w, y); ctx.stroke(); ctx.globalAlpha = 1;
     ctx.fillStyle = C.teal; ctx.beginPath(); ctx.moveTo(p.x, y - 4); ctx.lineTo(p.x + 7, y); ctx.lineTo(p.x, y + 4); ctx.closePath(); ctx.fill();
+  }
+
+  // The three grid stretch-handles, drawn last so nothing sits on top of them. They are
+  // the roll's now rather than the gamaka page's: both hosts widen the same grid, and a
+  // tab drawn by one page and hit-tested by another is exactly the drift this module
+  // exists to prevent. The boxes come from roll-geometry, the same ones the gesture
+  // grabs by — there is no second copy of the arithmetic to keep in step.
+  if (mode === 'roll' && v.handles) {
+    const H = gridHandles(g, { w: v.w, h: v.h }, { stepMin: m.stepMin, stepMax: m.stepMax });
+    // A row of dots ACROSS the axis you cannot drag: the way a tab hints which way it slides.
+    const dots = (cx, cy, axis) => {
+      ctx.fillStyle = '#08110d';
+      for (let i = -1; i <= 1; i++) {
+        if (axis === 'h') ctx.fillRect(cx - 1, cy + i * 4 - 1, 2, 2);
+        else ctx.fillRect(cx + i * 4 - 1, cy - 1, 2, 2);
+      }
+    };
+    const tab = (t) => {
+      ctx.fillStyle = C.teal; ctx.globalAlpha = .85;
+      roundRect(ctx, t.x - t.w / 2, t.y - t.h / 2, t.w, t.h, 4); ctx.fill(); ctx.globalAlpha = 1;
+      ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = .6; ctx.stroke();
+      dots(t.x, t.y, t.axis);
+    };
+    tab(H.pmin); tab(H.pmax); tab(H.bottom);
+    // "+ time" says what the bottom tab DOES, because unlike the pitch edges it is not
+    // sitting on the boundary it moves — it is pinned to the viewport.
+    ctx.fillStyle = '#031'; ctx.font = 'bold 12px ' + mono;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('+ time', H.bottom.x, H.bottom.y);
+    ctx.textBaseline = 'alphabetic'; ctx.font = '11px ' + mono;
   }
 
   hooks.top && hooks.top(g);
