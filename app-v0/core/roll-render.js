@@ -273,6 +273,21 @@ export function renderRoll(ctx, m, v, hooks = {}) {
     ctx.globalAlpha = 1;
   }
 
+  // In-roll gamaka mode: every curve's anchors, so they can be aimed at without opening
+  // anything. Drawn from view state like everything else the gesture layers need shown.
+  if (mode === 'roll' && v.gamakaMode) {
+    for (let i = 0; i < notes.length; i++) {
+      const c = notes[i].curve; if (!c) continue;
+      const t0 = starts[i], t1 = t0 + notes[i].dur;
+      for (const [u, st] of c) {
+        const cx = X(st), cy = Y(t0 + (t1 - t0) * u);
+        ctx.fillStyle = C.teal; ctx.globalAlpha = .9;
+        ctx.beginPath(); ctx.arc(cx, cy, 4, 0, 6.283); ctx.fill(); ctx.globalAlpha = 1;
+        ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = .7; ctx.stroke();
+      }
+    }
+  }
+
   // The curve editor's own furniture: the anchors you grab, and a prompt when there is
   // nothing to grab yet. Shared, because a curve editor without visible anchor points is
   // not one — you cannot aim at what is not drawn. Suppressed mid-stroke (v.drawing),

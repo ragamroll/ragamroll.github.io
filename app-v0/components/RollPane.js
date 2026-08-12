@@ -4,6 +4,7 @@ import { createRagamRoll } from '../core/ragamroll.js';
 import { buildRollModel } from '../core/roll-model.js';
 import { createRollEdit } from '../core/roll-edit.js';
 import { createCurveEdit } from '../core/curve-edit.js';
+import { createGamakaEdit } from '../core/gamaka-edit.js';
 import { sampleCurve } from '../core/gamaka-inline.js';
 import { snapToRagaRow, snapToAkshara } from '../core/note-edit.js';
 import { EDO } from '../core/shruti.js';
@@ -25,7 +26,7 @@ const cssvar = (k) => getComputedStyle(document.documentElement).getPropertyValu
 
 export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom = 1, paint,
   mode = 'roll', curveIndex = -1, onCurveIntent, snapping, onCurvePitch, drawSpan = 22,
-  markerA = 0, markerB = 0 }) {
+  markerA = 0, markerB = 0, gamaka, onGamakaIntent }) {
   const holder = useRef(null), content = useRef(null), canvas = useRef(null);
   const roll = useRef(null);
   // The gesture layer reads these through refs, not through its closure: it is mounted
@@ -36,6 +37,8 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
   modeRef.current = mode; curveRef.current = onCurveIntent; snapRef.current = snapping; idxRef.current = curveIndex;
   const pitchRef = useRef(onCurvePitch); pitchRef.current = onCurvePitch;
   const marksRef = useRef({ a: markerA, b: markerB }); marksRef.current = { a: markerA, b: markerB };
+  const gamaRef = useRef(gamaka), gamaIntentRef = useRef(onGamakaIntent);
+  gamaRef.current = gamaka; gamaIntentRef.current = onGamakaIntent;
 
   useEffect(() => {
     const hd = holder.current;
@@ -74,7 +77,11 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
       redraw: () => r.setView({ paint: ed.painting() }).render(),
       painting: () => !!paintRef.current,
       marks: () => marksRef.current,
-      enabled: () => !!intentRef.current && modeRef.current === 'roll',
+      // NOT while ✎ is armed: there a press on a note is shaping its curve, and letting
+      // the roll gestures run too started a note-move alongside the trace — two commits
+      // in one gesture, the second re-serialising against notation the first had already
+      // replaced. Draw has always had this guard; the app was missing it.
+      enabled: () => !!intentRef.current && modeRef.current === 'roll' && !gamaRef.current,
       allow: (kind) => (allowRef.current ? allowRef.current.includes(kind) : true),
       emit: (it) => { if (intentRef.current) intentRef.current(it); },
     });
@@ -85,7 +92,6 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
       geometry: () => r.geometry(),
       curve: () => { const m = r.model(); const i = idxRef.current; return i >= 0 && m.notes[i] ? m.notes[i].curve : null; },
       setCurve: (c) => { const m = r.model(); const i = idxRef.current; if (i >= 0 && m.notes[i]) m.notes[i].curve = c; },
-      snapStep: (step) => snapToRagaRow(step, [...new Set(r.bounds().gridPitches.map((g) => ((g.step % EDO) + EDO) % EDO))]),
       snapping: () => !!snapRef.current,
       enabled: () => modeRef.current === 'draw' && !!curveRef.current,
       redraw: () => r.setView({ drawing: ced.drawing() }).render(),
@@ -102,10 +108,24 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
     const onScroll = () => r.render();
     hd.addEventListener('scroll', onScroll, { passive: true });
 
+    // In-roll gamaka editing, on the same canvas as everything else. Live only while the
+    // ✎ toggle is on, and it takes the press before the roll gestures do — a drag there
+    // is shaping a curve, not moving a note.
+    const ged = createGamakaEdit(canvas.current, {
+      geometry: () => r.geometry(),
+      model: () => { const m = r.model(); return { notes: m.notes, starts: m.starts }; },
+      hitNote: (x, y) => (gamaRef.current ? ed.hitNote(x, y) : -1),
+      snapping: () => !!snapRef.current,
+      enabled: () => !!gamaRef.current && modeRef.current === 'roll',
+      redraw: () => r.render(),
+      sample: sampleCurve,
+      emit: (it) => { if (gamaIntentRef.current) gamaIntentRef.current(it); },
+    });
+
     const ro = new ResizeObserver(() => r.resize());
     ro.observe(hd);
     r.resize();
-    return () => { hd.removeEventListener('scroll', onScroll); ed.destroy(); ced.destroy(); ro.disconnect(); roll.current = null; if (api && api.current === r) api.current = null; };
+    return () => { hd.removeEventListener('scroll', onScroll); ed.destroy(); ced.destroy(); ged.destroy(); ro.disconnect(); roll.current = null; if (api && api.current === r) api.current = null; };
   }, []);
 
   useEffect(() => {
@@ -169,6 +189,12 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
     const r = roll.current; if (!r) return;
     r.setView({ paintMode: !!paint }).render();
   }, [paint]);
+
+  // ✎ shows every curve's anchors, so they can be aimed at.
+  useEffect(() => {
+    const r = roll.current; if (!r) return;
+    r.setView({ gamakaMode: !!gamaka }).render();
+  }, [gamaka]);
 
   return html`<div class="pane roll" style=${style}>
     ${tools}

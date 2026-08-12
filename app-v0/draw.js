@@ -21,6 +21,7 @@ import { anchorsOf, resplitAt } from './core/note-split.js';
 import { createSeamHost } from './core/roll-seam.js';
 import { pointsToAnchors, addAnchor, removeAnchor, moveAnchor } from './core/gamaka-curve.js';
 import { createCurveEdit } from './core/curve-edit.js';
+import { createGamakaEdit } from './core/gamaka-edit.js';
 import { buildSequence } from './core/midi/sequence.js';
 import { writeSMF } from './core/midi/smf.js';
 import { serializeModel, applyEdit, applyMove, paintEdit, snapToRagaRow, snapToAkshara, placePaint, splitSpans, octMarks } from './core/note-edit.js';
@@ -102,9 +103,6 @@ function recomputeGridBounds(){
 }
 const freqOf = step => stepFreq(saFreq, step);
 const secPerUnit = () => 30 / tempoBpm;
-function snapStep(s){ const oct = Math.floor(s / EDO), base = s - oct * EDO; let best = SHRUTI[0], bd = Infinity;
-  for (const sh of [...SHRUTI, EDO]){ const d = Math.abs(base - sh); if (d < bd){ bd = d; best = sh; } }
-  return oct * EDO + best; }
 
 // ---------- canvas ----------
 const cv = document.getElementById('cv');
@@ -112,7 +110,6 @@ let mode='roll', sel=-1, drawSpan=22;   // the curve gesture's own state lives i
 // Roll-mode long-press grab (move/resize a note). paintMode is wired to the
 // `+ note` toolbar toggle below; grab and paint gestures are mutually exclusive.
 let paintMode=false, gamakaMode=false;   // the press/drag gestures themselves live in core/roll-edit.js
-let gamaStroke=null;   // in-roll gamaka gesture: {gi, pid, dragIdx, downX, downY, buffer, mode:'anchor'|'free'|'pending'}
 const HANDLE_PX=18;
 const ROLL_TOUCH_ACTION='pan-y';   // touchAction roll mode uses when idle (matches resizeCanvas below)
 // Grid stretch-handles (pitch-low/pitch-high/time-bottom) — shared sizing between
@@ -189,7 +186,7 @@ function syncView(){
     // The rest gutter and the in-progress paint box are the shared renderer's now, so
     // they are told rather than drawn here — both apps aim at the same band.
     paintMode: mode==='roll' && paintMode, paint: rollEdit ? rollEdit.painting() : null,
-    drawing: curveEdit ? curveEdit.drawing() : false });
+    drawing: curveEdit ? curveEdit.drawing() : false, gamakaMode: mode==='roll' && gamakaMode });
 }
 // ---- editing chrome ----
 // Painted through the roll's hooks, because it is interleaved with the roll's own
@@ -204,11 +201,7 @@ function drawRestGutter(g){ const p=g.plot, [sa,sb]=g.xRange, C=roll.ctx;
     if (s<sa||s>sb) continue; const x=g.X(s); C.strokeStyle=cssvar('--hair2'); C.globalAlpha=.5; C.beginPath(); C.moveTo(x,p.y); C.lineTo(x,p.y+p.h); C.stroke(); C.globalAlpha=1; } }
 }
 function drawEditChrome(g){ const p=g.plot, X=g.X, Y=g.Y, C=roll.ctx, teal=cssvar('--teal');
-  if (mode==='roll' && gamakaMode) for (let i=0;i<NOTES.length;i++){ const c=NOTES[i].curve; if (!c) continue;
-    const t0=starts[i], t1=t0+NOTES[i].dur;
-    for (const [u,st] of c){ const cx=X(st), cy=Y(t0+(t1-t0)*u);
-      C.fillStyle=teal; C.globalAlpha=.9; C.beginPath(); C.arc(cx,cy,4,0,6.283); C.fill(); C.globalAlpha=1;
-      C.strokeStyle='rgba(0,0,0,.35)'; C.lineWidth=.7; C.stroke(); } }
+  // In-roll gamaka anchors are the shared renderer's now.
   // The curve editor's anchors and its empty-note prompt are the shared renderer's now.
 }
 function drawHandles(){ if (mode==='roll') drawGridHandles(cssvar('--teal')); }
@@ -282,7 +275,6 @@ const curveEdit = createCurveEdit(cv, {
   geometry: () => geo(),
   curve: () => (sel >= 0 && NOTES[sel] ? NOTES[sel].curve : null),
   setCurve: (c) => { if (sel >= 0 && NOTES[sel]) NOTES[sel].curve = c; syncCurveButtons(); },
-  snapStep,
   snapping: () => $('snap').checked,
   enabled: () => mode === 'draw',
   redraw: () => render(),
@@ -388,52 +380,24 @@ async function applyIntent(it) {
 // Painting is core/roll-edit.js's gesture now, like every other press on the roll; what
 // arrives here is the finished intent. The grid stretch-handles still get first refusal
 // in the capture-phase listener above, so you can still zoom while painting is armed.
-// In-roll gamaka drawing/editing (`✎ gamaka` toggled on). Grid handles + `+ time`
-// are checked first (so you can zoom while editing). The note under the initial
-// press is the stroke's target; drag on empty note area = freehand redraw.
-const MOVE_EPS=6;   // px before a press counts as a drag (vs a tap)
-function uAt(i,y){ return Math.max(0,Math.min(1,(tAtY(y)-starts[i])/Math.max(1e-6,NOTES[i].dur))); }
-function stepAt(x){ const p=plot(); return snapStep(Math.round(stepAtX(Math.max(p.x,Math.min(p.x+p.w,x))))); }
-// Roll-coord hit-test of note gi's anchors; returns the anchor index or -1.
-function hitAnchor(gi,x,y){ const c=NOTES[gi].curve; if (!c) return -1; const t0=starts[gi],t1=t0+NOTES[gi].dur;
-  for (let k=0;k<c.length;k++){ const cx=X(c[k][1]),cy=Y(t0+(t1-t0)*c[k][0]); if ((x-cx)*(x-cx)+(y-cy)*(y-cy)<=16*16) return k; } return -1; }
-// Is (x,y) on note gi's curve LINE (within ~12px), for tap-to-add? Sample at the press u.
-function onCurveLine(gi,x,y){ const c=NOTES[gi].curve; if (!c) return false; const u=uAt(gi,y);
-  const st=sampleCurve(c,u); return Math.abs(X(st)-x)<=12; }
-cv.addEventListener('pointerdown', e=>{ if (mode!=='roll' || !gamakaMode) return;
-  { const {x,y}=evtPos(e); const gh=hitGridHandle(x,y); if (gh){ if (gh==='tbottom') extendTime(); else startHandleDrag(gh,e); return; } }
-  if (gamaStroke) return;
-  ensureAudio(); const {x,y}=evtPos(e); const i=hitNote(x,y); if (i<0) return;
-  try{ cv.setPointerCapture(e.pointerId); }catch(_){};
-  const dragIdx = NOTES[i].curve ? hitAnchor(i,x,y) : -1;
-  gamaStroke={ gi:i, pid:e.pointerId, downX:x, downY:y, dragIdx, buffer:null, mode: dragIdx>=0 ? 'anchor' : 'pending', origCurve:NOTES[i].curve };
-}, true);
-cv.addEventListener('pointermove', e=>{ if (!gamaStroke || e.pointerId!==gamaStroke.pid) return; const {x,y}=evtPos(e);
-  const g=gamaStroke;
-  if (g.mode==='anchor'){ if (Math.abs(x-g.downX)>MOVE_EPS || Math.abs(y-g.downY)>MOVE_EPS){
-      if (!g.moved){ pushUndo(); g.moved=true; }
-      NOTES[g.gi].curve=moveAnchor(NOTES[g.gi].curve, g.dragIdx, uAt(g.gi,y), stepAt(x)); render(); }
-    return; }
-  if (g.mode==='pending' && (Math.abs(x-g.downX)>MOVE_EPS || Math.abs(y-g.downY)>MOVE_EPS)){
-    // begin a freehand redraw of the target note's curve
-    pushUndo(); g.mode='free'; g.buffer=[]; NOTES[g.gi].curve=null;
-  }
-  if (g.mode==='free'){ const u=uAt(g.gi,y), st=stepAt(x);
-    if (g.buffer.length && u<=g.buffer[g.buffer.length-1][0]) g.buffer[g.buffer.length-1][1]=st; else g.buffer.push([u,st]);
-    NOTES[g.gi].curve=g.buffer.slice(); render(); }
-}, true);
-cv.addEventListener('pointerup', e=>{ if (!gamaStroke || e.pointerId!==gamaStroke.pid) return; const g=gamaStroke; gamaStroke=null;
-  rollEdit.suppressClick();   // suppress the trailing click (don't fall into the full-screen editor)
-  const {x,y}=evtPos(e); const moved=Math.abs(x-g.downX)>MOVE_EPS||Math.abs(y-g.downY)>MOVE_EPS;
-  if (g.mode==='free'){ NOTES[g.gi].curve=pointsToAnchors(g.buffer); render(); scheduleShare(); return; }
-  if (g.mode==='anchor'){ if (g.moved){ scheduleShare(); }
-    else { pushUndo(); NOTES[g.gi].curve=removeAnchor(NOTES[g.gi].curve, g.dragIdx); render(); scheduleShare(); }  // tap = remove
-    return; }
-  // mode 'pending' with no move: tap on the curve line adds an anchor there
-  if (!moved && NOTES[g.gi].curve && onCurveLine(g.gi,x,y)){ pushUndo();
-    NOTES[g.gi].curve=addAnchor(NOTES[g.gi].curve, uAt(g.gi,y), stepAt(x)); render(); scheduleShare(); }
-}, true);
-cv.addEventListener('pointercancel', e=>{ if (!gamaStroke || e.pointerId!==gamaStroke.pid) return; NOTES[gamaStroke.gi].curve=gamaStroke.origCurve; gamaStroke=null; render(); }, true);
+// In-roll gamaka editing (`✎ gamaka` toggled on) is core/gamaka-edit.js's gesture now,
+// so the app can mount the same one. Grid handles and `+ time` are still checked first
+// in the capture-phase listener above, so you can zoom while editing.
+const gamakaEdit = createGamakaEdit(cv, {
+  geometry: () => geo(),
+  model: () => ({ notes: NOTES, starts }),
+  hitNote: (x, y) => (mode === 'roll' && gamakaMode ? rollEdit.hitNote(x, y) : -1),
+  snapping: () => $('snap').checked,
+  enabled: () => mode === 'roll' && gamakaMode,
+  redraw: () => render(),
+  sample: sampleCurve,
+  onGrabStart: () => ensureAudio(),
+  emit: (it) => {
+    if (it.phase === 'begin') { pushUndo(); return; }
+    rollEdit.suppressClick();   // the trailing click must not open the full-screen editor
+    scheduleShare();
+  },
+});
 // Grid stretch-handle drag (pitch-low/pitch-high/time-bottom). These are separate
 // listeners (not folded into grab/paint) because a handle-drag must fire in BOTH
 // normal and paint mode — startHandleDrag() is invoked from the top of both roll
@@ -589,12 +553,12 @@ $('tplus').onclick=()=>{ zoom=Math.min(8, Math.round((zoom+0.5)*10)/10); resizeC
 // `+ note` toggle: paint mode is mutually exclusive with the roll's long-press grab
 // (both handlers guard on paintMode, see the pointerdown listeners above), and with
 // `✎ gamaka` mode below.
-$('paintbtn').onclick=()=>{ paintMode=!paintMode; if (paintMode){ gamakaMode=false; $('gamakabtn').classList.remove('on'); if (gamaStroke){ NOTES[gamaStroke.gi].curve=gamaStroke.origCurve; gamaStroke=null; } }
+$('paintbtn').onclick=()=>{ paintMode=!paintMode; if (paintMode){ gamakaMode=false; $('gamakabtn').classList.remove('on'); }
   $('paintbtn').classList.toggle('on',paintMode); cv.style.cursor=paintMode?'crosshair':''; render(); };
 // `✎ gamaka` toggle: shows draggable anchor dots on the roll (rendered in render()) and
 // is mutually exclusive with `+ note` paint mode. Pointer handlers land in later tasks.
 $('gamakabtn').onclick=()=>{ gamakaMode=!gamakaMode; if (gamakaMode){ paintMode=false; $('paintbtn').classList.remove('on'); }
-  if (gamaStroke){ NOTES[gamaStroke.gi].curve=gamaStroke.origCurve; gamaStroke=null; } $('gamakabtn').classList.toggle('on',gamakaMode); cv.style.cursor=gamakaMode?'crosshair':''; render(); };
+  $('gamakabtn').classList.toggle('on',gamakaMode); $('snapctl').style.display=gamakaMode?'':'none'; cv.style.cursor=gamakaMode?'crosshair':''; render(); };
 // Gamaka-on-move default: 'preserve pitch' (leave the abs curve — serialize emits shifted
 // relative deltas) or 'move with note' (shift the abs curve so the deltas stay verbatim
 // and the curve rides the note). Persisted; the post-move toast always offers the other.
@@ -944,7 +908,7 @@ function download(name, data, type){ const a=document.createElement('a'); a.href
 $('save').onclick=()=>download(docName+'.srgm', srcText, 'text/plain');
 $('exportmidi').onclick=()=>{ try{ download(docName+'.mid', writeSMF(buildSequence(parse(srcText))), 'audio/midi'); }catch(e){ window.alert('MIDI export failed: '+e.message); } };
 window.__rr = { notes:()=>NOTES, rests:()=>RESTS.map(r=>({...r})), get selRest(){ return selRest; },
-  intents:()=>INTENT_LOG.map(i=>({...i})), clearIntents:()=>{ INTENT_LOG.length=0; }, get mode(){ return mode; },
+  intents:()=>INTENT_LOG.map(i=>({...i})), clearIntents:()=>{ INTENT_LOG.length=0; }, get mode(){ return mode; }, get gamakaMode(){ return gamakaMode; },
   get delEnabled(){ return !$('delbtn').disabled; }, restEdgeY:(tok)=>{ const r=RESTS.find(x=>x.tok===tok); return r?Y(r.t0+r.dur):null; },
   yRange:()=>geo().yRange, restMidY:(tok)=>{ const r=RESTS.find(x=>x.tok===tok); return r?Y(r.t0+r.dur/2):null; }, X, Y, starts:()=>starts, get playing(){ return playing; }, get paused(){ return paused; }, get stepMin(){ return stepMin; }, get stepMax(){ return stepMax; }, get padTop(){ return PAD.t; }, gridSteps:()=>gridPitches.map(g=>g.step), labelChipW:()=>14, get shareLink(){ return shareLink; }, get playPos(){ return playPos; }, get markerA(){ return markerA; }, get markerB(){ return markerB; }, get talaMeasure(){ return talaMeasure; }, get talaAccents(){ return talaAccents; }, get droneVol(){ return droneVol; }, get talaVol(){ return talaVol; }, inlineSrc:()=>inlineSrc(), rebuild:()=>rebuildShare(), get src(){ return srcText; } };
 // Populate the examples dropdown from the manifest (same source as the app).

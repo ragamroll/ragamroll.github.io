@@ -42,6 +42,7 @@ export const BOXES = [
 const BY_STEP = new Map(BOXES.map((b) => [b.step, b]));
 export function boxAt(step) { return BY_STEP.get(step) || null; }
 
+
 // The a/b twin of a variant (same `pair`), or null for fixed / lone steps.
 export function twin(step) {
   const b = BY_STEP.get(step);

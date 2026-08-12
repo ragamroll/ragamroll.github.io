@@ -193,6 +193,10 @@ function App({ examples }) {
   // "+ note": while it is armed a press PLACES something rather than grabbing what is
   // already there, so the two gestures are mutually exclusive by construction.
   const [rollPaint, setRollPaint] = useState(false);
+  // ✎ : shape a gamaka in place, without opening the one-note editor. Mutually exclusive
+  // with painting — both take a press on a note and mean different things by it.
+  const [rollGamaka, setRollGamaka] = useState(false);
+
   const [rollSel, setRollSel] = useState(null);   // { type:'note'|'rest', tok } | null
   // The roll draws one cell per note of typical length; zoom stretches time on top of
   // that, for shaping a long note or reading a crowded phrase. Same range and step draw
@@ -345,6 +349,18 @@ function App({ examples }) {
     if (st == null || !r) { setCurveHz(''); return; }
     setCurveHz('≈' + stepFreq(midiToFreq(r.model().saRef), st).toFixed(0) + ' Hz');
   }, []);
+  // Declared HERE, not beside the ✎ toggle it belongs to: it closes over commitRoll,
+  // and a useCallback above that definition reads it in the temporal dead zone and
+  // takes the whole app down before it renders.
+  const onGamakaIntent = useCallback((it) => {
+    if (it.phase !== 'commit') return;
+    const r = rollApiRef.current; if (!r) return;
+    // Which note changed is not in the intent; the gesture writes straight into the
+    // model, so every note is re-serialised. deriveOctave stays off — nothing moved in
+    // pitch class, only the ornament riding on it.
+    commitRoll({ changed: new Set(r.model().notes.map((n) => n.tok)) });
+  }, [commitRoll]);
+
   const onCurveIntent = useCallback((it) => {
     // 'begin' says a press became a real edit. Undo is recorded at commit, where both
     // versions of the notation are in hand, so there is nothing to do until then.
@@ -631,10 +647,13 @@ function App({ examples }) {
         <${RollPane} model=${effModel} api=${rollApiRef} onIntent=${onRollIntent} allow=${ROLL_EDITS}
           sel=${rollSel} zoom=${rollZoom} paint=${rollPaint}
           mode=${rollMode} curveIndex=${curveIdx} onCurveIntent=${onCurveIntent} snapping=${curveSnap}
+          gamaka=${rollGamaka} onGamakaIntent=${onGamakaIntent}
           onCurvePitch=${onCurvePitch} drawSpan=${curveSpan} markerA=${markA} markerB=${markB}
           tools=${html`<${RollTools} sel=${rollSel} onDelete=${onRollDelete}
             canUndo=${canUndo} onUndo=${onRollUndo} zoom=${rollZoom} onZoom=${onRollZoom}
-            paint=${rollPaint} onPaint=${() => setRollPaint((v) => !v)}
+            paint=${rollPaint} onPaint=${() => { setRollPaint((v) => !v); setRollGamaka(false); }}
+            gamaka=${rollGamaka} onGamaka=${() => { setRollGamaka((v) => !v); setRollPaint(false); }}
+            snap=${curveSnap} onSnap=${() => setCurveSnap((v) => !v)}
             hasSeg=${hasSeg} onClearMarks=${() => { setMarkA(0); setMarkB(0); }}
             mode=${rollMode} onBack=${() => { setCurveIdx(-1); setCurveTok(-1); }}
             hasCurve=${!!(curveIdx >= 0 && effModel && curveNote() && curveNote().curve)}

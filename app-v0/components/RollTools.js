@@ -11,7 +11,7 @@ import { html } from '../vendor/htm-preact.js';
 // state at all.
 export function RollTools({ sel, onDelete, canUndo, onUndo, zoom, onZoom, paint, onPaint,
   mode, onBack, hasCurve, canPaste, onClear, onCopy, onPaste, snap, onSnap, hz, span, onSpan,
-  hasSeg, onClearMarks }) {
+  hasSeg, onClearMarks, gamaka, onGamaka }) {
   const what = sel ? (sel.type === 'rest' ? 'rest' : 'note') : '';
 
   // Shaping one note is a different job from arranging a piece, so the strip swaps
@@ -24,7 +24,7 @@ export function RollTools({ sel, onDelete, canUndo, onUndo, zoom, onZoom, paint,
       <button disabled=${!hasCurve} onClick=${onCopy} title="Copy this gamaka">Copy</button>
       <button disabled=${!canPaste} onClick=${onPaste}
         title="Paste the copied gamaka onto this note — re-anchored to its own pitch">Paste</button>
-      <label class="rt-snap" title="Snap each anchor onto a row of the raga when you let go">
+      <label class="rt-snap" title="On: points land on the 53-EDO grid. Off: exactly where you put them.">
         <input type="checkbox" checked=${snap} onChange=${onSnap} /> snap
       </label>
       <span class="rt-zoom" title="How much of the pitch axis to show — narrow it to place a shruti precisely">
@@ -41,6 +41,13 @@ export function RollTools({ sel, onDelete, canUndo, onUndo, zoom, onZoom, paint,
     <button class=${'rt-paint' + (paint ? ' on' : '')} onClick=${onPaint}
       title="Draw a new note by dragging on the grid — or a rest, in the tala margin at the left">
       ${paint ? '✓ + note' : '+ note'}
+    </button>
+    ${gamaka ? html`<label class="rt-snap" title="On: points land on the 53-EDO grid. Off: exactly where you put them.">
+      <input type="checkbox" checked=${snap} onChange=${onSnap} /> snap
+    </label>` : ''}
+    <button class=${'rt-gamaka' + (gamaka ? ' on' : '')} onClick=${onGamaka}
+      title="Shape a gamaka in place: drag across a note to trace it, drag a point to move it, tap one to remove it, shift-drag to re-trace over an existing curve">
+      ${gamaka ? '✓ ✎ gamaka' : '✎ gamaka'}
     </button>
     <button class="rt-del" disabled=${!sel} onClick=${onDelete}
       title=${sel ? `Delete the selected ${what} (Del)` : 'Select a note or a rest first'}>
@@ -62,6 +69,7 @@ export function RollTools({ sel, onDelete, canUndo, onUndo, zoom, onZoom, paint,
     </span>
     <span class="rt-what">${paint
       ? 'drag grid = note · drag margin = rest'
+      : gamaka ? 'drag a point · tap = remove · shift-drag = re-trace'
       : (sel ? `${what} selected` : 'click = select · dbl-click = gamaka · margin = A–B')}</span>
   </div>`;
 }

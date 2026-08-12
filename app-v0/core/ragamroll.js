@@ -107,6 +107,7 @@ export function createRagamRoll(el, opts = {}) {
       // way to the renderer, silently, and the feature simply never appears. Four of
       // these were passed in by both apps and never arrived.
       paint: view.paint, paintMode: view.paintMode, drawing: view.drawing, abTabs: view.abTabs,
+      gamakaMode: view.gamakaMode,
       chipH: LABEL_CHIP_H, sample: sampleCurve };
   };
 

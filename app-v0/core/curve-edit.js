@@ -25,8 +25,7 @@ export function createCurveEdit(canvas, opts) {
     geometry,              // () -> the roll's geometry (X, Y, stepAtX, tAtY, plot, yRange)
     curve,                 // () -> [[u, step]...] | null   the note being shaped
     setCurve,              // (c|null) -> void              apply a preview to the host
-    snapStep,              // (step) -> step
-    snapping = () => false,// () -> bool                    the host's snap toggle
+    snapping = () => false,// () -> bool   on: the 53-EDO grid; off: wherever you put it
     enabled = () => true,
     redraw,
     emit,                  // (intent) -> void
@@ -41,15 +40,23 @@ export function createCurveEdit(canvas, opts) {
   const at = (e) => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
   const span = () => geometry().yRange;
 
-  // Which anchor is under the pointer, or -1.
+  // Where a point lands: the nearest 53-EDO step, or exactly where you put it when snap
+  // is off — to two decimals, the precision the notation carries. One rule for both
+  // editors, so a curve shaped in one is a curve the other can shape back.
+  const place = (step) => (snapping() ? Math.round(step) : Math.round(step * 100) / 100);
+
+  // Which anchor is under the pointer, or -1. NEAREST, not the first within reach: two
+  // anchors close together would otherwise let only one of them ever be grabbed.
   function hitHandle(x, y) {
     const c = curve(); if (!c) return -1;
     const geo = geometry(), [t0, t1] = span();
+    let best = -1, bd = HIT_PX * HIT_PX;
     for (let k = 0; k < c.length; k++) {
       const cx = geo.X(c[k][1]), cy = geo.Y(t0 + (t1 - t0) * c[k][0]);
-      if ((x - cx) * (x - cx) + (y - cy) * (y - cy) <= HIT_PX * HIT_PX) return k;
+      const d = (x - cx) * (x - cx) + (y - cy) * (y - cy);
+      if (d <= bd) { bd = d; best = k; }
     }
-    return -1;
+    return best;
   }
 
   // Is (x,y) on the drawn curve itself? That is where a tap ADDS an anchor, so it is
@@ -80,7 +87,7 @@ export function createCurveEdit(canvas, opts) {
     let c = curve();
     if (!c || c.length < 2) { setCurve(null); return; }
     c = extractAnchors(c);
-    if (snapping()) c = c.map((pt) => [pt[0], snapStep(pt[1])]);
+    c = c.map((pt) => [pt[0], place(pt[1])]);
     if (c[0][0] > 0.001) c = [[0, c[0][1]], ...c];
     if (c[c.length - 1][0] < 0.999) c = [...c, [1, c[c.length - 1][1]]];
     setCurve(c);
@@ -129,7 +136,7 @@ export function createCurveEdit(canvas, opts) {
     if (done.mode === 'drag') {
       // Snap on release, not during: snapping mid-drag makes the anchor jump under the
       // pointer instead of following it.
-      if (snapping()) { const c = curve(); c[dragIdx][1] = snapStep(c[dragIdx][1]); }
+      { const c = curve(); c[dragIdx][1] = place(c[dragIdx][1]); }
       dragIdx = -1; onPitch(null);
       redraw(); emit({ kind: 'curve', phase: 'commit' }); return;
     }
@@ -148,8 +155,7 @@ export function createCurveEdit(canvas, opts) {
       emit({ kind: 'curve', phase: 'begin' });
       const geo = geometry(), [t0, t1] = span();
       const u = Math.max(0, Math.min(1, (geo.tAtY(y) - t0) / Math.max(1e-6, t1 - t0)));
-      const raw = Math.round(geo.stepAtX(x));
-      setCurve(addAnchor(c, u, snapping() ? snapStep(raw) : raw));
+      setCurve(addAnchor(c, u, place(geo.stepAtX(x))));
       redraw(); emit({ kind: 'curve', phase: 'commit' }); return;
     }
     onPitch(null);
