@@ -7,7 +7,7 @@ import { useState, useRef, useEffect } from '../vendor/hooks.module.js';
 // flyout) so it works with one tap on touch. Closes on select, outside-click,
 // or Esc. `exampleValue` marks the currently-loaded example (was the select's
 // controlled value) so the user sees which one is active.
-export function OpenMenu({ examples, exampleValue, onOpen, onExample, onOpenLink }) {
+export function OpenMenu({ examples, exampleValue, onNew, onOpen, onExample, onOpenLink }) {
   const [open, setOpen] = useState(false);
   const [link, setLink] = useState('');
   const [linkErr, setLinkErr] = useState(false);
@@ -37,6 +37,7 @@ export function OpenMenu({ examples, exampleValue, onOpen, onExample, onOpenLink
     <input type="file" accept=".srgm,.txt" ref=${fileRef} style="display:none"
            onChange=${e => { const f = e.target.files[0]; e.target.value = ''; if (f) { setOpen(false); onOpen(f); } }} />
     ${open && html`<div class="openmenu-pop" role="menu">
+      <button role="menuitem" class="openmenu-item" onClick=${() => { setOpen(false); onNew && onNew(); }}>Blank / New</button>
       <button role="menuitem" class="openmenu-item" onClick=${() => fileRef.current && fileRef.current.click()}>From file…</button>
       <div class="openmenu-sep">Paste a share link</div>
       <div class="openmenu-link">

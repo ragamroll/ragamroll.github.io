@@ -42,3 +42,22 @@ export function chooseSeed(name, draftsMap, extForName, ragasMap) {
   if (hasScale) return { srgm: ragaPreviewSrgm(name, extForName, ragasMap, {}), kind: 'plain' };
   return null;
 }
+
+
+// The per-raga seed map (drafts.json), fetched once and shared by every page that offers
+// a raga picker. Two paths because the same file is served from a deployed build and
+// from a local curation run; a total failure is NOT memoized, so the next pick retries
+// rather than being told forever that there are no drafts.
+let _draftsPromise = null;
+export function loadDrafts(urls = ['./ragas/drafts.json', '../tools/out/drafts.json']) {
+  if (!_draftsPromise) {
+    _draftsPromise = (async () => {
+      for (const url of urls) {
+        try { const r = await fetch(url); if (r.ok) return await r.json(); } catch (_) { /* try the next */ }
+      }
+      _draftsPromise = null;
+      return {};
+    })();
+  }
+  return _draftsPromise;
+}

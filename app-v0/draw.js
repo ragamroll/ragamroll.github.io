@@ -6,7 +6,7 @@
 import { parse, TALA_MAP } from './core/parser.js';
 import { setRagas, getRagas, resolveRagaName } from './core/raga-base.js';
 import { setRagaExt, getRagaExt } from './core/raga-ext.js';
-import { chooseSeed } from './core/raga-seed.js';
+import { chooseSeed, loadDrafts } from './core/raga-seed.js';
 import { midiToFreq } from './audio/schedule.js';
 import { BOXES, EDO, stepFreq } from './core/shruti.js';
 import { encodeShareToken, decodeShareToken } from './core/share.js';
@@ -598,20 +598,6 @@ function syncControls(){ $('sapick').value=saPlay==null?'':String(saPlay);
   $('ragasearch').disabled=!blank; $('talasel').disabled=!blank;
   $('editnote').textContent = blank ? 'pick a raga / tala, then type swaras below' : 'raga · tala locked while notes exist';
   $('ragasearch').value = curRaga || ''; $('talasel').value = curTalaName; }
-// The per-raga seed map (drafts.json), fetched once. Tries the deployed path
-// (./ragas/) then the local-curation path (../tools/out/); empty map if neither
-// is reachable (offline / not built) — seeding then falls back to the plain scale.
-let _draftsPromise = null;
-function loadDrafts(){
-  if (!_draftsPromise) _draftsPromise = (async () => {
-    for (const url of ['./ragas/drafts.json', '../tools/out/drafts.json']) {
-      try { const r = await fetch(url); if (r.ok) return await r.json(); } catch(_){}
-    }
-    _draftsPromise = null; // total failure (offline / not built) — don't memoize {}, retry next pick
-    return {};
-  })();
-  return _draftsPromise;
-}
 // Set the Raga=/Tala= directive in the srgm (blank pieces only) and reload.
 // A Raga pick seeds the piece with that raga's notation (curated draft, else a
 // plain scale); a Tala pick only rewrites the directive (unchanged behaviour).

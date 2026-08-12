@@ -18,7 +18,7 @@ export function Transport({ state, canPlay, onPlay, onPause, onStop,
   talaVol, onTalaVol, talaMuted, onToggleTala, melodyMuted, onToggleMelody,
   droneVol, onDroneVol, droneMuted, onToggleDrone, masterVol, onMasterVol,
   onSave, onExportMidi, onShare, shared, compositionTempo, tempoOverride, onTempo, onResetTempo,
-  saPitch, autoSaMidi, onSetSa }) {
+  saPitch, autoSaMidi, onSetSa, onRewind}) {
   const overridden = tempoOverride != null;
   const eff = overridden ? tempoOverride : compositionTempo;
   // Speed multiplier of the composition tempo, snapped to the 0.2 grid.
@@ -52,7 +52,8 @@ export function Transport({ state, canPlay, onPlay, onPause, onStop,
     </label>
 
     <span class="transport-play">
-      <button title="Play"  onClick=${onPlay}  disabled=${state === 'playing' || !canPlay}>▶</button>
+      <button title="Back to the start (of the A–B segment, if set)" onClick=${onRewind} disabled=${!canPlay}>⏮</button>
+      <button class="pri" title="Play" onClick=${onPlay}  disabled=${state === 'playing' || !canPlay}>▶</button>
       <button title="Pause" onClick=${onPause} disabled=${state !== 'playing'}>⏸</button>
       <button title="Stop"  onClick=${onStop}  disabled=${state === 'stopped'}>⏹</button>
 

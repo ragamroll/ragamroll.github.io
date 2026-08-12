@@ -2,11 +2,14 @@ import { h, render } from './vendor/preact.module.js';
 import { useState, useEffect, useMemo, useCallback, useRef } from './vendor/hooks.module.js';
 import { html } from './vendor/htm-preact.js';
 import { TALA_MAP } from './core/parser.js';
-import { setRagas, getRagas } from './core/raga-base.js';
+import { setRagas, getRagas, resolveRagaName } from './core/raga-base.js';
 import { setRagaExt } from './core/raga-ext.js';
 import { Editor } from './components/Editor.js';
 import { RollPane } from './components/RollPane.js';
 import { RollTools } from './components/RollTools.js';
+import { EditTools } from './components/EditTools.js';
+import { chooseSeed, loadDrafts } from './core/raga-seed.js';
+import { getRagaExt } from './core/raga-ext.js';
 import { applyEdit, applyMove, paintEdit, placePaint } from './core/note-edit.js';
 import { createSeamHost } from './core/roll-seam.js';
 import { stepFreq } from './core/shruti.js';
@@ -95,6 +98,13 @@ function App({ examples }) {
   const raga = useMemo(() => { const e = [...model.events].reverse().find(e => e.type === 'raga'); return e ? e.key.join(',') : ''; }, [model]);
   const ragaName = useMemo(() => { const e = [...model.events].reverse().find(e => e.type === 'raga'); return e ? e.key[0] : ''; }, [model]);
   const tala = useMemo(() => { const e = [...model.events].reverse().find(e => e.type === 'tala'); return e ? `beat ${e.props.beat}` : ''; }, [model]);
+  // The quick raga/tala pickers above the notation box. They apply to a BLANK piece
+  // only: changing the raga under written swaras would re-spell every one of them.
+  const talaName = useMemo(() => { const e = [...model.events].reverse().find((x) => x.type === 'tala'); return e && e.key ? e.key[0] : ''; }, [model]);
+  const [ragaNames, setRagaNames] = useState([]);
+  useEffect(() => { setRagaNames(Object.keys(getRagas() || {}).filter((n) => !/^mela_\d+$/i.test(n))
+    .sort((a2, b2) => a2.toLowerCase().localeCompare(b2.toLowerCase()))); }, [model]);
+  const talaNames = useMemo(() => Object.keys(TALA_MAP), []);
 
   // Opening a file / picking an example remembers its name, so Save and Export
   // suggest the same base name instead of a fixed "ragamroll".
@@ -105,6 +115,21 @@ function App({ examples }) {
   // defined later; reach it through a ref that's kept current below.
   const stopRef = useRef(() => {});
   const onOpen = useCallback(async (file) => { stopRef.current(); setExampleValue(''); setDocName(baseName(file.name)); setText(await file.text()); }, []);
+  // Blank / New: the skeleton draw writes — a raga, a tala, an octave and a length, and
+  // no notes. A piece with no notes is what gives the roll its WIDE grid (two avartanas
+  // of empty time, the middle octave with half an octave either side, from gridBounds),
+  // so there is a canvas to write on rather than one unit of nothing.
+  //
+  // It keeps the raga and tala you were already in, where draw always resets to its
+  // first-listed raga and adi. Clearing the notes is not a reason to throw away the
+  // context, and both pickers unlock the moment the piece is blank, so changing either
+  // is one click away. Declared beside onOpen because it closes over ragaName/talaName
+  // (declared above) and nothing from the roll state below.
+  const onNew = useCallback(() => {
+    stopRef.current(); setExampleValue(''); setDocName('untitled');
+    const r = ragaName || ragaNames[0] || 'c12';
+    setText(`Raga=${r},0\nTala=${talaName || 'adi'},4\nO=5 L=1\n`);
+  }, [ragaName, talaName, ragaNames]);
   const onSave = useCallback(() => {
     const blob = new Blob([text], { type: 'text/plain' });
     const a = document.createElement('a');
@@ -481,6 +506,24 @@ function App({ examples }) {
 
   const noteCount = useMemo(() => model.events.filter(e => e.type === 'note' && !e.rest).length, [model]);
 
+  // Below noteCount ON PURPOSE — these close over it. Fourth time in this file that a
+  // useCallback declared above what it reads took the app down before first render.
+  // A raga pick SEEDS the piece with that raga's own notation — a curated draft when
+  // there is one, else a plain scale — so a blank page becomes something to hear.
+  const onPickRaga = useCallback(async (name) => {
+    if (!name || noteCount > 0) return;
+    const cname = resolveRagaName(name) || name;
+    const drafts = await loadDrafts();
+    const picked = chooseSeed(cname, drafts, getRagaExt(cname), getRagas());
+    setText(picked ? picked.srgm : `Raga=${cname},0\nTala=adi,4\nO=5 L=1\n`);
+  }, [noteCount]);
+  const onPickTala = useCallback((name) => {
+    if (!name || noteCount > 0) return;
+    const nv = 'Tala=' + name + ',4', re = /(^|\s)Tala=\S+/;
+    setText((t) => (re.test(t) ? t.replace(re, (m2, p2) => p2 + nv) : nv + '\n' + t));
+  }, [noteCount]);
+
+
   const applyScroll = useCallback(() => {
     const pos = playerRef.current.position();
     // The roll draws the playhead; this decides where it is. Transport seconds minus
@@ -514,6 +557,20 @@ function App({ examples }) {
     const hd = rollApiRef.current && rollApiRef.current.canvas.parentElement.parentElement;
     if (hd) hd.scrollTop = 0;
   }, []);
+  // Rewind PARKS the playhead at the start — of the A–B segment when there is one — so
+  // you can see where the next Play will begin, rather than taking the line off the roll
+  // as Stop does. Declared HERE, below onStop and playState: it closes over both, and a
+  // useCallback above them reads them in the temporal dead zone and takes the app down
+  // before it renders. Third time in this file; the order is not incidental.
+  const onRewind = useCallback(() => {
+    const at = hasSeg ? markA : 0;
+    const wasPlaying = playState === 'playing';
+    onStop();
+    playheadRef.current = at;
+    if (rollApiRef.current) rollApiRef.current.setPlayhead(at).render();
+    if (wasPlaying) setPlayState('playing');
+  }, [hasSeg, markA, playState, onStop]);
+
   stopRef.current = onStop;   // let onOpen/onExample (defined earlier) stop playback on a content swap
 
   const loop = useCallback(() => {
@@ -617,7 +674,7 @@ function App({ examples }) {
 
   return html`
     <${Toolbar} raga=${raga} tala=${tala} examples=${examples} exampleValue=${exampleValue}
-                onOpen=${onOpen} onExample=${onExample} onOpenLink=${onOpenLink}
+                onNew=${onNew} onOpen=${onOpen} onExample=${onExample} onOpenLink=${onOpenLink}
                 onOpenRagas=${onOpenRagas} onOpenTalas=${onOpenTalas}
                 onOpenScale=${onOpenScale} scaleActive=${!!scale} scaleLabel=${scaleLabel}
                 timbre=${timbre} onTimbre=${onTimbre} />
@@ -630,7 +687,7 @@ function App({ examples }) {
     ${dialog === 'scale' && html`<${ScaleDialog} scale=${scale} onApply=${onApplyScale} onClose=${onCloseDialog}
                                                  ragas=${getRagas()} ragaName=${ragaName} />`}
     <${Transport} state=${playState} canPlay=${noteCount > 0}
-                  onPlay=${onPlay} onPause=${onPause} onStop=${onStop}
+                  onPlay=${onPlay} onPause=${onPause} onStop=${onStop} onRewind=${onRewind}
                   compositionTempo=${compositionTempo} tempoOverride=${tempoOverride} onTempo=${onTempo} onResetTempo=${onResetTempo}
                   saPitch=${saPitch} autoSaMidi=${autoSaMidi} onSetSa=${onSetSa}
                   masterVol=${masterVol} onMasterVol=${onMasterVol}
@@ -642,7 +699,11 @@ function App({ examples }) {
     <div class="workspace" ref=${wsRef}>
       <div class="cols" ref=${colsRef}
            style=${`flex:1 1 0; grid-template-columns:${leftPct}fr 6px ${100 - leftPct}fr`}>
-        <${Editor} value=${text} onInput=${setText} />
+        <div class="editor-pane">
+          <${EditTools} ragas=${ragaNames} talas=${talaNames} raga=${ragaName} tala=${talaName}
+            blank=${noteCount === 0} onRaga=${onPickRaga} onTala=${onPickTala} />
+          <${Editor} value=${text} onInput=${setText} />
+        </div>
         <${Splitter} orientation="v" onResize=${onVDrag} />
         <${RollPane} model=${effModel} api=${rollApiRef} onIntent=${onRollIntent} allow=${ROLL_EDITS}
           sel=${rollSel} zoom=${rollZoom} paint=${rollPaint}

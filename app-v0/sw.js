@@ -1,10 +1,10 @@
-const CACHE = 'ragamroll-68e272d';
+const CACHE = 'ragamroll-dfe4fd0';
 const ASSETS = [
   './', './index.html', './help.html', './draw.html', './draw.js', './pitchy.html', './app.js', './worker.js', './version.js', './manifest.webmanifest',
   './vendor/preact.module.js', './vendor/hooks.module.js', './vendor/htm.module.js', './vendor/htm-preact.js',
   './vendor/tone.js',
   './vendor/pitchy.mjs', './vendor/fft.mjs',
-  './components/Editor.js', './components/RollPane.js', './components/RollTools.js', './components/Toolbar.js',
+  './components/Editor.js', './components/RollPane.js', './components/RollTools.js', './components/EditTools.js', './components/Toolbar.js',
   './components/Diagnostics.js', './components/Transport.js', './components/ReferenceDialog.js', './components/Splitter.js',
   './components/Footer.js', './components/OpenMenu.js', './components/ScaleDialog.js', './components/TalaDialog.js',
   './components/RagaDialog.js',
