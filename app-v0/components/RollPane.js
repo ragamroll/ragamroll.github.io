@@ -178,6 +178,55 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
     };
     content.current.addEventListener('contextmenu', onCtx);
 
+    // TOUCH has no right-click. A long press is its stand-in everywhere else, so it is
+    // here too — held still on a note, past the moment a drag would have declared itself.
+    //
+    // 500ms, not the 300ms that arms a grab: by then roll-edit is already HOLDING the note,
+    // and a menu that left it held would move the note on the way to the menu item. So the
+    // press is taken back with a real pointercancel on the surface both share, which is
+    // what roll-edit reverts on — the note goes back where it was and commits nothing.
+    //
+    // Android fires a contextmenu event of its own after a long press, and that lands in
+    // the same setMenu above; iOS fires none, which is what this is for. Either way the
+    // menu opens once with the same note under it.
+    let lpTimer = null, lp = null;
+    const LP_MS = 500, LP_SLOP = 10;
+    const lpCancel = () => { clearTimeout(lpTimer); lp = null; };
+    const onLpDown = (e) => {
+      if (e.pointerType !== 'touch' || modeRef.current !== 'roll') return;
+      // Those modes own a press outright: painting places a note, ✎ shapes a curve, and a
+      // menu appearing mid-gesture would be taking the press away from what armed it.
+      if (paintRef.current || gamaRef.current) return;
+      const r2 = canvas.current.getBoundingClientRect();
+      const x = e.clientX - r2.left, y = e.clientY - r2.top;
+      // An EDGE is not a body. Holding an edge is how a length is grabbed on a touchscreen
+      // — the hold IS the gesture, and a menu opening halfway through it would take the
+      // press away from a resize already in hand. The note's body has no such claim on a
+      // press that never moves.
+      if (ed.noteEdgeAt(x, y) || ed.restEdgeAt(x, y)) return;
+      const i = ed.hitNote(x, y);
+      if (i < 0) return;                       // empty grid stays the scroller's
+      lp = { x: e.clientX, y: e.clientY, id: e.pointerId, i };
+      clearTimeout(lpTimer);
+      lpTimer = setTimeout(() => {
+        if (!lp) return;
+        const held = lp; lp = null;
+        content.current.dispatchEvent(new PointerEvent('pointercancel',
+          { pointerId: held.id, pointerType: 'touch', bubbles: true }));
+        setMenu({ x: held.x, y: held.y, i: held.i });
+      }, LP_MS);
+    };
+    // Moved is dragged, not held: the finger is scrolling the piece or moving the note.
+    const onLpMove = (e) => {
+      if (!lp || e.pointerId !== lp.id) return;
+      if (Math.abs(e.clientX - lp.x) > LP_SLOP || Math.abs(e.clientY - lp.y) > LP_SLOP) lpCancel();
+    };
+    const onLpUp = (e) => { if (lp && e.pointerId === lp.id) lpCancel(); };
+    content.current.addEventListener('pointerdown', onLpDown);
+    content.current.addEventListener('pointermove', onLpMove);
+    window.addEventListener('pointerup', onLpUp, true);
+    window.addEventListener('pointercancel', onLpUp, true);
+
     // The three grid stretch-handles. This is VIEW state — how far a reader has widened
     // the grid to write into — so it is applied here and never reaches the notation or a
     // share link. Capture phase, and it stops the event: a tab sits ON the grid, and to
@@ -255,7 +304,14 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
     ro.observe(hd);
     r.resize(); fitGutter();
     return () => { hd.removeEventListener('scroll', onScroll); canvas.current && canvas.current.removeEventListener('pointermove', onHover);
-      content.current && content.current.removeEventListener('contextmenu', onCtx);
+      clearTimeout(lpTimer);
+      if (content.current) {
+        content.current.removeEventListener('contextmenu', onCtx);
+        content.current.removeEventListener('pointerdown', onLpDown);
+        content.current.removeEventListener('pointermove', onLpMove);
+      }
+      window.removeEventListener('pointerup', onLpUp, true);
+      window.removeEventListener('pointercancel', onLpUp, true);
       ed.destroy(); ced.destroy(); ged.destroy(); gst.destroy(); pan.destroy(); ro.disconnect(); roll.current = null; if (api && api.current === r) api.current = null; };
   }, []);
 

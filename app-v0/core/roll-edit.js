@@ -536,7 +536,10 @@ export function createRollEdit(canvas, opts) {
   surface.addEventListener('dblclick', onDblClick);
 
   return {
-    hitNote, hitRest, restEdgeAt,
+    // noteEdgeAt is exposed for the same reason restEdgeAt is: a host that wants to know
+    // what a press would MEAN before it means it — the long-press menu asks, because an
+    // edge press is how a length is grabbed on a touchscreen and a menu must not take it.
+    hitNote, hitRest, restEdgeAt, noteEdgeAt,
     /** True while a gesture is in flight — the host should not fight it. */
     busy: () => !!(grab || restGrab || paint || ab),
     /** The note being dragged, for drawing its handle. -1 when none. */

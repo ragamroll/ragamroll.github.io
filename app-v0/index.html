@@ -432,7 +432,10 @@
     /* The margin strip — see RollPane. Transparent, above the canvas, and the one place
        on the roll where a touch may not start a scroll. */
     .roll-gutter { position:absolute; top:0; left:0; height:100%; width:0; z-index:3; touch-action:none; }
-    .roll-holder canvas { display:block; position:sticky; top:0; width:100%; }
+    /* No OS text-callout on a long press: that gesture is the roll's own menu now, and
+       iOS would otherwise offer to select or copy a canvas nobody can select. */
+    .roll-holder canvas { display:block; position:sticky; top:0; width:100%;
+      -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
     .footer { display:flex; gap:.6rem; align-items:center; padding:.35rem .6rem; border-top:1px solid var(--hair); font-size:.75rem; opacity:.7; }
     .footer .build { margin-left:auto; }  /* build timestamp + version, pushed right */
     .footer .ver { color:var(--amber); font-family:ui-monospace,monospace; }
