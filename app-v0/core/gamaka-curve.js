@@ -80,12 +80,24 @@ export function removeAnchor(curve, idx) {
   return c;
 }
 
-// Move anchor idx to (u,step), u clamped between neighbours (endpoints to
-// [0,next) / (prev,1]) — matches the editor's dragHandle.
+// Move anchor idx to (u,step), u clamped between neighbours.
+//
+// The ENDPOINTS keep their u. A curve spans its note — removeAnchor re-pins the new first
+// and last for exactly that reason — and an endpoint dragged inward left the note's first
+// moments with no pitch written for them. Nothing renders that as a gap: sampleCurve was
+// asked for the pitch before the curve began and extrapolated its cubic backwards, which
+// at u=0 against a first anchor at 0.112 came out fourteen thousand steps above Sa and
+// took the audio layer down with an infinite frequency. An endpoint still moves in PITCH,
+// which is what dragging one is for; it simply cannot leave the end.
 export function moveAnchor(curve, idx, u, step) {
   const c = curve.map(p => p.slice());
-  const lo = idx === 0 ? 0 : c[idx - 1][0] + 0.006, hi = idx === c.length - 1 ? 1 : c[idx + 1][0] - 0.006;
-  c[idx][0] = Math.max(lo, Math.min(hi, u));
+  const first = idx === 0, last = idx === c.length - 1;
+  if (!first && !last) {
+    const lo = c[idx - 1][0] + 0.006, hi = c[idx + 1][0] - 0.006;
+    c[idx][0] = Math.max(lo, Math.min(hi, u));
+  } else {
+    c[idx][0] = first ? 0 : 1;
+  }
   c[idx][1] = step;
   return c;
 }

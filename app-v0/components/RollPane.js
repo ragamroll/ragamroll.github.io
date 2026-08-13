@@ -28,7 +28,8 @@ const cssvar = (k) => getComputedStyle(document.documentElement).getPropertyValu
 
 export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom = 1, onSetZoom, paint, chrome = true,
   mode = 'roll', curveIndex = -1, onCurveIntent, snapping, onCurvePitch, drawSpan = 22,
-  markerA = 0, markerB = 0, gamaka, onGamakaIntent }) {
+  markerA = 0, markerB = 0, gamaka, onGamakaIntent, onGamakaPitch,
+  canPasteGamaka, onCopyGamakaAt, onPasteGamakaAt }) {
   const holder = useRef(null), content = useRef(null), canvas = useRef(null), gutter = useRef(null);
   const roll = useRef(null);
   // The gesture layer reads these through refs, not through its closure: it is mounted
@@ -45,6 +46,13 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
   // The slider shows the span the roll is ACTUALLY drawing, so a pan or a stretch-tab
   // drag moves it too rather than leaving it describing a range nobody is looking at.
   const [pitchSpan, setPitchSpan] = useState(0);
+  // The roll's context menu: right-click a note to copy or paste its gamaka, the way the
+  // gamaka page has always done it. { x, y, i } in client coordinates, or null.
+  //
+  // It acts on the note UNDER THE POINTER rather than on the selection, which is the whole
+  // of why it feels direct: no arming a mode, no selecting first, no strip to travel to.
+  const [menu, setMenu] = useState(null);
+  const hitRef = useRef(() => -1);            // the roll-edit hit-test, once it exists
   // The pitch window as the READER set it — centre and span, in floats — kept apart from
   // what the roll draws, which is rounded to whole steps. Rounding is for drawing; a
   // control that reads its own rounded output back accumulates the error.
@@ -53,6 +61,10 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
   const returnTo = useRef(null);          // the moment to come back to when the editor closes
   const gamaRef = useRef(gamaka), gamaIntentRef = useRef(onGamakaIntent);
   gamaRef.current = gamaka; gamaIntentRef.current = onGamakaIntent;
+  // Its own ref, NOT the curve editor's `pitchRef`: the two report the same thing from
+  // different modes, and one name for both is how a collision in here took the app down
+  // twice before.
+  const gamaPitchRef = useRef(onGamakaPitch); gamaPitchRef.current = onGamakaPitch;
 
   useEffect(() => {
     const hd = holder.current;
@@ -143,7 +155,28 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
       redraw: () => r.render(),
       sample: sampleCurve,
       emit: (it) => { if (gamaIntentRef.current) gamaIntentRef.current(it); },
+      onPitch: (st) => { if (gamaPitchRef.current) gamaPitchRef.current(st); },
     });
+
+    hitRef.current = (x, y) => ed.hitNote(x, y);
+
+    // Right-click: the gamaka page's own gesture. It opens on whatever note the press
+    // landed on, in roll mode only — the one-note editor has its whole strip to hand and
+    // a menu there would be offering a note the reader is already inside.
+    //
+    // On the PARENT, not the canvas: the margin strip is a sibling laid over the same
+    // area, so the canvas is not what a press lands on — which is why every other gesture
+    // in this pane listens here too. Coordinates are still measured against the canvas,
+    // because that is what the hit-test was drawn in.
+    const onCtx = (e) => {
+      if (modeRef.current !== 'roll') return;
+      const r2 = canvas.current.getBoundingClientRect();
+      const i = ed.hitNote(e.clientX - r2.left, e.clientY - r2.top);
+      if (i < 0) return;                       // empty grid keeps the browser's own menu
+      e.preventDefault();
+      setMenu({ x: e.clientX, y: e.clientY, i });
+    };
+    content.current.addEventListener('contextmenu', onCtx);
 
     // The three grid stretch-handles. This is VIEW state — how far a reader has widened
     // the grid to write into — so it is applied here and never reaches the notation or a
@@ -188,6 +221,12 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
     pan = createRollPan(canvas.current, {
       geometry: () => r.geometry(),
       bounds: () => r.bounds(),
+      extent: () => r.extent(),
+      // Desktop gets the gesture only once the axis is zoomed, where it is the only way
+      // along it and where a drag on empty grid means nothing else. Unzoomed, the whole
+      // pitch range is already on the canvas and a mouse drag stays what it was.
+      mousePan: () => !!r.pitchView(),
+      hitNote: (x, y) => ed.hitNote(x, y),
       setPitchView: (v) => {
         // A pan moves the centre and keeps the span; carried in floats for the same
         // reason the zoom carries it.
@@ -216,6 +255,7 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
     ro.observe(hd);
     r.resize(); fitGutter();
     return () => { hd.removeEventListener('scroll', onScroll); canvas.current && canvas.current.removeEventListener('pointermove', onHover);
+      content.current && content.current.removeEventListener('contextmenu', onCtx);
       ed.destroy(); ced.destroy(); ged.destroy(); gst.destroy(); pan.destroy(); ro.disconnect(); roll.current = null; if (api && api.current === r) api.current = null; };
   }, []);
 
@@ -356,6 +396,26 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
     setPitchSpan(Math.round(span));
   };
 
+  // A menu that outlives what it points at is worse than no menu: the roll scrolls, the
+  // piece re-parses, and the note under those coordinates is no longer the note the
+  // reader right-clicked. So it closes on anything that could move it.
+  useEffect(() => {
+    if (!menu) return;
+    const away = (e) => { if (!e.target.closest || !e.target.closest('.roll-ctx')) setMenu(null); };
+    const esc = (e) => { if (e.key === 'Escape') setMenu(null); };
+    const hd = holder.current;
+    document.addEventListener('pointerdown', away, true);
+    document.addEventListener('keydown', esc);
+    hd && hd.addEventListener('scroll', () => setMenu(null), { passive: true, once: true });
+    return () => { document.removeEventListener('pointerdown', away, true); document.removeEventListener('keydown', esc); };
+  }, [menu]);
+  useEffect(() => { setMenu(null); }, [model, mode]);
+
+  // What the menu is about to act on, read at RENDER time from the live model: a curve
+  // can be traced or cleared while the menu is open, and an item that lies about what it
+  // will do is worse than one that is simply greyed out.
+  const menuNote = menu && roll.current ? roll.current.model().notes[menu.i] : null;
+
   return html`<div class="pane roll" style=${style}>
     ${tools}
     <div class="roll-body">
@@ -378,5 +438,16 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
     ${chrome && html`<input class="roll-zp" type="range" min="9" max=${Math.max(10, Math.round(naturalPitch.current.span))} step="1"
       value=${pitchSpan} title="Zoom pitch — the pitch at the centre stays there"
       aria-label="Zoom pitch" onInput=${(e) => zoomPitch(parseFloat(e.target.value))} />`}
+    <!-- Clamped to the window, because a menu opened near the right or bottom edge would
+         otherwise hang off the screen with its items unreachable — the same clamp the
+         Open menu needed for the same reason. -->
+    ${menu && html`<div class="roll-ctx" role="menu"
+      style=${`left:${Math.min(menu.x, (typeof innerWidth === 'number' ? innerWidth : 1000) - 170)}px;`
+        + `top:${Math.min(menu.y, (typeof innerHeight === 'number' ? innerHeight : 800) - 90)}px`}>
+      <button role="menuitem" class="ctx-copy" disabled=${!(menuNote && menuNote.curve)}
+        onClick=${() => { onCopyGamakaAt && onCopyGamakaAt(menu.i); setMenu(null); }}>Copy gamaka</button>
+      <button role="menuitem" class="ctx-paste" disabled=${!canPasteGamaka}
+        onClick=${() => { onPasteGamakaAt && onPasteGamakaAt(menu.i); setMenu(null); }}>Paste gamaka</button>
+    </div>`}
   </div>`;
 }

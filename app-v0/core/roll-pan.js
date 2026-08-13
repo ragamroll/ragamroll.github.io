@@ -17,9 +17,16 @@ const SLOP_PX = 8;
 export function createRollPan(canvas, opts) {
   const {
     geometry,              // () -> the roll's geometry
-    bounds,                // () -> { stepMin, stepMax }
+    bounds,                // () -> { stepMin, stepMax }   what is DRAWN — the view, if any
+    extent,                // () -> { stepMin, stepMax }   the paper itself, view or no view
     setPitchView,          // ({min, max}) -> void
     enabled = () => true,
+    // A mouse pans only where a mouse has nothing else to mean: zoomed in, and not on a
+    // note. Desktop has no other way along this axis — the roll fits the pitch axis to the
+    // canvas, so there is no scrollbar to reach for, and zooming in without a pan strands
+    // a reader in the middle of their own piece.
+    mousePan = () => false,
+    hitNote = () => -1,
     redraw,
   } = opts;
 
@@ -28,9 +35,11 @@ export function createRollPan(canvas, opts) {
   const at = (e) => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
 
   const onDown = (e) => {
-    if (!enabled() || e.pointerType !== 'touch' || g) return;
+    if (!enabled() || g) return;
+    if (e.pointerType !== 'touch' && !mousePan()) return;
     const { x, y } = at(e);
     if (x < geometry().plot.x) return;            // the margin is A–B's
+    if (e.pointerType !== 'touch' && hitNote(x, y) >= 0) return;   // that press is the note's
     const b = bounds();
     g = { pid: e.pointerId, x0: x, y0: y, min0: b.stepMin, max0: b.stepMax, live: false };
   };
@@ -51,7 +60,18 @@ export function createRollPan(canvas, opts) {
     const span = g.max0 - g.min0;
     const perPx = span / Math.max(1, geometry().plot.w);
     const shift = -dx * perPx;
-    setPitchView({ min: g.min0 + shift, max: g.max0 + shift });
+    // CLAMPED to the paper. Panning off the end of the grid showed acres of staves with
+    // nothing on them and no landmark to come back by — and if anything downstream then
+    // takes the window for a range worth keeping, that emptiness becomes the piece's own
+    // grid. A window wider than the paper simply sits on it.
+    const ext = extent ? extent() : null;
+    let min = g.min0 + shift, max = g.max0 + shift;
+    if (ext && ext.stepMax > ext.stepMin) {
+      if (max - min >= ext.stepMax - ext.stepMin) { min = ext.stepMin; max = ext.stepMax; }
+      else if (min < ext.stepMin) { min = ext.stepMin; max = min + span; }
+      else if (max > ext.stepMax) { max = ext.stepMax; min = max - span; }
+    }
+    setPitchView({ min, max });
     redraw();
   };
 

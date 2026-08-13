@@ -61,9 +61,14 @@ export function createRagamRoll(el, opts = {}) {
   // and below leave the screen. So a view range overrides the bounds outright, and is
   // safe because panning can always reach what it pushed off.
   let pitchView = null;   // { min, max } | null — null = the grid's own bounds
+  // The grid's OWN extent, before any view is laid over it. bounds() reports the view when
+  // there is one — which is right for drawing and wrong for every question about the paper
+  // itself: how far a pan may travel, and what a host is pinning when it pins the grid.
+  let extent = { stepMin: -26, stepMax: 66, total: 1 };
 
   function recompute() {
     const b = gridBounds(model, user);
+    extent = { stepMin: b.stepMin, stepMax: b.stepMax, total: b.total };
     const lo = pitchView ? pitchView.min : b.stepMin;
     const hi = pitchView ? pitchView.max : b.stepMax;
     bounds = { ...b, stepMin: lo, stepMax: hi, gridPitches: gridPitches(model.notes, lo, hi, model.raga) };
@@ -160,6 +165,10 @@ export function createRagamRoll(el, opts = {}) {
     // KEEP that canvas has to ask for it separately: bounds() already carries whatever the
     // host pinned last, so reading the pin back through it can only ever confirm itself.
     autoBounds: () => gridBounds(model),
+    /** The grid as it would be drawn with no pitch view over it. */
+    extent: () => ({ ...extent }),
+    /** The bounds a reader has stretched to by hand — never the view. */
+    userBounds: () => ({ ...user }),
     // Read-only, for hosts and guards: what the renderer is actually being told to
     // draw. A selection pushed in through setView is only real if it arrives here.
     view: () => ({ ...view }),

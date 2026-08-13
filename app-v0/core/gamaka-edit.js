@@ -41,6 +41,7 @@ export function createGamakaEdit(canvas, opts) {
     emit,                  // (intent) -> void   { kind:'gamaka', phase:'begin'|'commit' }
     sample,                // (curve, u) -> step
     onGrabStart = () => {},
+    onPitch = () => {},    // (step|null) -> void  the pitch under the pointer; null = let go
   } = opts;
 
   let g = null;   // { i, pid, downX, downY, dragIdx, moved, buffer, mode, origCurve }
@@ -132,6 +133,12 @@ export function createGamakaEdit(canvas, opts) {
     const dragIdx = near ? near.k : -1;
     g = { i, pid: e.pointerId, downX: x, downY: y, dragIdx, moved: false, buffer: null,
       mode: dragIdx >= 0 ? 'anchor' : 'pending', origCurve: noteOf(i).curve };
+    // Says which note this press is AIMED at, before anything has been changed and whether
+    // or not anything ever is. A host with controls that act on a note — clear it, copy its
+    // gamaka, paste one onto it — needs a subject that a press can choose; without this the
+    // only way to choose one was to edit it, so a curve could never be pasted onto a note
+    // that had none. Not an edit: no undo, nothing to commit.
+    emit({ kind: 'gamaka', phase: 'target', index: i, tok: noteOf(i).tok });
   };
 
   const onMove = (e) => {
@@ -141,7 +148,9 @@ export function createGamakaEdit(canvas, opts) {
     if (g.mode === 'anchor') {
       if (!far) return;
       if (!g.moved) { emit({ kind: 'gamaka', phase: 'begin' }); g.moved = true; }
-      noteOf(g.i).curve = moveAnchor(noteOf(g.i).curve, g.dragIdx, uAt(g.i, y), stepAt(x));
+      const st = stepAt(x);
+      noteOf(g.i).curve = moveAnchor(noteOf(g.i).curve, g.dragIdx, uAt(g.i, y), st);
+      onPitch(st);
       redraw();
       return;
     }
@@ -155,6 +164,7 @@ export function createGamakaEdit(canvas, opts) {
       if (g.buffer.length && u <= g.buffer[g.buffer.length - 1][0]) g.buffer[g.buffer.length - 1][1] = st;
       else g.buffer.push([u, st]);
       noteOf(g.i).curve = g.buffer.slice();
+      onPitch(st);
       redraw();
     }
   };
@@ -164,12 +174,17 @@ export function createGamakaEdit(canvas, opts) {
     const { x, y } = at(e);
     const done = g; g = null;
     const moved = Math.abs(x - done.downX) > MOVE_EPS || Math.abs(y - done.downY) > MOVE_EPS;
+    onPitch(null);
+    // Every commit carries the note it shaped. The host has no other way to know: the
+    // gesture writes straight into the model, and which note was under the pointer was
+    // decided in here. It is what lets the strip's Clear/Copy/Paste have a subject.
+    const commit = () => emit({ kind: 'gamaka', phase: 'commit', index: done.i, tok: noteOf(done.i).tok });
 
     if (done.mode === 'free') {
       noteOf(done.i).curve = pointsToAnchors(done.buffer);
-      redraw(); emit({ kind: 'gamaka', phase: 'commit' }); return;
+      redraw(); commit(); return;
     }
-    if (done.mode === 'anchor' && done.moved) { emit({ kind: 'gamaka', phase: 'commit' }); return; }
+    if (done.mode === 'anchor' && done.moved) { commit(); return; }
     if (moved) return;
 
     // A TAP, and the same three answers the full-screen editor gives, in the same order:
@@ -183,12 +198,12 @@ export function createGamakaEdit(canvas, opts) {
     if (k >= 0) {
       emit({ kind: 'gamaka', phase: 'begin' });
       noteOf(done.i).curve = removeAnchor(c, k);
-      redraw(); emit({ kind: 'gamaka', phase: 'commit' }); return;
+      redraw(); commit(); return;
     }
     if (onCurveLine(done.i, x, y)) {
       emit({ kind: 'gamaka', phase: 'begin' });
       noteOf(done.i).curve = addAnchor(c, uAt(done.i, y), stepAt(x));
-      redraw(); emit({ kind: 'gamaka', phase: 'commit' });
+      redraw(); commit();
     }
   };
 
@@ -196,7 +211,7 @@ export function createGamakaEdit(canvas, opts) {
     if (!g || e.pointerId !== g.pid) return;
     // Put back exactly what was there: a half-traced stroke is not a curve anyone asked
     // for, and there is no commit to undo it with.
-    noteOf(g.i).curve = g.origCurve; g = null; redraw();
+    noteOf(g.i).curve = g.origCurve; g = null; onPitch(null); redraw();
   };
 
   canvas.addEventListener('pointerdown', onDown, true);

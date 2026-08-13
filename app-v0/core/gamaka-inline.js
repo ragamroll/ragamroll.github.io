@@ -77,7 +77,19 @@ export function walkTokens(srcText, visit) {
 export function sampleCurve(c, u) {
   if (c.length === 1) return c[0][1];
   for (let k = 1; k < c.length; k++) {
-    if (u <= c[k][0]) { const [u0, s0] = c[k - 1], [u1, s1] = c[k]; let t = (u - u0) / Math.max(1e-6, u1 - u0); t = t * t * (3 - 2 * t); return s0 + (s1 - s0) * t; }
+    if (u <= c[k][0]) {
+      const [u0, s0] = c[k - 1], [u1, s1] = c[k];
+      // CLAMPED before the smoothstep, which is a cubic and must never be evaluated
+      // outside the pair it interpolates. A curve whose first anchor is not at u=0 — one
+      // anchor dragged off the end is enough — was asked for the pitch before it began,
+      // and t went to -18: the cubic answered fourteen thousand steps above Sa, which
+      // reached the audio layer as an infinite frequency and threw. Outside its own range
+      // a curve HOLDS its end value, which is the only honest reading of a pitch that was
+      // never written.
+      let t = Math.max(0, Math.min(1, (u - u0) / Math.max(1e-6, u1 - u0)));
+      t = t * t * (3 - 2 * t);
+      return s0 + (s1 - s0) * t;
+    }
   }
   return c[c.length - 1][1];
 }

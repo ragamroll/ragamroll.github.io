@@ -48,9 +48,21 @@ export function RollTools({ sel, onDelete, canUndo, onUndo, zoom, onZoom, paint,
       title="Draw a new note by dragging on the grid — or a rest, in the tala margin at the left">
       +♪
     </button>
+    <!-- ✎ brings the editor's own controls with it, on the note last shaped — which is the
+         one the roll has selected, because shaping selects. They are the SAME handlers the
+         full-screen strip calls: a gamaka copied here pastes there and back, and the point
+         of the exercise is that the editor stops being the only place these live. Shown
+         only while ✎ is armed, since a strip that fits a phone cannot carry them always. -->
     ${gamaka ? html`<label class="rt-snap" title="On: points land on the 53-EDO grid. Off: exactly where you put them.">
       <input type="checkbox" checked=${snap} onChange=${onSnap} /> snap
-    </label>` : ''}
+    </label>
+    <button class="rt-gclear" disabled=${!hasCurve} onClick=${onClear} aria-label="Clear gamaka"
+      title=${hasCurve ? 'Remove this note\'s gamaka' : 'Shape or select a note with a gamaka first'}>∿✕</button>
+    <button class="rt-gcopy" disabled=${!hasCurve} onClick=${onCopy} aria-label="Copy gamaka"
+      title=${hasCurve ? 'Copy this gamaka' : 'Shape or select a note with a gamaka first'}>⧉</button>
+    <button class="rt-gpaste" disabled=${!canPaste} onClick=${onPaste} aria-label="Paste gamaka"
+      title=${canPaste ? 'Paste the copied gamaka onto this note — re-anchored to its own pitch' : 'Nothing copied yet'}>📋</button>
+    <span class="rt-hz">${hz}</span>` : ''}
     <button class=${'rt-gamaka' + (gamaka ? ' on' : '')} onClick=${onGamaka} aria-label="Shape gamaka"
       title="Shape a gamaka in place: drag across a note to trace it, drag a point to move it, tap one to remove it, shift-drag to re-trace over an existing curve">
       ∿

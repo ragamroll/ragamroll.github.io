@@ -14,11 +14,10 @@
 // A curve here is ABSOLUTE 53-EDO steps against `u` in 0..1, which is what the note
 // carries and what the renderer draws. Note-relative deltas are a serialisation detail
 // and belong to whoever writes the notation.
-import { extractAnchors, addAnchor, removeAnchor, tapAnchor } from './gamaka-curve.js';
+import { extractAnchors, addAnchor, removeAnchor, moveAnchor, tapAnchor } from './gamaka-curve.js';
 
 const MOVE_EPS = 6;        // px before a press counts as a drag rather than a tap
 const HIT_PX = 18;         // anchor grab radius
-const MIN_GAP = 0.006;     // an anchor may not be dragged onto its neighbour in u
 
 export function createCurveEdit(canvas, opts) {
   const {
@@ -102,14 +101,17 @@ export function createCurveEdit(canvas, opts) {
     setCurve(c);
   }
 
+  // Where a dragged anchor lands, decided by moveAnchor rather than here — including that
+  // an endpoint keeps its u. A curve spans its note; an endpoint dragged inward left the
+  // note's opening with no pitch written for it, and what read that gap was a cubic
+  // extrapolating backwards into frequencies that are not sound. The array is mutated in
+  // place because it IS the note's live curve, which the renderer is already drawing.
   function dragTo(x, y) {
     const c = curve(), geo = geometry(), p = geo.plot, [ba, bb] = span();
-    let u = (geo.tAtY(y) - ba) / (bb - ba);
-    const lo = dragIdx === 0 ? 0 : c[dragIdx - 1][0] + MIN_GAP;
-    const hi = dragIdx === c.length - 1 ? 1 : c[dragIdx + 1][0] - MIN_GAP;
-    u = Math.max(lo, Math.min(hi, u));
+    const u = (geo.tAtY(y) - ba) / (bb - ba);
     const st = geo.stepAtX(Math.max(p.x, Math.min(p.x + p.w, x)));
-    c[dragIdx][0] = u; c[dragIdx][1] = st;
+    const moved = moveAnchor(c, dragIdx, u, st);
+    c[dragIdx][0] = moved[dragIdx][0]; c[dragIdx][1] = moved[dragIdx][1];
     onPitch(st);
   }
 

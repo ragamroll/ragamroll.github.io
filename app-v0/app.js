@@ -388,17 +388,24 @@ function App({ examples }) {
     if (i < 0) setCurveTok(-1);
   }, [effModel, curveTok, curveIdx]);
 
+  // The note the gamaka controls act on. In the full-screen editor that is the note it was
+  // opened on; in ✎ mode there is no editor and no opened note, so it is the SELECTION —
+  // which shaping a curve sets, and which is also what the roll highlights. One accessor
+  // for both, so Clear, Copy and Paste are the same button wherever they are pressed
+  // rather than a second implementation that drifts.
   const curveNote = () => {
     const r = rollApiRef.current; const m = r && r.model();
-    return m && curveIdx >= 0 ? m.notes[curveIdx] : null;
+    if (!m) return null;
+    if (curveIdx >= 0) return m.notes[curveIdx];
+    return rollSel && rollSel.type === 'note' ? m.notes.find((n) => n.tok === rollSel.tok) || null : null;
   };
   // Hear what was just shaped. draw plays the note after every curve edit, and a gamaka
   // is a thing you judge by ear — reading anchors tells you almost nothing. previewNote
   // is the contract's audition: it sounds one note and cannot disturb the transport, so
   // this works mid-playback too.
-  const auditionCurve = useCallback(() => {
+  const auditionNote = useCallback((n) => {
     const p = playerRef.current, r = rollApiRef.current;
-    const n = curveNote(); if (!p || !r || !n) return;
+    if (!p || !r || !n) return;
     const m = r.model();
     const saF = midiToFreq(m.saRef);
     const secPerUnit = 30 / (m.tempo > 0 ? m.tempo : 120);
@@ -408,12 +415,19 @@ function App({ examples }) {
       for (let k = 0; k < GAMAKA_SAMPLES; k++) gamaka[k] = stepFreq(saF, sampleCurve(n.curve, k / (GAMAKA_SAMPLES - 1)));
     }
     p.previewNote({ freq: stepFreq(saF, n.step), durSec: Math.min(3, n.dur * secPerUnit), gamaka });
-  }, [curveIdx]);
-  const commitCurve = useCallback(() => {
-    const n = curveNote(); if (!n) return;
+  }, []);
+  const auditionCurve = useCallback(() => auditionNote(curveNote()), [auditionNote, curveIdx, rollSel]);
+  // Commit takes the NOTE, not the selection. The context menu acts on whatever is under
+  // the pointer, which is the whole point of it — a menu that could only act on the
+  // selected note would need the reader to select first, which is the paperwork it exists
+  // to remove. Committing "the selected note" while pasting onto another one would write
+  // the wrong token into the notation.
+  const commitNote = useCallback((n) => {
+    if (!n) return;
     commitRoll({ changed: new Set([n.tok]) });
-    auditionCurve();
-  }, [commitRoll, curveIdx, auditionCurve]);
+    auditionNote(n);
+  }, [commitRoll, auditionNote]);
+  const commitCurve = useCallback(() => commitNote(curveNote()), [commitNote, curveIdx, rollSel]);
   // The pitch under the pointer, in Hz. A gamaka is written in 53-EDO steps, which say
   // nothing to the ear; the frequency is the part a musician can check against an
   // instrument.
@@ -426,8 +440,15 @@ function App({ examples }) {
   // and a useCallback above that definition reads it in the temporal dead zone and
   // takes the whole app down before it renders.
   const onGamakaIntent = useCallback((it) => {
+    // Pressing a note SELECTS it, before any edit and even if none follows. In ✎ mode the
+    // roll's own select gesture is off — a press there is shaping a curve — so without
+    // this nothing on the strip has a subject to act on, and Clear, Copy and Paste could
+    // only ever be offered by opening the editor. It also says which note you are in, on
+    // a roll where the ornament may be drawn nowhere near it.
+    if (it.phase === 'target') { if (it.tok != null) setRollSel({ type: 'note', tok: it.tok }); return; }
     if (it.phase !== 'commit') return;
     const r = rollApiRef.current; if (!r) return;
+    if (it.tok != null) setRollSel({ type: 'note', tok: it.tok });
     // Which note changed is not in the intent; the gesture writes straight into the
     // model, so every note is re-serialised. deriveOctave stays off — nothing moved in
     // pitch class, only the ornament riding on it.
@@ -449,13 +470,26 @@ function App({ examples }) {
     setCurveIdx(-1); setCurveTok(-1);
   }, [curveTok]);
 
-  const onCurveClear = useCallback(() => { const n = curveNote(); if (!n) return; n.curve = null; commitCurve(); }, [commitCurve, curveIdx]);
-  const onCurveCopy = useCallback(() => { const n = curveNote(); if (!n || !n.curve) return;
+  const onCurveClear = useCallback(() => { const n = curveNote(); if (!n) return; n.curve = null; commitCurve(); }, [commitCurve, curveIdx, rollSel]);
+  // Copy and paste BY NOTE. The strip's buttons pass the note they act on; so does the
+  // context menu, which is handed an index by the hit-test under the pointer.
+  const noteAt = (i) => { const m = rollApiRef.current && rollApiRef.current.model(); return m && m.notes[i] ? m.notes[i] : null; };
+  const copyGamakaFrom = useCallback((n) => {
+    if (!n || !n.curve) return;
     // Stored RELATIVE to its note's step, so pasting re-anchors it onto the target's
     // pitch instead of carrying the source note's absolute one.
-    setCurveClip(n.curve.map(([u, st]) => [u, st - n.step])); }, [curveIdx]);
-  const onCurvePaste = useCallback(() => { const n = curveNote(); if (!n || !curveClip) return;
-    n.curve = curveClip.map(([u, d]) => [u, n.step + d]); commitCurve(); }, [curveClip, commitCurve, curveIdx]);
+    setCurveClip(n.curve.map(([u, st]) => [u, st - n.step]));
+  }, []);
+  const pasteGamakaOnto = useCallback((n) => {
+    if (!n || !curveClip) return;
+    n.curve = curveClip.map(([u, d]) => [u, n.step + d]);
+    commitNote(n);
+  }, [curveClip, commitNote]);
+  const onCurveCopy = useCallback(() => copyGamakaFrom(curveNote()), [copyGamakaFrom, curveIdx, rollSel]);
+  const onCurvePaste = useCallback(() => pasteGamakaOnto(curveNote()), [pasteGamakaOnto, curveIdx, rollSel]);
+  // What the roll's context menu calls: the note is whichever one the press landed on.
+  const onCopyGamakaAt = useCallback((i) => copyGamakaFrom(noteAt(i)), [copyGamakaFrom]);
+  const onPasteGamakaAt = useCallback((i) => pasteGamakaOnto(noteAt(i)), [pasteGamakaOnto]);
 
   const intentLog = useRef([]);       // headless guards read this; nothing else does
   const onRollIntent = useCallback((it) => {
@@ -624,9 +658,15 @@ function App({ examples }) {
   useEffect(() => {
     const r = rollApiRef.current;
     if (!r || !compiled.parsed || noteCount !== 0) return;
-    const auto = r.autoBounds(), cur = r.bounds();
-    r.setUser({ min: Math.min(auto.stepMin, cur.stepMin), max: Math.max(auto.stepMax, cur.stepMax),
-      bottom: Math.max(auto.total, cur.total) }).resize();
+    // Against the bounds a reader STRETCHED to, never against bounds() — which reports the
+    // pitch VIEW when there is one. A view is where someone is looking; pinning it made a
+    // pan permanent, so on a phone a pan-and-type-and-pan-again walked the grid out to
+    // eight octaves of empty staves that no zoom could get back.
+    const auto = r.autoBounds(), u = r.userBounds();
+    const lo = u.min != null ? Math.min(auto.stepMin, u.min) : auto.stepMin;
+    const hi = u.max != null ? Math.max(auto.stepMax, u.max) : auto.stepMax;
+    const bot = u.bottom != null ? Math.max(auto.total, u.bottom) : auto.total;
+    r.setUser({ min: lo, max: hi, bottom: bot }).resize();
   }, [docEpoch, noteCount, model, compiled.parsed]);
 
   const applyScroll = useCallback(() => {
@@ -853,16 +893,17 @@ function App({ examples }) {
           model=${effModel} api=${rollApiRef} onIntent=${onRollIntent} allow=${ROLL_EDITS}
           sel=${rollSel} zoom=${rollZoom} onSetZoom=${onRollZoomTo} paint=${rollPaint}
           mode=${rollMode} curveIndex=${curveIdx} onCurveIntent=${onCurveIntent} snapping=${curveSnap}
-          gamaka=${rollGamaka} onGamakaIntent=${onGamakaIntent}
+          gamaka=${rollGamaka} onGamakaIntent=${onGamakaIntent} onGamakaPitch=${onCurvePitch}
+          canPasteGamaka=${!!curveClip} onCopyGamakaAt=${onCopyGamakaAt} onPasteGamakaAt=${onPasteGamakaAt}
           onCurvePitch=${onCurvePitch} drawSpan=${curveSpan} markerA=${markA} markerB=${markB}
           tools=${html`<${RollTools} sel=${rollSel} onDelete=${onRollDelete}
             canUndo=${canUndo} onUndo=${onRollUndo}
             paint=${rollPaint} onPaint=${() => { setRollPaint((v) => !v); setRollGamaka(false); }}
-            gamaka=${rollGamaka} onGamaka=${() => { setRollGamaka((v) => !v); setRollPaint(false); }}
+            gamaka=${rollGamaka} onGamaka=${() => { setRollGamaka((v) => !v); setRollPaint(false); setCurveHz(''); }}
             gmove=${gmove} onGmove=${hasCurves ? onGmove : null}
             snap=${curveSnap} onSnap=${() => setCurveSnap((v) => !v)}
             mode=${rollMode} onBack=${onCurveBack}
-            hasCurve=${!!(curveIdx >= 0 && effModel && curveNote() && curveNote().curve)}
+            hasCurve=${!!(effModel && curveNote() && curveNote().curve)}
             canPaste=${!!curveClip} onClear=${onCurveClear} onCopy=${onCurveCopy} onPaste=${onCurvePaste}
             snap=${curveSnap} onSnap=${() => setCurveSnap((v) => !v)}
             hz=${curveHz} span=${curveSpan}

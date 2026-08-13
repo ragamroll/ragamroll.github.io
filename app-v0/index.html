@@ -79,6 +79,15 @@
     .transport-play { display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; margin-left:auto; }  /* wraps in portrait */
     .transport .sapick { display:inline-flex; align-items:center; gap:.25rem; font-size:.85rem; margin-left:.4rem; }
     .transport .sapick select { background:var(--panel2); color:var(--ink); border:1px solid var(--hair); border-radius:4px; padding:.1rem .25rem; font:inherit; }
+    /* The roll's right-click menu. Fixed, because it is positioned in CLIENT coordinates
+       from the pointer event — inside the scrolling roll it would slide away from the note
+       it points at the moment anything scrolled. */
+    .roll-ctx { position:fixed; z-index:50; background:var(--panel); border:1px solid var(--hair);
+      border-radius:8px; padding:.25rem; box-shadow:0 8px 24px rgba(0,0,0,.35); min-width:140px; }
+    .roll-ctx button { display:block; width:100%; text-align:left; border:0; background:none;
+      color:var(--ink); padding:.4rem .55rem; border-radius:5px; font-size:.88rem; cursor:pointer; }
+    .roll-ctx button:hover:not(:disabled) { background:var(--panel2); }
+    .roll-ctx button:disabled { opacity:.4; cursor:default; }
     .transport .tempo { display:inline-flex; align-items:center; gap:.3rem; font-size:.85rem; margin-left:.4rem; }
     .transport .tempo .tempo-mult { width:4.5rem; accent-color:var(--teal); cursor:pointer; }
     .transport .tempo .tempo-num { width:3.2rem; background:var(--panel2); color:var(--ink); border:1px solid var(--hair);
