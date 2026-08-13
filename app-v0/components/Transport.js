@@ -14,6 +14,14 @@ const pct = (v) => Math.round(v * 100);
 const SA_CHOICES = [];
 for (let m = 40; m <= 72; m++) SA_CHOICES.push(m);
 
+// What a playback tempo may be. 600 rather than 400 because a length-unit is not a beat:
+// curated files carry T480, and a box that stopped at 400 could not even reach the tempo
+// of the piece it was overriding. The slider is a SPEED, and quarter-speed to quadruple
+// covers the kalai the notation itself doubles and halves in.
+export const BPM_MIN = 20, BPM_MAX = 600;
+const MULT_MIN = 0.25, MULT_MAX = 4, MULT_STEP = 0.25;
+const clampBpm = (v) => Math.max(BPM_MIN, Math.min(BPM_MAX, v));
+
 export function Transport({ state, canPlay, onPlay, onPause, onStop,
   talaVol, onTalaVol, talaMuted, onToggleTala, melodyMuted, onToggleMelody,
   droneVol, onDroneVol, droneMuted, onToggleDrone, masterVol, onMasterVol,
@@ -21,8 +29,12 @@ export function Transport({ state, canPlay, onPlay, onPause, onStop,
   saPitch, autoSaMidi, onSetSa, onRewind}) {
   const overridden = tempoOverride != null;
   const eff = overridden ? tempoOverride : compositionTempo;
-  // Speed multiplier of the composition tempo, snapped to the 0.2 grid.
-  const mult = Math.max(0.2, Math.min(2, Math.round((eff / compositionTempo) / 0.2) * 0.2));
+  // Speed multiplier of the composition tempo. The RATIO is honest and the SLIDER's own
+  // position is what gets clamped — pinning the ratio to the slider's range read "2.0×"
+  // for 240 BPM and for 400 alike, so a tempo typed past the slider's end looked like a
+  // control that had stopped responding to anything.
+  const ratio = eff / compositionTempo;
+  const sliderAt = Math.max(MULT_MIN, Math.min(MULT_MAX, Math.round(ratio / MULT_STEP) * MULT_STEP));
 
   return html`<span class="transport">
     <button class="doc-btn" title="Save the .srgm source" onClick=${onSave}>Save</button>
@@ -40,14 +52,15 @@ export function Transport({ state, canPlay, onPlay, onPause, onStop,
     </label>
 
     <label class=${'tempo' + (overridden ? ' on' : '')}
-           title=${`Playback tempo. Slider = speed × the composition's ${compositionTempo} BPM (0.2 steps); the box sets an exact BPM. ↺ = back to composition.`}>
+           title=${`Playback tempo. Slider = speed × the composition's ${compositionTempo} BPM (${MULT_STEP} steps, ${MULT_MIN}–${MULT_MAX}×); the box sets an exact BPM (${BPM_MIN}–${BPM_MAX}), including past the slider's ends. ↺ = back to composition.`}>
       ♩
-      <input class="tempo-mult" type="range" min="0.2" max="2" step="0.2" value=${mult}
-             onInput=${(e) => onTempo(Math.round(compositionTempo * Number(e.target.value)))} />
-      <input class="tempo-num" type="number" min="20" max="400" step="1" placeholder=${String(compositionTempo)}
+      <input class="tempo-mult" type="range" min=${String(MULT_MIN)} max=${String(MULT_MAX)} step=${String(MULT_STEP)} value=${sliderAt}
+             onInput=${(e) => onTempo(clampBpm(Math.round(compositionTempo * Number(e.target.value))))} />
+      <input class="tempo-num" type="number" min=${String(BPM_MIN)} max=${String(BPM_MAX)} step="1" placeholder=${String(compositionTempo)}
              value=${overridden ? String(tempoOverride) : ''}
-             onInput=${(e) => { const val = e.target.value; if (val === '') onResetTempo(); else onTempo(Number(val)); }} />
-      <span class="tempo-state">${overridden ? `${mult.toFixed(1)}×` : `comp ${compositionTempo}`}</span>
+             onInput=${(e) => { const val = e.target.value; if (val === '') onResetTempo(); else onTempo(Number(val)); }}
+             onBlur=${(e) => { e.target.value = overridden ? String(tempoOverride) : ''; }} />
+      <span class="tempo-state">${overridden ? `${eff} bpm · ${ratio.toFixed(2)}×` : `comp ${compositionTempo}`}</span>
       ${overridden ? html`<button class="tempo-reset" title="Use composition tempo" onClick=${onResetTempo}>↺</button>` : ''}
     </label>
 

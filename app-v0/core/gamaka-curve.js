@@ -26,6 +26,41 @@ export function pointsToAnchors(raw) {
   return c;
 }
 
+// Which anchor a TAP is on, or -1 — as against which anchor a DRAG grabs.
+//
+// A grab may be generous: a drag on a curve means one thing, so the nearest point however
+// far away is the right answer. A tap means two things — remove this point, or add one
+// where the line is — and the only honest way to tell them apart is distance measured
+// against the SPACING of the points themselves. Half-way between two anchors is where
+// "between the points" begins, whatever the zoom.
+//
+// One fixed radius cannot serve both editors. In the full-screen editor a note fills the
+// pane and its anchors sit tens of pixels apart, so 16px means "on the dot". On the roll
+// the same curve is 24px tall with its anchors 6px apart, so 16px reached clean across the
+// note: every tap between two points removed one instead of adding one, which is exactly
+// what it looked like.
+//
+// `pts` are anchor positions in screen pixels, in curve order.
+const DOT_PX = 4;   // the anchor as drawn: two points nearer than this are one dot
+export function tapAnchor(pts, x, y, maxPx = 14) {
+  let best = -1, bd = Infinity;
+  for (let k = 0; k < pts.length; k++) {
+    let gap = Infinity;
+    for (let j = 0; j < pts.length; j++) {
+      if (j === k) continue;
+      gap = Math.min(gap, Math.hypot(pts[j][0] - pts[k][0], pts[j][1] - pts[k][1]));
+    }
+    // 0.4 of the gap, not half: the midpoint has to fall OUTSIDE both radii, not on the
+    // edge of them. No floor — a floor is a fixed radius wearing a hat, and at the roll's
+    // spacing it swallows the gap all over again. Points closer together than the dot they
+    // are drawn as have no "between" to protect, so those keep the full radius.
+    const r = (gap === Infinity || gap < DOT_PX) ? maxPx : Math.min(maxPx, gap * 0.4);
+    const d = Math.hypot(x - pts[k][0], y - pts[k][1]);
+    if (d <= r && d < bd) { bd = d; best = k; }
+  }
+  return best;
+}
+
 // Insert an anchor at (u,step), keeping u ascending; u clamped to [0,1].
 export function addAnchor(curve, u, step) {
   const c = curve.map(p => p.slice());

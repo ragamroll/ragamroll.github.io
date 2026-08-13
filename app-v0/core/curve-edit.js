@@ -14,7 +14,7 @@
 // A curve here is ABSOLUTE 53-EDO steps against `u` in 0..1, which is what the note
 // carries and what the renderer draws. Note-relative deltas are a serialisation detail
 // and belong to whoever writes the notation.
-import { extractAnchors, addAnchor, removeAnchor } from './gamaka-curve.js';
+import { extractAnchors, addAnchor, removeAnchor, tapAnchor } from './gamaka-curve.js';
 
 const MOVE_EPS = 6;        // px before a press counts as a drag rather than a tap
 const HIT_PX = 18;         // anchor grab radius
@@ -57,6 +57,15 @@ export function createCurveEdit(canvas, opts) {
       if (d <= bd) { bd = d; best = k; }
     }
     return best;
+  }
+
+  // The anchors in screen pixels, for the tap test. Here a note fills the pane and its
+  // points are far apart, so tapAnchor's answer is the same one HIT_PX gave — which is
+  // the point: the roll runs the identical rule at a scale where it is not.
+  function anchorPx() {
+    const c = curve(); if (!c) return [];
+    const geo = geometry(), [t0, t1] = span();
+    return c.map(([u, st]) => [geo.X(st), geo.Y(t0 + (t1 - t0) * u)]);
   }
 
   // Is (x,y) on the drawn curve itself? That is where a tap ADDS an anchor, so it is
@@ -145,9 +154,12 @@ export function createCurveEdit(canvas, opts) {
       redraw(); emit({ kind: 'curve', phase: 'commit' }); return;
     }
     // A tap. On an anchor it goes; on the line a new one arrives; anywhere else nothing.
-    if (done.hi >= 0) {
+    // Judged by tapAnchor rather than by the grab radius that caught the press, so the
+    // roll's ✎ mode can answer the same way with its points a few pixels apart.
+    const hit = tapAnchor(anchorPx(), x, y);
+    if (hit >= 0) {
       emit({ kind: 'curve', phase: 'begin' });
-      setCurve(removeAnchor(curve(), done.hi));
+      setCurve(removeAnchor(curve(), hit));
       onPitch(null); redraw(); emit({ kind: 'curve', phase: 'commit' }); return;
     }
     const c = curve();

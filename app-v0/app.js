@@ -29,7 +29,7 @@ import { droneFreqs } from './audio/drone.js';
 import { saBaseOf, applyPlaybackPitch } from './core/retune.js';
 import { shareUrl, readSharedSource, sourceFromShareInput, parseSharedPayload, mixLevels } from './core/share.js';
 import { inlineLegacyCurves } from './core/share-legacy.js';
-import { Transport } from './components/Transport.js';
+import { Transport, BPM_MIN, BPM_MAX } from './components/Transport.js';
 import { Splitter } from './components/Splitter.js';
 import { Footer } from './components/Footer.js';
 
@@ -72,15 +72,19 @@ function App({ examples }) {
   // malformed composition can never block the UI thread. The worker returns the
   // parsed model (used by the playback / export path on the main thread) plus
   // the notation string. Stale replies are dropped by request id.
+  // `parsed` separates "the piece has no notes" from "the worker has not answered yet".
+  // They look identical in the model — this one is a placeholder standing in until the
+  // first reply — and anything that treats an unparsed piece as an empty one acts on a
+  // blank page that never existed. A saved composition reloads through that gap.
   const [compiled, setCompiled] = useState({
-    model: { events: [], seqProps: {}, meta: {}, diagnostics: [] }, notation: '',
+    model: { events: [], seqProps: {}, meta: {}, diagnostics: [] }, notation: '', parsed: false,
   });
   const workerRef = useRef(null);
   const reqRef = useRef(0);
   useEffect(() => {
     const w = new Worker('./worker.js', { type: 'module' });
     w.onmessage = (e) => {
-      if (e.data.id === reqRef.current) setCompiled({ model: e.data.model, notation: e.data.notation });
+      if (e.data.id === reqRef.current) setCompiled({ model: e.data.model, notation: e.data.notation, parsed: true });
     };
     workerRef.current = w;
     return () => w.terminate();
@@ -95,7 +99,11 @@ function App({ examples }) {
   // playhead both use it and stay in sync.
   const compositionTempo = useMemo(() => (model.meta?.tempo > 0 ? model.meta.tempo : 120), [model]);
   const [tempoOverride, setTempoOverride] = useState(null);
-  const onTempo = useCallback((v) => { if (v >= 20 && v <= 400) setTempoOverride(v); }, []);
+  // Out of range is IGNORED rather than clamped, because this runs on every keystroke:
+  // clamping would turn the "2" of 240 into 20 before the reader typed the second digit.
+  // The box re-reads the accepted value when it loses focus, so a rejected number never
+  // stays on screen pretending to be in force.
+  const onTempo = useCallback((v) => { if (v >= BPM_MIN && v <= BPM_MAX) setTempoOverride(v); }, []);
   const onResetTempo = useCallback(() => setTempoOverride(null), []);
   const effModel = useMemo(
     () => (tempoOverride ? { ...model, meta: { ...model.meta, tempo: tempoOverride } } : model),
@@ -587,6 +595,39 @@ function App({ examples }) {
     setText((t) => (re.test(t) ? t.replace(re, (m2, p2) => p2 + nv) : nv + '\n' + t));
   }, [noteCount]);
 
+  // The paper a blank piece is given, kept once someone starts writing on it.
+  //
+  // gridBounds hands a piece with NO notes a wide frame on purpose — about two avartanas
+  // of empty time, and the middle octave with half an octave either side — because a grid
+  // the size of nothing cannot be written on. The instant the first note lands, that
+  // branch stops applying and the grid becomes the note's own extent: four units of
+  // timeline and two pitch rows. The canvas disappears under the first thing put on it,
+  // and a four-unit note drawn against a four-unit timeline reads as the whole piece.
+  //
+  // So a blank piece PINS its frame as user bounds — the same ones the stretch tabs
+  // write, which only ever widen. Writing into it now leaves the paper where it is, and
+  // the piece grows past the pin exactly as a hand-stretched grid does. This is view
+  // state: it never reaches the notation, the tabs can drag it back, and the docEpoch
+  // effect above drops it when a different piece arrives.
+  //
+  // Every way of reaching a blank page comes through here — New, opening a file or a
+  // share link that has no notes, an example, and deleting the last note of a piece —
+  // because the condition is the model's, not any one handler's.
+  //
+  // It re-pins on every parse WHILE the piece is blank, because the canvas a blank piece
+  // is owed depends on what it says: two avartanas is two avartanas of the tala currently
+  // written, and the first render happens before the worker has read any of it. It reads
+  // autoBounds rather than bounds — bounds already carries the last pin, so pinning from
+  // it would freeze whatever the frame happened to be before the tala arrived — and takes
+  // the WIDER of that and the frame on screen, so a grid stretched by hand on a blank page
+  // is not pulled back in by the next keystroke.
+  useEffect(() => {
+    const r = rollApiRef.current;
+    if (!r || !compiled.parsed || noteCount !== 0) return;
+    const auto = r.autoBounds(), cur = r.bounds();
+    r.setUser({ min: Math.min(auto.stepMin, cur.stepMin), max: Math.max(auto.stepMax, cur.stepMax),
+      bottom: Math.max(auto.total, cur.total) }).resize();
+  }, [docEpoch, noteCount, model, compiled.parsed]);
 
   const applyScroll = useCallback(() => {
     const pos = playerRef.current.position();

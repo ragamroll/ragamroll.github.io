@@ -155,6 +155,11 @@ export function createRagamRoll(el, opts = {}) {
     // ---- what it worked out ----
     model: () => model,
     bounds: () => bounds,
+    // The frame this piece would be drawn in with nothing stretched by hand — which for a
+    // piece with no notes is the blank canvas gridBounds hands out. A host that wants to
+    // KEEP that canvas has to ask for it separately: bounds() already carries whatever the
+    // host pinned last, so reading the pin back through it can only ever confirm itself.
+    autoBounds: () => gridBounds(model),
     // Read-only, for hosts and guards: what the renderer is actually being told to
     // draw. A selection pushed in through setView is only real if it arrives here.
     view: () => ({ ...view }),

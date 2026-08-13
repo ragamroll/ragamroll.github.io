@@ -9,8 +9,14 @@
 //   the target is PICKED per press, not selected in advance
 //   `u` is measured within that note's own span on the roll, not the whole canvas
 //   the pitch lands on the 53-EDO grid, or nowhere in particular if snap is off
-//   a freehand trace becomes anchors through pointsToAnchors, not extractAnchors —
-//     nothing is pinned to u=0 and u=1, since the note is not being isolated
+//   a freehand trace becomes anchors through pointsToAnchors rather than extractAnchors
+//     plus the editor's own end-pinning — same result, one call
+//
+// What a press MEANS, though, is meant to be identical in the two, so that the
+// full-screen editor is eventually one way of looking at this rather than a second set of
+// rules. Both ask gamaka-curve's tapAnchor which point a tap is on, and it answers by the
+// SPACING of the points rather than by a fixed radius — the one thing that cannot be
+// shared as a constant, since a note is the whole pane in one editor and 24px in the other.
 //
 // WHAT COUNTS AS "on" a note here is the note's CURVE, not its column. A gamaka's whole
 // purpose is to leave the note's pitch, so its points are mostly nowhere near the note's
@@ -18,7 +24,7 @@
 // points ungrabbable, which is every point worth reaching. So a press looks for the
 // nearest ANCHOR of any note first, then for a curve LINE under the pointer, and only
 // then falls back to the note's box, which is what a note with no curve yet needs.
-import { addAnchor, removeAnchor, moveAnchor, pointsToAnchors } from './gamaka-curve.js';
+import { addAnchor, removeAnchor, moveAnchor, pointsToAnchors, tapAnchor } from './gamaka-curve.js';
 
 const MOVE_EPS = 6;        // px before a press counts as a drag rather than a tap
 const HIT_PX = 16;         // anchor grab radius, on the roll
@@ -58,40 +64,29 @@ export function createGamakaEdit(canvas, opts) {
     return snapping() ? Math.round(raw) : Math.round(raw * 100) / 100;
   };
 
-  // NEAREST, not the first within reach — and within a radius that SHRINKS WITH THE NOTE.
-  //
-  // A fixed 16px was wider than the note itself: at default zoom a note is about 24px
-  // tall, so a traced curve's anchors sit a few pixels apart and every press inside the
-  // note landed on one. The consequence was not a near miss but a whole gesture becoming
-  // unreachable — a curve could never be RE-TRACED, because the drag that should have
-  // replaced it was always read as nudging a point instead. Zoom in and the radius grows
-  // back to 16, which is what zoom is for.
-  function hitAnchor(i, x, y) {
-    const c = noteOf(i).curve; if (!c) return -1;
-    const [t0, t1] = spanOf(i), geo = geometry();
-    // GENEROUS, and it grows with the note rather than shrinking with it. Shrinking it
-    // to fit a 24px note made points almost impossible to hit by eye — the dot is 4px
-    // across and a hand is not that precise. There is no ambiguity left to protect
-    // against: shift-drag says "re-trace", so a plain drag can simply take the nearest
-    // point however far away it is.
-    const noteH = Math.abs(geo.Y(t1) - geo.Y(t0));
-    const rad = Math.max(HIT_PX, noteH / 3);
-    let best = -1, bd = rad * rad;
-    for (let k = 0; k < c.length; k++) {
-      const cx = geo.X(c[k][1]), cy = geo.Y(t0 + (t1 - t0) * c[k][0]);
-      const d = (x - cx) * (x - cx) + (y - cy) * (y - cy);
-      if (d <= bd) { bd = d; best = k; }
-    }
-    return best;
-  }
   const onCurveLine = (i, x, y) => {
     const c = noteOf(i).curve; if (!c) return false;
     return Math.abs(geometry().X(sample(c, uAt(i, y))) - x) <= LINE_PX;
   };
 
-  // The nearest anchor of ANY note, with the note it belongs to. Searching across notes
-  // rather than within one is the point: a curve's points are out in open grid, and which
-  // note owns the one you are reaching for is not something a user should have to aim at.
+  // A note's anchors in screen pixels — what a TAP is judged against. The grab radius
+  // below deliberately reaches well past the dots, which is right for a drag and wrong
+  // for a tap: see tapAnchor, which measures against the spacing instead.
+  const anchorPx = (i) => {
+    const c = noteOf(i).curve; if (!c) return [];
+    const [t0, t1] = spanOf(i), geo = geometry();
+    return c.map(([u, st]) => [geo.X(st), geo.Y(t0 + (t1 - t0) * u)]);
+  };
+
+  // The nearest anchor of ANY note, with the note it belongs to — the GRAB test, used to
+  // decide what a press has hold of. Searching across notes rather than within one is the
+  // point: a curve's points are out in open grid, and which note owns the one you are
+  // reaching for is not something a user should have to aim at.
+  //
+  // GENEROUS, and it grows with the note rather than shrinking with it: the dot is 4px
+  // across and a hand is not that precise. Nothing is lost by over-reaching, because a
+  // drag on a curve means one thing — shift-drag says "re-trace" — and a TAP is no longer
+  // decided here at all.
   function nearestAnchor(x, y) {
     const m = model();
     let best = null, bd = Infinity;
@@ -174,15 +169,25 @@ export function createGamakaEdit(canvas, opts) {
       noteOf(done.i).curve = pointsToAnchors(done.buffer);
       redraw(); emit({ kind: 'gamaka', phase: 'commit' }); return;
     }
-    if (done.mode === 'anchor') {
-      if (done.moved) { emit({ kind: 'gamaka', phase: 'commit' }); return; }
+    if (done.mode === 'anchor' && done.moved) { emit({ kind: 'gamaka', phase: 'commit' }); return; }
+    if (moved) return;
+
+    // A TAP, and the same three answers the full-screen editor gives, in the same order:
+    // on a point it goes, on the line one arrives, anywhere else nothing happens. Which
+    // one it is cannot be decided by the radius the PRESS was grabbed with — that radius
+    // is generous on purpose, so it swallowed the whole note and every tap read as "on a
+    // point", removing one where a new one was being asked for.
+    const c = noteOf(done.i).curve;
+    if (!c) return;
+    const k = tapAnchor(anchorPx(done.i), x, y);
+    if (k >= 0) {
       emit({ kind: 'gamaka', phase: 'begin' });
-      noteOf(done.i).curve = removeAnchor(noteOf(done.i).curve, done.dragIdx);
+      noteOf(done.i).curve = removeAnchor(c, k);
       redraw(); emit({ kind: 'gamaka', phase: 'commit' }); return;
     }
-    if (!moved && noteOf(done.i).curve && onCurveLine(done.i, x, y)) {
+    if (onCurveLine(done.i, x, y)) {
       emit({ kind: 'gamaka', phase: 'begin' });
-      noteOf(done.i).curve = addAnchor(noteOf(done.i).curve, uAt(done.i, y), stepAt(x));
+      noteOf(done.i).curve = addAnchor(c, uAt(done.i, y), stepAt(x));
       redraw(); emit({ kind: 'gamaka', phase: 'commit' });
     }
   };
