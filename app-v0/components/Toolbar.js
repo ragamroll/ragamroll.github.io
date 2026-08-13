@@ -1,11 +1,19 @@
 import { html } from '../vendor/htm-preact.js';
 import { useState, useEffect, useCallback } from '../vendor/hooks.module.js';
 import { OpenMenu } from './OpenMenu.js';
+// The synthesised voices, then the SAMPLED ones — real recordings of the instrument,
+// fetched when you pick them. They are last because they are the ones that need the
+// network: offline, or before they arrive, they play as the synth and say nothing about
+// it, which is better than silence and better than a warning nobody can act on.
 const TIMBRES = [
   ['soft-am', 'Soft'],
   ['bowed-fm', 'Bowed'],
   ['reed-fm', 'Reed'],
   ['pluck', 'Pluck'],
+  ['violin', 'Violin ◆'],
+  ['flute', 'Flute ◆'],
+  ['guitar', 'Guitar ◆'],
+  ['harmonium', 'Harmonium ◆'],
 ];
 
 // Fullscreen, which on a phone is what gets rid of the address bar — the gamaka page's

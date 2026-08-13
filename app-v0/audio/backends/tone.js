@@ -1,5 +1,6 @@
 import * as Tone from '../../vendor/tone.js';
 import { midiToFreq } from '../schedule.js';
+import { createSampledVoice, isSampled, warmSamples } from '../sampler.js';
 
 // The ONLY module that references Tone.js. Encapsulates all Tone version specifics.
 // v14: Tone.Transport is the global transport. If a future vendored bundle exposes
@@ -23,6 +24,7 @@ const droneDb = (v) => trackDb(v) - 14;
 // Melody voice factory. The srgm melody is monophonic (notes never overlap), so
 // each timbre is a single MONO synth — not a PolySynth.
 function makeMelody(timbre) {
+  if (isSampled(timbre)) return makeSampled(timbre);
   switch (timbre) {
     case 'reed': {      // filtered MonoSynth — soft, mellow reed
       const s = new Tone.MonoSynth().toDestination();
@@ -97,6 +99,53 @@ function makeTala(timbre) {
   }
 }
 
+// A sampled melody voice, wearing the same face as a synth one.
+//
+// The scheduler bends a gamaka by ramping `synth.frequency`, which only an oscillator has.
+// So a voice may instead offer `curve(points, time, dur, vel)` and say what it means in
+// its own terms — which is the honest seam: a sampler bends by playback rate, and pretending
+// it has a frequency param would have been a lie the first ramp exposed.
+//
+// It keeps a synth INSIDE it as the fallback, per note: samples arrive over a CDN, so the
+// first note of a playback can easily be ahead of them, and offline there are none at all.
+// A missing sample costs the timbre, never the sound.
+function makeSampled(name) {
+  const out = new Tone.Volume(0).toDestination();
+  const inner = makeMelody('soft-am');          // the fallback voice, and the fallback ONLY
+  inner.disconnect(); inner.connect(out);
+  const ctx = rawCtx();
+  // A NATIVE gain node, connected into the Tone chain by Tone itself. Reaching for a Tone
+  // node's private `_nativeAudioNode` guessed at an internal that this build does not
+  // expose — so `dest` came back null, the voice was never built, and every note fell back
+  // to the synth while the picker said Violin. Tone.connect is the supported seam between
+  // a raw node and a Tone one, and it is the whole point of having it.
+  const dest = ctx ? ctx.createGain() : null;
+  if (dest) Tone.connect(dest, out);
+  const fallback = {
+    plain: (freq, time, dur, vel) => inner.triggerAttackRelease(freq, dur, time, vel),
+    curve: (pts, time, dur, vel) => {
+      inner.triggerAttack(pts[0], time, vel);
+      for (let k = 1; k < pts.length; k++) inner.frequency.linearRampToValueAtTime(pts[k], time + (dur * k) / (pts.length - 1));
+      inner.triggerRelease(time + dur);
+    },
+  };
+  // No raw destination to play into (an unusual Tone build) — then this is the synth voice,
+  // which is exactly what the fallback is for.
+  const voice = ctx && dest ? createSampledVoice(ctx, name, dest, fallback) : null;
+  if (voice) voice.load();
+  return {
+    volume: out.volume,
+    sampled: true,
+    triggerAttackRelease(freq, dur, time, vel) {
+      if (voice) voice.note(freq, time, dur, vel); else fallback.plain(freq, time, dur, vel);
+    },
+    curve(points, time, dur, vel) {
+      if (voice) voice.curve(points, time, dur, vel); else fallback.curve(points, time, dur, vel);
+    },
+    dispose() { if (voice) voice.dispose(); inner.dispose(); out.dispose(); },
+  };
+}
+
 export function createToneBackend() {
   let synth = null;      // melody voice (mono)
   let preview = null;    // audition voice — see previewNote; never the melody voice
@@ -138,7 +187,9 @@ export function createToneBackend() {
           // Inline gamaka: ramp the (mono) melody voice's frequency through the
           // sampled curve instead of a fixed pitch. Linear ramps (strictly
           // increasing times) — robust across browsers; same voice = same timbre.
-          if (e.gamaka && e.gamaka.length) {
+          if (e.gamaka && e.gamaka.length && !isTala && synth.curve) {
+            synth.curve(e.gamaka, time, e.durSec, vel);       // a voice that bends its own way
+          } else if (e.gamaka && e.gamaka.length) {
             const arr = e.gamaka, N = arr.length;
             synth.triggerAttack(arr[0], time, vel);
             for (let k = 1; k < N; k++) synth.frequency.linearRampToValueAtTime(arr[k], time + e.durSec * k / (N - 1));
@@ -282,7 +333,13 @@ export function createToneBackend() {
       if (synth) synth.volume.value = muted ? -Infinity : 0;
     },
     // Melody voice preset ('bowed-fm' | 'soft-am' | 'reed'); applies next load.
-    setTimbre(name) { timbre = name; },
+    setTimbre(name) {
+      timbre = name;
+      // Start fetching now rather than when Play is pressed: the voice is built at load(),
+      // and without this the opening of the first playback is the fallback synth while the
+      // samples are still on their way.
+      if (isSampled(name)) warmSamples(rawCtx(), name);
+    },
     droneOff() {
       if (!drone) return;
       try { drone.releaseAll ? drone.releaseAll() : drone.triggerRelease(); } catch {}
