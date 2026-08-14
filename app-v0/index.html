@@ -426,6 +426,15 @@
       accent-color:var(--teal); cursor:pointer; touch-action:none; }
     /* Reversed: dragging RIGHT narrows the range, which is zooming IN — the direction a
        reader expects a zoom control to travel. */
+    /* The pitch scrollbar: the time axis has the browser's, and this axis is a mapping
+       onto the canvas width with nothing overflowing for one to appear on. Sits between
+       the roll and the zoom slider, in the reading order the two have — where you are,
+       then how close. */
+    .roll-hs { flex:0 0 auto; height:.55rem; margin:.15rem .5rem 0 2.6rem; position:relative;
+      background:var(--panel2); border-radius:.3rem; cursor:pointer; touch-action:none; }
+    .roll-hs-thumb { position:absolute; top:0; bottom:0; background:var(--amberSoft);
+      border-radius:.3rem; min-width:1.2rem; }
+    .roll-hs:hover .roll-hs-thumb { background:var(--amber); }
     .roll-zp { flex:0 0 auto; height:1.2rem; margin:.1rem .5rem .2rem 2.6rem; direction:rtl;
       accent-color:var(--teal); cursor:pointer; touch-action:none; }
     .roll-holder > div { position:relative; width:100%; }

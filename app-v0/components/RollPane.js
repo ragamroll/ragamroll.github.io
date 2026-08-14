@@ -46,6 +46,12 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
   // The slider shows the span the roll is ACTUALLY drawing, so a pan or a stretch-tab
   // drag moves it too rather than leaving it describing a range nobody is looking at.
   const [pitchSpan, setPitchSpan] = useState(0);
+  // Where the visible pitch window sits inside the whole grid, as fractions of it. The
+  // TIME axis gets this for free: the roll is a tall div in a scroller, so the browser
+  // draws the bar and moves it. Pitch is a mapping onto the canvas width — there is no
+  // overflowing content for a scrollbar to describe — so the window has to be measured
+  // and drawn. null when the whole range is on screen and there is nothing to scroll.
+  const [pitchBar, setPitchBar] = useState(null);   // { off, frac } in 0..1, or null
   // The roll's context menu: right-click a note to copy or paste its gamaka, the way the
   // gamaka page has always done it. { x, y, i } in client coordinates, or null.
   //
@@ -53,6 +59,17 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
   // of why it feels direct: no arming a mode, no selecting first, no strip to travel to.
   const [menu, setMenu] = useState(null);
   const hitRef = useRef(() => -1);            // the roll-edit hit-test, once it exists
+  // Recomputed rather than tracked: the view is moved by a slider, a pan, a stretch tab,
+  // a new piece and the editor coming back, and a bar that each of those had to remember
+  // to update is a bar that is wrong after whichever one gets forgotten.
+  const syncBar = () => {
+    const r = roll.current; if (!r) return;
+    const e = r.extent(), v = r.pitchView();
+    const span = e.stepMax - e.stepMin;
+    if (!v || span <= 0 || v.max - v.min >= span) { setPitchBar(null); return; }
+    setPitchBar({ off: (v.min - e.stepMin) / span, frac: (v.max - v.min) / span });
+  };
+
   // The pitch window as the READER set it — centre and span, in floats — kept apart from
   // what the roll draws, which is rounded to whole steps. Rounding is for drawing; a
   // control that reads its own rounded output back accumulates the error.
@@ -280,7 +297,7 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
         // A pan moves the centre and keeps the span; carried in floats for the same
         // reason the zoom carries it.
         pitchWin.current = { c: (v.min + v.max) / 2, span: v.max - v.min };
-        r.setPitchView(v); setPitchSpan(Math.round(v.max - v.min));
+        r.setPitchView(v); setPitchSpan(Math.round(v.max - v.min)); syncBar();
       },
       enabled: () => chromeRef.current && modeRef.current === 'roll'
         && !paintRef.current && !gamaRef.current && !ed.busy(),
@@ -330,6 +347,7 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
       naturalPitch.current = { c: (b.stepMin + b.stepMax) / 2, span: b.stepMax - b.stepMin };
       setPitchSpan(Math.round(naturalPitch.current.span));
     }
+    syncBar();
   }, [model]);
 
   // Zoom stretches the time axis, so the scroll offset means a different moment
@@ -444,12 +462,14 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
       pitchWin.current = null;
       r.setPitchView(null).resize();
       setPitchSpan(nat.span);
+      syncBar();
       return;
     }
     const c = pitchWin.current ? pitchWin.current.c : nat.c;
     pitchWin.current = { c, span };
     r.setPitchView({ min: c - span / 2, max: c + span / 2 }).resize();
     setPitchSpan(Math.round(span));
+    syncBar();
   };
 
   // A menu that outlives what it points at is worse than no menu: the roll scrolls, the
@@ -472,6 +492,35 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
   // will do is worse than one that is simply greyed out.
   const menuNote = menu && roll.current ? roll.current.model().notes[menu.i] : null;
 
+  // Moving the window from the bar. In FRACTIONS of the grid, so a drag means the same
+  // thing at any zoom, and clamped to the paper by the same rule a pan obeys — the bar
+  // cannot ask for a window the grid does not have.
+  const scrollPitchTo = (off) => {
+    const r = roll.current; if (!r || !pitchBar) return;
+    const e = r.extent(), span = e.stepMax - e.stepMin, win = span * pitchBar.frac;
+    const min = Math.max(e.stepMin, Math.min(e.stepMax - win, e.stepMin + off * span));
+    pitchWin.current = { c: min + win / 2, span: win };
+    r.setPitchView({ min, max: min + win }).resize();
+    setPitchSpan(Math.round(win));
+    syncBar();
+  };
+  // A press on the THUMB drags it; a press on the track jumps the window there, centred,
+  // which is what a scrollbar does when you click beside its thumb.
+  const barPress = (e) => {
+    const track = e.currentTarget, box = track.getBoundingClientRect();
+    if (!pitchBar || box.width <= 0) return;
+    const onThumb = e.target !== track;
+    const grabAt = onThumb ? (e.clientX - box.left) / box.width - pitchBar.off : pitchBar.frac / 2;
+    if (!onThumb) scrollPitchTo((e.clientX - box.left) / box.width - pitchBar.frac / 2);
+    try { track.setPointerCapture(e.pointerId); } catch (_) { /* the drag still works */ }
+    const move = (ev) => scrollPitchTo((ev.clientX - box.left) / box.width - grabAt);
+    const up = () => { track.removeEventListener('pointermove', move); track.removeEventListener('pointerup', up); };
+    track.addEventListener('pointermove', move);
+    track.addEventListener('pointerup', up);
+    track.addEventListener('pointercancel', up);
+    e.preventDefault();
+  };
+
   return html`<div class="pane roll" style=${style}>
     ${tools}
     <div class="roll-body">
@@ -488,6 +537,16 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
       value=${zoom} title="Zoom time — the moment at the centre stays there"
       aria-label="Zoom time" onInput=${(e) => zoomTime(parseFloat(e.target.value))} />`}
     </div>
+    <!-- The pitch scrollbar. Shown only while there is something off-screen to reach,
+         which is the same rule the browser follows for the time axis beside it: a bar
+         describing a window that already holds everything is furniture, not information.
+         The thumb IS the visible window — its width says how much of the range you are
+         looking at, which nothing else on this page says. -->
+    ${chrome && pitchBar && html`<div class="roll-hs" onPointerDown=${barPress}
+      title="Drag to move along the pitch axis">
+      <div class="roll-hs-thumb" style=${`left:${(pitchBar.off * 100).toFixed(2)}%;`
+        + `width:${Math.max(6, pitchBar.frac * 100).toFixed(2)}%`}></div>
+    </div>`}
     <!-- The pitch slider runs from the piece's own range (left, where the axis is the
          grid's again) to nine steps (right, a couple of swaras filling the screen). The
          value IS the span, reversed by direction so that right means closer. -->
