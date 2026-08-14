@@ -20,6 +20,32 @@ export function stringifyAttrs(obj) {
   return Object.entries(obj).map(([k, v]) => `${k}:${JSON.stringify(v)}`).join(', ');
 }
 
+// Where a `{…}` block starting at `at` ends: the index just past its closing brace, or
+// the end of the text if it never closes.
+//
+// QUOTE-AWARE, and that is the whole reason it exists as its own function. Two scanners
+// counted braces independently and neither looked at quotes, which was fine while every
+// value was a number, an array of them, or a short word. A value can now carry another
+// notation system's text verbatim — that is what `gka` is for — and a brace inside that
+// string closed the block early, leaving the rest of the line to be read as notes. One
+// routine, used by the tokenizer and by the token walker, so the two cannot disagree
+// about where a note ends.
+export function blockEnd(s, at) {
+  let depth = 0, inStr = false;
+  for (let k = at; k < s.length; k++) {
+    const c = s[k];
+    if (inStr) {
+      if (c === '\\') k++;                 // an escaped anything, including a quote
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') { inStr = true; continue; }
+    if (c === '{') depth++;
+    else if (c === '}') { depth--; if (depth === 0) return k + 1; }
+  }
+  return s.length;
+}
+
 // Capturing head: (octave marks)(swara/rest letter)(length digits)
 const NOTE_HEAD_G = /^(>*|<*)([sSrRgGmMpPdDnNzZ])(\d*)$/;
 
@@ -51,11 +77,8 @@ export function walkTokens(srcText, visit) {
     const head = srcText.slice(i, j);
     let k = j, hadBrace = false, body = '';
     if (srcText[j] === '{') {                           // brace-balanced block
-      hadBrace = true; let d = 0;
-      for (k = j; k < srcText.length; k++) {
-        if (srcText[k] === '{') d++;
-        else if (srcText[k] === '}') { d--; if (d === 0) { k++; break; } }
-      }
+      hadBrace = true;
+      k = blockEnd(srcText, j);
       body = srcText.slice(j + 1, k - 1);
     }
     const raw = srcText.slice(i, k);

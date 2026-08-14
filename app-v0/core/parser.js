@@ -1,7 +1,7 @@
 import { noteToMidi } from './tuning.js';
 import { swaraMap, resolveRagaName } from './raga-base.js';
 import { GM } from './midi/gm.js';
-import { parseAttrs, curveOf } from './gamaka-inline.js';
+import { parseAttrs, curveOf, blockEnd } from './gamaka-inline.js';
 
 /**
  * The version of the notation this app WRITES. Files without a V= are version 1: the era
@@ -20,11 +20,7 @@ function tokenizeSrgm(s) {
     let j = i;
     while (j < s.length && !isWs(s[j]) && s[j] !== '{') j++;
     if (s[j] !== '{') { toks.push(s.slice(i, j)); i = j; continue; }
-    let d = 0, k = j;
-    for (; k < s.length; k++) {
-      if (s[k] === '{') d++;
-      else if (s[k] === '}') { d--; if (d === 0) { k++; break; } }
-    }
+    const k = blockEnd(s, j);   // quote-aware: a value may carry braces of its own
     toks.push(s.slice(i, k));   // note + {…} (or to end if unbalanced)
     i = k;
   }
@@ -156,6 +152,11 @@ export function parse(input) {
         const cv = curveOf(attrs);      // `gcurve`, or `gamaka` from before it was renamed
         if (cv) ev.gamaka = cv;
         if (typeof attrs.sahitya === 'string') ev.sahitya = attrs.sahitya;
+        // Provenance: the fragment of ANOTHER notation system that produced this note,
+        // written by whatever converted it. Nothing here reads it as music — not the
+        // audio, not the MIDI, not the roll's geometry — it exists to be shown beside
+        // the note it came from, so a conversion can be checked by eye.
+        if (typeof attrs.gka === 'string') ev.gka = attrs.gka;
       }
       events.push(ev);
       continue;

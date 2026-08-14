@@ -430,6 +430,20 @@
        onto the canvas width with nothing overflowing for one to appear on. Sits between
        the roll and the zoom slider, in the reading order the two have — where you are,
        then how close. */
+    /* Where a note came from: a strip above the notation, not a tooltip. A tooltip would
+       sit over the roll covering the notes being compared against, and could not hold a
+       long fragment. */
+    .gka-strip { flex:0 0 auto; display:flex; align-items:center; gap:.5rem;
+      padding:.15rem .4rem; border-bottom:1px solid var(--hair); font-size:.8rem; }
+    .gka-strip .gka-toggle { display:inline-flex; align-items:center; gap:.25rem;
+      color:var(--muted); white-space:nowrap; cursor:pointer; }
+    .gka-strip.on .gka-toggle { color:var(--ink); }
+    /* One line, scrolling sideways: a source fragment can be long, and a strip that grew
+       to fit it would push the notation down every time the pointer moved. */
+    .gka-value { flex:1 1 auto; min-width:0; overflow-x:auto; overflow-y:hidden;
+      white-space:nowrap; padding:.1rem 0; }
+    .gka-value code { font-family:var(--mono); color:var(--teal); }
+    .gka-hint { color:var(--muted); opacity:.7; font-style:italic; }
     .roll-hs { flex:0 0 auto; height:.55rem; margin:.15rem .5rem 0 2.6rem; position:relative;
       background:var(--panel2); border-radius:.3rem; cursor:pointer; touch-action:none; }
     .roll-hs-thumb { position:absolute; top:0; bottom:0; background:var(--amberSoft);

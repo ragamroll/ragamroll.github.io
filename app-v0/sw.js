@@ -1,4 +1,18 @@
-const CACHE = 'ragamroll-5a0d5e9';
+const CACHE = 'ragamroll-1b7d058';
+
+// SERVED FROM A LOCAL SERVER: stand down entirely.
+//
+// Everything but a page is cache-first, and the cache NAME is what retires a stale copy —
+// rewritten to the commit hash at build time, so each published version gets its own. A
+// local server never goes through that build, so the name above is the name forever: a
+// module cached on the first visit is served on every visit after it, and an edit to it is
+// invisible until the cache is cleared by hand. That is not a hypothetical — it cost an
+// afternoon of a fixed file looking unfixed, twice.
+//
+// Offline is what the worker is FOR, and localhost is never offline. So on a local host it
+// installs nothing, caches nothing, and answers no request; the published site is
+// untouched, which is the only place the behaviour matters.
+const DEV = ['localhost', '127.0.0.1', '[::1]', ''].includes(self.location.hostname);
 const ASSETS = [
   './', './index.html', './help.html', './pitchy.html', './app.js', './worker.js', './version.js', './manifest.webmanifest',
   './vendor/preact.module.js', './vendor/hooks.module.js', './vendor/htm.module.js', './vendor/htm-preact.js',
@@ -30,6 +44,7 @@ async function precacheExamples(cache) {
 }
 
 self.addEventListener('install', (e) => {
+  if (DEV) { self.skipWaiting(); return; }          // nothing to precache off a dev server
   e.waitUntil((async () => {
     const c = await caches.open(CACHE);
     await c.addAll(ASSETS);
@@ -38,6 +53,10 @@ self.addEventListener('install', (e) => {
   })());
 });
 self.addEventListener('activate', (e) => {
+  // On a dev host this also CLEARS whatever an earlier visit left behind, so the fix
+  // arrives by loading the page rather than by knowing to empty the cache by hand.
+  if (DEV) { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.map((k) => caches.delete(k))))
+    .then(() => self.clients.claim())); return; }
   e.waitUntil(caches.keys()
     .then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
     .then(() => self.clients.claim()));
@@ -45,6 +64,7 @@ self.addEventListener('activate', (e) => {
 // Cache-first, then network — and cache any successful same-origin GET so pieces
 // (or assets) not in the precache still work offline after their first fetch.
 self.addEventListener('fetch', (e) => {
+  if (DEV) return;                                   // the network is the answer here
   if (e.request.method !== 'GET') return;
   e.respondWith((async () => {
     // PAGES are network-first, everything else cache-first. Cache-first on

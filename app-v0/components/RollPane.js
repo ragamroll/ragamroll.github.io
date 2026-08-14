@@ -29,7 +29,7 @@ const cssvar = (k) => getComputedStyle(document.documentElement).getPropertyValu
 export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom = 1, onSetZoom, paint, chrome = true,
   mode = 'roll', curveIndex = -1, onCurveIntent, snapping, onCurvePitch, drawSpan = 22,
   markerA = 0, markerB = 0, gamaka, onGamakaIntent, onGamakaPitch,
-  canPasteGamaka, onCopyGamakaAt, onPasteGamakaAt }) {
+  canPasteGamaka, onCopyGamakaAt, onPasteGamakaAt, onHoverNote }) {
   const holder = useRef(null), content = useRef(null), canvas = useRef(null), gutter = useRef(null);
   const roll = useRef(null);
   // The gesture layer reads these through refs, not through its closure: it is mounted
@@ -82,6 +82,7 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
   // different modes, and one name for both is how a collision in here took the app down
   // twice before.
   const gamaPitchRef = useRef(onGamakaPitch); gamaPitchRef.current = onGamakaPitch;
+  const hoverRef = useRef(onHoverNote); hoverRef.current = onHoverNote;
 
   useEffect(() => {
     const hd = holder.current;
@@ -194,6 +195,25 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
       setMenu({ x: e.clientX, y: e.clientY, i });
     };
     content.current.addEventListener('contextmenu', onCtx);
+
+    // Which note the POINTER is over, reported only when it changes. A mouse moves in
+    // dozens of events a second and the answer is the same note for almost all of them;
+    // pushing every one of them into the host's state would re-render the app at the
+    // frame rate to say nothing new.
+    //
+    // Mouse only. A finger has no hover — it is either pressing something or not there —
+    // and reporting a touch as a hover would leave the last note pressed showing as
+    // "under the pointer" long after the hand had gone.
+    let hoverIdx = -1;
+    const sayHover = (i) => { if (i !== hoverIdx) { hoverIdx = i; if (hoverRef.current) hoverRef.current(i); } };
+    const onHoverMove = (e) => {
+      if (e.pointerType !== 'mouse' || !hoverRef.current) return;
+      const r2 = canvas.current.getBoundingClientRect();
+      sayHover(ed.hitNote(e.clientX - r2.left, e.clientY - r2.top));
+    };
+    const onHoverOut = () => sayHover(-1);
+    content.current.addEventListener('pointermove', onHoverMove);
+    content.current.addEventListener('pointerleave', onHoverOut);
 
     // TOUCH has no right-click. A long press is its stand-in everywhere else, so it is
     // here too — held still on a note, past the moment a drag would have declared itself.
@@ -324,6 +344,8 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
       clearTimeout(lpTimer);
       if (content.current) {
         content.current.removeEventListener('contextmenu', onCtx);
+        content.current.removeEventListener('pointermove', onHoverMove);
+        content.current.removeEventListener('pointerleave', onHoverOut);
         content.current.removeEventListener('pointerdown', onLpDown);
         content.current.removeEventListener('pointermove', onLpMove);
       }

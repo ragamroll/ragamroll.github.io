@@ -1,6 +1,6 @@
 import { html } from '../vendor/htm-preact.js';
 import { useRef } from '../vendor/hooks.module.js';
-import { Editor } from './Editor.js';
+import { Editor, GkaStrip } from './Editor.js';
 import { EditTools } from './EditTools.js';
 
 // The notation, on a drawer. This is the gamaka page's grip, and its rules are the ones
@@ -19,7 +19,8 @@ import { EditTools } from './EditTools.js';
 // loaded while the drawer is shut is already there when it opens.
 const MAX_FRAC = 0.6, OPEN_FRAC = 0.35, MOVED_PX = 3;
 
-export function EditorDrawer({ h, setH, text, onText, ragas, talas, raga, tala, blank, onRaga, onTala }) {
+export function EditorDrawer({ h, setH, text, onText, ragas, talas, raga, tala, blank, onRaga, onTala,
+  gkaOn, onGkaToggle, gkaText, hasGka }) {
   const drag = useRef(null);
   const winH = () => window.innerHeight || 600;
   const clamp = (v) => Math.max(0, Math.min(v, Math.round(winH() * MAX_FRAC)));
@@ -49,6 +50,10 @@ export function EditorDrawer({ h, setH, text, onText, ragas, talas, raga, tala, 
     <div class="drawer-body" style=${`height:${h}px`}>
       <${EditTools} ragas=${ragas} talas=${talas} raga=${raga} tala=${tala}
         blank=${blank} onRaga=${onRaga} onTala=${onTala} />
+      <!-- The same strip as the side-by-side layout, in the same place relative to the
+           notation: above it. Shut, the drawer hides it — which is right, because on a
+           phone there is no pointer to hover with and nothing would ever fill it. -->
+      <${GkaStrip} on=${gkaOn} onToggle=${onGkaToggle} text=${gkaText} has=${hasGka} />
       <${Editor} value=${text} onInput=${onText} />
     </div>
   </div>`;

@@ -35,7 +35,10 @@ export function buildRollModel(model) {
     const step = stepForRagaLetter(n.swara.toUpperCase(), stepOfSemitone(n.midi - saRef), readBack);
     // Inline gamaka is stored NOTE-RELATIVE (a delta per point); the roll is absolute.
     const curve = (Array.isArray(n.gamaka) && n.gamaka.length) ? n.gamaka.map(([u, d]) => [u, step + d]) : null;
-    return { step, dur: n.absLen, swara: n.swara.toUpperCase(), octave: n.octave, curve, tok: keep[i] };
+    // `gka` rides along untouched: it is where this note came from in another notation
+    // system, and the roll shows it beside the note rather than reading it as music.
+    return { step, dur: n.absLen, swara: n.swara.toUpperCase(), octave: n.octave, curve, tok: keep[i],
+      gka: typeof n.gka === 'string' ? n.gka : null };
   });
 
   // Real composition time: the cursor advances over rests too, so a leading or

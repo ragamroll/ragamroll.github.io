@@ -4,7 +4,7 @@ import { html } from './vendor/htm-preact.js';
 import { TALA_MAP } from './core/parser.js';
 import { setRagas, getRagas, resolveRagaName } from './core/raga-base.js';
 import { setRagaExt } from './core/raga-ext.js';
-import { Editor } from './components/Editor.js';
+import { Editor, GkaStrip } from './components/Editor.js';
 import { RollPane } from './components/RollPane.js';
 import { RollTools } from './components/RollTools.js';
 import { EditTools } from './components/EditTools.js';
@@ -46,6 +46,7 @@ const LS_SWAP = 'ragamroll.rollfirst';   // pane order, once the reader has said
 // key, deliberately: it is one reader's preference about one kind of edit, and the two
 // pages are the same editor — being asked twice would be the surprise.
 const LS_GMOVE = 'ragamroll.gamakaOnMove';
+const LS_GKA = 'ragamroll.showSource';       // the provenance strip, on or off
 const DEFAULT_NAME = 'ragamroll';
 
 // Derive a document base-name (no extension) from an opened file / example name.
@@ -248,6 +249,19 @@ function App({ examples }) {
   const [curveHz, setCurveHz] = useState('');       // the pitch under the pointer, while shaping
   const [curveSpan, setCurveSpan] = useState(22);   // how much of the pitch axis the editor shows
   const [curveClip, setCurveClip] = useState(null);   // copied curve, RELATIVE to its note
+  // Where the note under the pointer came from: the `gka` fragment of another system's
+  // notation. Remembered ON, because someone checking a conversion is checking it for a
+  // whole session, not a note.
+  const [gkaOn, setGkaOn] = useState(() => localStorage.getItem(LS_GKA) === '1');
+  const [gkaText, setGkaText] = useState('');
+  useEffect(() => { localStorage.setItem(LS_GKA, gkaOn ? '1' : '0'); }, [gkaOn]);
+  // The index is the ROLL's, and it is read back through the roll rather than kept here:
+  // the model is rebuilt on every parse and an index held across one means another note.
+  const onHoverNote = useCallback((i) => {
+    const r = rollApiRef.current; const m = r && r.model();
+    const n = m && i >= 0 ? m.notes[i] : null;
+    setGkaText(n && n.gka ? n.gka : '');
+  }, []);
   const rollMode = curveIdx >= 0 ? 'draw' : 'roll';
   // "+ note": while it is armed a press PLACES something rather than grabbing what is
   // already there, so the two gestures are mutually exclusive by construction.
@@ -611,6 +625,9 @@ function App({ examples }) {
   const shift = saPitch != null ? saPitch - autoSaMidi : 0;
 
   const noteCount = useMemo(() => model.events.filter(e => e.type === 'note' && !e.rest).length, [model]);
+  // Whether this piece carries any provenance at all, so the strip can say "there is none
+  // here" rather than "point at a note" about notes that will never answer.
+  const hasGka = useMemo(() => model.events.some((e) => e.type === 'note' && typeof e.gka === 'string'), [model]);
 
   // Below noteCount ON PURPOSE — these close over it. Fourth time in this file that a
   // useCallback declared above what it reads took the app down before first render.
@@ -885,6 +902,7 @@ function App({ examples }) {
         ${!stacked && html`<div class="editor-pane" style=${`order:${rollFirst ? 3 : 1}`}>
           <${EditTools} ragas=${ragaNames} talas=${talaNames} raga=${ragaName} tala=${talaName}
             blank=${noteCount === 0} onRaga=${onPickRaga} onTala=${onPickTala} />
+          <${GkaStrip} on=${gkaOn} onToggle=${() => setGkaOn((v) => !v)} text=${gkaText} has=${hasGka} />
           <${Editor} value=${text} onInput=${setText} />
         </div>`}
         ${!stacked && html`<${Splitter} orientation="v" onResize=${onVDrag} style="order:2"
@@ -895,6 +913,7 @@ function App({ examples }) {
           mode=${rollMode} curveIndex=${curveIdx} onCurveIntent=${onCurveIntent} snapping=${curveSnap}
           gamaka=${rollGamaka} onGamakaIntent=${onGamakaIntent} onGamakaPitch=${onCurvePitch}
           canPasteGamaka=${!!curveClip} onCopyGamakaAt=${onCopyGamakaAt} onPasteGamakaAt=${onPasteGamakaAt}
+          onHoverNote=${gkaOn ? onHoverNote : null}
           onCurvePitch=${onCurvePitch} drawSpan=${curveSpan} markerA=${markA} markerB=${markB}
           tools=${html`<${RollTools} sel=${rollSel} onDelete=${onRollDelete}
             canUndo=${canUndo} onUndo=${onRollUndo}
@@ -912,6 +931,7 @@ function App({ examples }) {
     </div>
     ${stacked && html`<${EditorDrawer} h=${drawerH} setH=${setDrawerH}
       text=${text} onText=${setText}
+      gkaOn=${gkaOn} onGkaToggle=${() => setGkaOn((v) => !v)} gkaText=${gkaText} hasGka=${hasGka}
       ragas=${ragaNames} talas=${talaNames} raga=${ragaName} tala=${talaName}
       blank=${noteCount === 0} onRaga=${onPickRaga} onTala=${onPickTala} />`}
     <${Transport} state=${playState} canPlay=${noteCount > 0}
