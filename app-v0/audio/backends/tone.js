@@ -1,6 +1,7 @@
 import * as Tone from '../../vendor/tone.js';
 import { midiToFreq } from '../schedule.js';
 import { createSampledVoice, isSampled, warmSamples } from '../sampler.js';
+import { outputDelay } from '../backend.js';
 
 // The ONLY module that references Tone.js. Encapsulates all Tone version specifics.
 // v14: Tone.Transport is the global transport. If a future vendored bundle exposes
@@ -149,6 +150,7 @@ function makeSampled(name) {
 export function createToneBackend() {
   let synth = null;      // melody voice (mono)
   let preview = null;    // audition voice — see previewNote; never the melody voice
+
   let tala = null;       // tala voice — separate so its volume is live
   let drone = null;      // separate sustained voice; survives load/play/stop
   let droneKey = '';     // freqs signature — lets volume change without re-voicing
@@ -159,6 +161,17 @@ export function createToneBackend() {
   let total = 0;
   let ended = false;
   const clearFade = () => { if (fadeTimer) { clearTimeout(fadeTimer); fadeTimer = null; } };
+
+  // Resolve once the context's clock has actually advanced, or after `capMs` either way.
+  const clockAwake = (ctx, capMs = 250) => new Promise((resolve) => {
+    if (!ctx || typeof ctx.currentTime !== 'number') { resolve(); return; }
+    const t0 = ctx.currentTime, started = Date.now();
+    const tick = () => {
+      if (ctx.currentTime > t0 || Date.now() - started > capMs) { resolve(); return; }
+      setTimeout(tick, 10);
+    };
+    tick();
+  });
   const b = {
     onended: null,
     // opts.talaGain (0..1) is the tala track's initial live volume.
@@ -216,7 +229,31 @@ export function createToneBackend() {
       clearFade();                      // don't let a stale teardown stop this run
       ended = false;
       await Tone.start();               // unlock AudioContext on the user gesture
-      transport().start();
+      // WAIT FOR THE CLOCK TO MOVE before scheduling anything against it.
+      //
+      // Tone.start() resolves when the context reports itself running, which is not the
+      // same as the hardware having started: on a phone the first output buffers can be
+      // dropped while the audio route is still being set up, and a piece that opens on a
+      // note loses the front of it. Every note after the first is fine, because by then
+      // the clock and the speaker agree — which is what made this look like a fault in
+      // one note rather than in the start.
+      //
+      // Bounded, and a no-op wherever the clock is already ticking: at most ~250ms, and
+      // a context that never advances is simply started anyway rather than hanging on a
+      // promise that will not settle.
+      await clockAwake(rawCtx());
+      // STARTED IN THE FUTURE, by the time it takes a buffer to reach the speaker.
+      //
+      // A piece that opens on a note puts that note's attack at transport time 0, and
+      // starting the transport "now" asks for it at an audio time that is already being
+      // rendered — so the envelope begins part-way through and the first note comes out
+      // clipped, or on a device with a big buffer, missing. Every note after it is fine,
+      // which is what made this look like a quirk of the first note rather than of the
+      // start. A piece that happens to open on a rest never showed it at all.
+      //
+      // The runway is the output delay itself, floored at 60ms: whatever the device
+      // needs to get sound out is what it needs to get the FIRST sound out.
+      transport().start('+' + Math.max(0.06, outputDelay(rawCtx())).toFixed(3));
     },
     pause() { transport().pause(); },
     stop() {
@@ -245,13 +282,7 @@ export function createToneBackend() {
       const s = transport().seconds;
       return s < 1e-6 ? 0 : Math.min(1, s / total);
     },
-    latency() {
-      // Output latency of the real AudioContext, for A/V sync compensation.
-      // Guarded: 0 when the context / fields are unavailable (e.g. old browsers).
-      const c = Tone.getContext && Tone.getContext();
-      const raw = c && c.rawContext;
-      return (raw && (raw.outputLatency ?? raw.baseLatency)) || 0;
-    },
+    latency() { return outputDelay(rawCtx()); },
     // Constant tambura-style drone: sustained Sa/Pa voices, independent of the
     // transport. `vol` (0..1) sets loudness; vol<=0 or empty freqs = off. When
     // only the volume changes (same freqs) the voices keep ringing — no

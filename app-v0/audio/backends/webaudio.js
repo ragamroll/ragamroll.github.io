@@ -1,4 +1,5 @@
 import { midiToFreq } from '../schedule.js';
+import { outputDelay } from '../backend.js';
 
 // A SynthBackend on bare Web Audio — no library, no bundle. The counterpart to
 // backends/tone.js, for pages that want the roll to SOUND without carrying 353KB of
@@ -169,10 +170,7 @@ export function createWebAudioBackend(context) {
       if (state === 'playing') return Math.min(1, Math.max(0, elapsed() / total));
       return Math.min(1, offsetSec / total);
     },
-    latency() {
-      const c = actx;
-      return (c && (c.outputLatency ?? c.baseLatency)) || 0;
-    },
+    latency() { return outputDelay(actx); },
     // Sound ONE note now, for auditioning while a curve is being shaped. Never touches
     // the transport: nothing here reads or writes originSec/offsetSec/state, so a
     // preview is invisible to position() whatever is playing.
