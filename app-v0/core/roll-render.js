@@ -247,7 +247,17 @@ export function renderRoll(ctx, m, v, hooks = {}) {
   }
 
   // The notes, coloured by the key they sit on, with their gamaka drawn through them.
+  //
+  // CLIPPED to the plot horizontally. Time is culled above — a note outside the scroll
+  // window is skipped — but pitch never was, because until the axis could be zoomed there
+  // was nothing outside it: the grid always held every note. A view narrower than the
+  // piece puts notes to either side of the paper, and they were still drawn, over the
+  // pitch labels and the A–B margin and out to the edge of the screen. It shows on the
+  // LEFT because that margin is 40px of label column and a gutter; the right has 12px of
+  // padding and the canvas ends.
   const colW = mode === 'draw' ? 0 : Math.max(9, p.w / (m.stepMax - m.stepMin) * 4);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(p.x, 0, p.w, v.h); ctx.clip();
   for (let i = 0; i < notes.length; i++) {
     if (mode === 'draw' && i !== v.sel) continue;
     if (mode === 'roll') { const s0 = starts[i], s1 = s0 + notes[i].dur; if (s1 < vLo || s0 > vHi) continue; }
@@ -273,6 +283,7 @@ export function renderRoll(ctx, m, v, hooks = {}) {
       ctx.globalAlpha = 1;
     }
   }
+  ctx.restore();
 
   // A paint in progress. Also shared: it is the same box in both apps, and drawing it
   // from view state means the gesture layer can stay the only thing that knows how a
@@ -289,6 +300,8 @@ export function renderRoll(ctx, m, v, hooks = {}) {
   // In-roll gamaka mode: every curve's anchors, so they can be aimed at without opening
   // anything. Drawn from view state like everything else the gesture layers need shown.
   if (mode === 'roll' && v.gamakaMode) {
+    ctx.save();
+    ctx.beginPath(); ctx.rect(p.x, 0, p.w, v.h); ctx.clip();   // an anchor is off the paper too
     for (let i = 0; i < notes.length; i++) {
       const c = notes[i].curve; if (!c) continue;
       const t0 = starts[i], t1 = t0 + notes[i].dur;
@@ -299,6 +312,7 @@ export function renderRoll(ctx, m, v, hooks = {}) {
         ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = .7; ctx.stroke();
       }
     }
+    ctx.restore();
   }
 
   // The curve editor's own furniture: the anchors you grab, and a prompt when there is
