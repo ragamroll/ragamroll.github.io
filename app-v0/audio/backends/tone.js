@@ -213,14 +213,29 @@ export function createToneBackend() {
         }, e.startSec);
       }
       if (totalSec > 0) {
-        tr.schedule(() => {
+        tr.schedule((time) => {
           // Halt the transport internally (not via the public b.stop(), which
           // resets `ended`): after a natural end position() must report 1.
+          //
+          // WITH THE CALLBACK'S OWN TIME, and with everything that is not audio work
+          // moved off this callback. Tone raises a flag while it invokes a scheduled
+          // callback, and any of its calls made with the time omitted warns — the
+          // transport was being stopped at an implicit "now" from inside the audio
+          // thread's own dispatch, which is both the warning and a real jitter: "now"
+          // there is whenever the callback happened to run, not the moment scheduled.
+          //
+          // The rest — resetting the position, disposing voices, telling the host — is
+          // bookkeeping. It ran here only because this is where the end was noticed, and
+          // a dispose on the audio callback is how a teardown ends up racing the render
+          // it is tearing down. Handed to a timeout, it happens on the page's own thread
+          // a tick later, which is soon enough for something that has already stopped.
           const t = transport();
-          t.stop();
-          t.position = 0;
+          t.stop(time);
           ended = true;
-          if (b.onended) b.onended();
+          setTimeout(() => {
+            t.position = 0;
+            if (b.onended) b.onended();
+          }, 0);
         }, totalSec);
       }
     },

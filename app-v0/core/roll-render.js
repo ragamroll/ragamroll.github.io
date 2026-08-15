@@ -336,6 +336,57 @@ export function renderRoll(ctx, m, v, hooks = {}) {
     }
   }
 
+  // ---- the seconds ruler, down the right edge --------------------------------------------
+  // The roll's time axis is in LENGTH-UNITS, which are a notation quantity: a unit is as
+  // long as T says it is, and nothing on the page says how long that is. This is the same
+  // axis in seconds, so a piece can be read for its duration and a tempo can be checked
+  // rather than believed.
+  //
+  // The interval is chosen so the labels stay legible whatever the zoom: seconds while
+  // they are far apart, then 5, 10, 30, 60. Ticks are drawn for the interval below the
+  // labelled one, which is what makes a ruler readable between its numbers.
+  if (mode === 'roll' && v.secPerUnit > 0) {
+    const x = p.x + p.w, secTotal = TOTAL * v.secPerUnit;
+    const pxPerSec = v.pxPerUnit / v.secPerUnit;
+    const STEPS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600];
+    const big = STEPS.find((s2) => s2 * pxPerSec >= 44) || STEPS[STEPS.length - 1];
+    const small = STEPS[Math.max(0, STEPS.indexOf(big) - 1)];
+    const label = (sec) => {
+      if (sec < 60) return sec % 1 === 0 ? `${sec}s` : `${sec.toFixed(1)}s`;
+      const m2 = Math.floor(sec / 60), r2 = Math.round(sec - m2 * 60);
+      return `${m2}:${String(r2).padStart(2, '0')}`;
+    };
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x, p.y - 2, v.w - x, v.h - p.y + 2); ctx.clip();
+    ctx.font = '10px ' + mono; ctx.textAlign = 'left';
+    // The small ticks first, so a label never has a tick drawn through it.
+    ctx.strokeStyle = C.hair; ctx.globalAlpha = .8; ctx.lineWidth = 1;
+    for (let s2 = Math.ceil(Math.max(0, vLo * v.secPerUnit) / small) * small; s2 <= Math.min(secTotal, vHi * v.secPerUnit); s2 += small) {
+      const y = Y(s2 / v.secPerUnit);
+      ctx.beginPath(); ctx.moveTo(x + 1, y); ctx.lineTo(x + 5, y); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    for (let s2 = Math.ceil(Math.max(0, vLo * v.secPerUnit) / big) * big; s2 <= Math.min(secTotal, vHi * v.secPerUnit); s2 += big) {
+      const y = Y(s2 / v.secPerUnit);
+      ctx.strokeStyle = C.muted; ctx.globalAlpha = .55;
+      ctx.beginPath(); ctx.moveTo(x + 1, y); ctx.lineTo(x + 9, y); ctx.stroke();
+      ctx.globalAlpha = .85; ctx.fillStyle = C.muted;
+      ctx.fillText(label(s2), x + 12, y + 3.5);
+      ctx.globalAlpha = 1;
+    }
+    // The END of the piece, always, whatever the interval landed on: the number a reader
+    // came here for is how long the whole thing takes.
+    const yEnd = Y(TOTAL);
+    if (yEnd > p.y - 2 && yEnd < v.h + 2) {
+      ctx.strokeStyle = C.amber; ctx.globalAlpha = .9; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(x + 1, yEnd); ctx.lineTo(x + 10, yEnd); ctx.stroke();
+      ctx.fillStyle = C.amber; ctx.font = 'bold 10px ' + mono;
+      ctx.fillText(label(+secTotal.toFixed(secTotal < 10 ? 1 : 0)), x + 12, yEnd + 3.5);
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+
   hooks.overNotes && hooks.overNotes(g);
 
   // The A–B segment, and the playhead the host drives.

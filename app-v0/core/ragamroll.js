@@ -39,6 +39,10 @@ export function createRagamRoll(el, opts = {}) {
     markerA: 0, markerB: 0, saMidi: null, grabIdx: -1, labels: true };
   let bounds = { total: 1, stepMin: -26, stepMax: 66, gridPitches: [] };
   const pad = { l: 40, r: 12, t: PAD_T_MIN, b: 12 };
+  // The seconds ruler needs a margin of its own on the right. Reserved HERE rather than in
+  // the renderer because the plot's width is derived from the padding — a ruler drawn into
+  // the plot would sit on top of the notes at the top of the pitch range.
+  const PAD_R_RULER = 46;
   let w = 0, h = 0;
 
   // The header has to be as deep as the longest pitch name is LONG, because the names
@@ -125,6 +129,7 @@ export function createRagamRoll(el, opts = {}) {
       // these were passed in by both apps and never arrived.
       paint: view.paint, paintMode: view.paintMode, drawing: view.drawing, abTabs: view.abTabs,
       gamakaMode: view.gamakaMode, handles: view.handles, abChip: view.abChip,
+      secPerUnit: view.secPerUnit,
       chipH: LABEL_CHIP_H, sample: sampleCurve };
   };
 
@@ -150,6 +155,7 @@ export function createRagamRoll(el, opts = {}) {
     pitchView: () => (pitchView ? { ...pitchView } : null),
     setView(v) {
       const reBound = v.zoom != null && v.zoom !== view.zoom;
+      if (v.secPerUnit !== undefined) pad.r = v.secPerUnit > 0 ? PAD_R_RULER : 12;
       view = { ...view, ...v };
       if (reBound) pad.t = labelDepth(bounds.gridPitches);
       return api;

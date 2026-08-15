@@ -625,6 +625,25 @@ function App({ examples }) {
   const shift = saPitch != null ? saPitch - autoSaMidi : 0;
 
   const noteCount = useMemo(() => model.events.filter(e => e.type === 'note' && !e.rest).length, [model]);
+  // The roll's time axis is in length-units; this is what one of them is worth in seconds,
+  // so the roll can rule a seconds scale beside them. It follows the tempo OVERRIDE as well
+  // as the composition's own T — the ruler has to describe what will actually play, or it
+  // is measuring a tempo nobody chose.
+  const secPerUnit = useMemo(() => 30 / (effModel.meta?.tempo > 0 ? effModel.meta.tempo : 120), [effModel]);
+  useEffect(() => {
+    const r = rollApiRef.current; if (!r) return;
+    r.setView({ secPerUnit }).resize();
+  }, [secPerUnit, docEpoch]);
+  // Said out loud, because a duration is the thing this app is worst at showing: the roll
+  // is scaled by the MEDIAN note, so a piece twice as fast looks identical and takes half
+  // as long. One line per parse, with the numbers a tempo argument needs.
+  useEffect(() => {
+    const r = rollApiRef.current; const m = r && r.model(); if (!m || !m.notes.length) return;
+    const units = m.contentEnd, tempo = effModel.meta?.tempo > 0 ? effModel.meta.tempo : 120;
+    console.log(`[ragamroll] ${m.notes.length} notes · ${units} units · T=${tempo}`
+      + ` · ${secPerUnit.toFixed(4)}s per unit · ${(units * secPerUnit).toFixed(2)}s total`);
+  }, [effModel, secPerUnit]);
+
   // Whether this piece carries any provenance at all, so the strip can say "there is none
   // here" rather than "point at a note" about notes that will never answer.
   const hasGka = useMemo(() => model.events.some((e) => e.type === 'note' && typeof e.gka === 'string'), [model]);
@@ -708,10 +727,25 @@ function App({ examples }) {
     return pos;
   }, []);
 
+  // Declared ABOVE onStop, which reads it. A `const` below its reader is in the temporal
+  // dead zone when that reader runs — the sixth time this file has had that fault, and it
+  // takes the app down on the first press rather than failing quietly.
+  const playStartRef = useRef(null);   // when this run began, and what it was meant to take
+
   // Idempotent: may fire from both the rAF pos>=1 guard and the backend's
   // onended callback for the same end — cancel/stop/reset are all safe twice.
   const onStop = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
+    // What the run took, beside what the tempo promised. Reported at the END because that
+    // is the only place both numbers exist: a piece can be argued about from the console
+    // instead of from memory. Skipped for a run that was paused and resumed, where wall
+    // time includes however long the pause was and the comparison would be nonsense.
+    const st = playStartRef.current; playStartRef.current = null;
+    if (st && st.expect > 0 && !st.resumed) {
+      const took = (performance.now() - st.at) / 1000;
+      console.log(`[ragamroll] played ${took.toFixed(2)}s · expected ${st.expect.toFixed(2)}s`
+        + ` at T=${st.tempo} · ratio ${(took / st.expect).toFixed(2)}`);
+    }
     playerRef.current.stop();
     setPlayState('stopped');
     playheadRef.current = null;
@@ -767,6 +801,10 @@ function App({ examples }) {
         loadedTempoRef.current = effModel.meta?.tempo > 0 ? effModel.meta.tempo : 120;
       }
       await player.play();
+      // Stamped so the end can report what the run ACTUALLY took against what the tempo
+      // said it would. A duration nobody measures is a duration nobody can argue with.
+      playStartRef.current = { at: performance.now(), expect: loadedTotalRef.current,
+        tempo: loadedTempoRef.current, resumed: playState === 'paused' };
       setPlayState('playing');
       cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(loop);
