@@ -38,7 +38,15 @@ import { Footer } from './components/Footer.js';
 // needs no code edit. EXAMPLES_BASE is where both the manifest and the .srgm
 // files are fetched from — point it at a CORS-enabled CDN to decouple later.
 const EXAMPLES_BASE = './examples';
-const EXAMPLES_FALLBACK = ['swaravali', 'hamsa', 'vathapi', 'varavina'];
+// Only reached when examples/index.json cannot be fetched, which is why it went unnoticed
+// that 'hamsa' had stopped being a file: it was a duplicate of the vathapi composition,
+// named for its raga hamsadhwani, and was removed to be rid of the duplication. Every name
+// here must be a file that is actually ON THE SERVER — this is the one path that exists
+// for a broken manifest, and it was offering an entry that 404s.
+//
+// kalyani-varnam leads because it is the piece that exercises what the app can currently
+// do: gamakas on most of its notes, and the source notation each of them came from.
+const EXAMPLES_FALLBACK = ['kalyani-varnam', 'swaravali', 'vathapi', 'varavina'];
 const LS_KEY = 'ragamroll.srgm';
 const LS_NAME = 'ragamroll.docname';
 const LS_SWAP = 'ragamroll.rollfirst';   // pane order, once the reader has said which they want
@@ -630,10 +638,6 @@ function App({ examples }) {
   // as the composition's own T — the ruler has to describe what will actually play, or it
   // is measuring a tempo nobody chose.
   const secPerUnit = useMemo(() => 30 / (effModel.meta?.tempo > 0 ? effModel.meta.tempo : 120), [effModel]);
-  useEffect(() => {
-    const r = rollApiRef.current; if (!r) return;
-    r.setView({ secPerUnit }).resize();
-  }, [secPerUnit, docEpoch]);
   // Said out loud, because a duration is the thing this app is worst at showing: the roll
   // is scaled by the MEDIAN note, so a piece twice as fast looks identical and takes half
   // as long. One line per parse, with the numbers a tempo argument needs.
@@ -642,6 +646,20 @@ function App({ examples }) {
     const units = m.contentEnd, tempo = effModel.meta?.tempo > 0 ? effModel.meta.tempo : 120;
     console.log(`[ragamroll] ${m.notes.length} notes · ${units} units · T=${tempo}`
       + ` · ${secPerUnit.toFixed(4)}s per unit · ${(units * secPerUnit).toFixed(2)}s total`);
+  }, [effModel, secPerUnit]);
+
+  // The piece's length as a reader would say it: 2:14 above a minute, 57.6s below, and
+  // nothing at all when there is nothing to time.
+  const duration = useMemo(() => {
+    // From the PARSED model, not from the roll: the roll is handed the new model by a
+    // child effect, which runs after this render, so reading it here would show the
+    // previous piece's length until something else re-rendered.
+    let units = 0;
+    for (const e of effModel.events) if (e.type === 'note') units += e.absLen || 0;
+    if (!(units > 0)) return '';
+    const sec = units * secPerUnit;
+    if (sec < 60) return `${sec.toFixed(sec < 10 ? 1 : 0)}s`;
+    return `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
   }, [effModel, secPerUnit]);
 
   // Whether this piece carries any provenance at all, so the strip can say "there is none
@@ -923,7 +941,7 @@ function App({ examples }) {
   }, [playState, stacked, rollFirst, editorPct, drawerH]);
 
   return html`
-    <${Toolbar} docName=${docName} blank=${noteCount === 0} />
+    <${Toolbar} docName=${docName} blank=${noteCount === 0} duration=${duration} />
     ${dialog === 'ragas' && html`<${RagaDialog} ragas=${getRagas()} player=${playerRef.current}
                                          saMidi=${saMidi} droneLevel=${droneLevel} ragaName=${ragaName}
                                          stopMain=${onStop} onClose=${onCloseDialog} />`}
@@ -951,6 +969,7 @@ function App({ examples }) {
           mode=${rollMode} curveIndex=${curveIdx} onCurveIntent=${onCurveIntent} snapping=${curveSnap}
           gamaka=${rollGamaka} onGamakaIntent=${onGamakaIntent} onGamakaPitch=${onCurvePitch}
           canPasteGamaka=${!!curveClip} onCopyGamakaAt=${onCopyGamakaAt} onPasteGamakaAt=${onPasteGamakaAt}
+          secPerUnit=${secPerUnit}
           onHoverNote=${gkaOn ? onHoverNote : null}
           onCurvePitch=${onCurvePitch} drawSpan=${curveSpan} markerA=${markA} markerB=${markB}
           tools=${html`<${RollTools} sel=${rollSel} onDelete=${onRollDelete}

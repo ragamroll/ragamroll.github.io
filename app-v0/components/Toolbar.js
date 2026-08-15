@@ -57,12 +57,18 @@ function FullscreenButton() {
 // controls live at the bottom of the screen with the transport, where a thumb reaches
 // them. That is the gamaka page's shape, and the reason it holds a phone: the roll is
 // the whole middle of the window instead of what is left after the chrome.
-export function Toolbar({ docName, blank }) {
+export function Toolbar({ docName, blank, duration }) {
   return html`<div class="toolbar">
     <span class="app-badge">RagaM-Roll</span>
     <a class="help-link" href="./help.html" target="_blank" rel="noopener"
        title="Help — notation guide &amp; features">?</a>
     <span class=${'readout' + (blank ? ' blank' : '')}>${blank ? 'blank / new' : docName}</span>
+    <!-- HOW LONG THE PIECE IS, beside its name. The roll is scaled by the median note, so
+         a piece at twice the tempo draws identically and takes half as long — the duration
+         is the one thing about time that nothing on the page showed. Here rather than on
+         the roll because it does not change as you scroll and costs no grid at any width,
+         which is what a phone needs. It follows a tempo override, like the ruler does. -->
+    ${duration && html`<span class="head-dur" title="How long the piece takes at this tempo">${duration}</span>`}
     <${FullscreenButton} />
   </div>`;
 }

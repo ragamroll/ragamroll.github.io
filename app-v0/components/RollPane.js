@@ -29,7 +29,7 @@ const cssvar = (k) => getComputedStyle(document.documentElement).getPropertyValu
 export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom = 1, onSetZoom, paint, chrome = true,
   mode = 'roll', curveIndex = -1, onCurveIntent, snapping, onCurvePitch, drawSpan = 22,
   markerA = 0, markerB = 0, gamaka, onGamakaIntent, onGamakaPitch,
-  canPasteGamaka, onCopyGamakaAt, onPasteGamakaAt, onHoverNote }) {
+  canPasteGamaka, onCopyGamakaAt, onPasteGamakaAt, onHoverNote, secPerUnit = 0 }) {
   const holder = useRef(null), content = useRef(null), canvas = useRef(null), gutter = useRef(null);
   const roll = useRef(null);
   // The gesture layer reads these through refs, not through its closure: it is mounted
@@ -46,6 +46,7 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
   // The slider shows the span the roll is ACTUALLY drawing, so a pan or a stretch-tab
   // drag moves it too rather than leaving it describing a range nobody is looking at.
   const [pitchSpan, setPitchSpan] = useState(0);
+  const [paneW, setPaneW] = useState(0);      // the canvas's own width: the ruler depends on it
   // Where the visible pitch window sits inside the whole grid, as fractions of it. The
   // TIME axis gets this for free: the roll is a tall div in a scroller, so the browser
   // draws the bar and moves it. Pitch is a mapping onto the canvas width — there is no
@@ -337,7 +338,7 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
     // The strip is exactly as wide as the roll's left margin, which changes with the
     // labels, so it is measured from the roll rather than guessed at.
     const fitGutter = () => { if (gutter.current) gutter.current.style.width = r.geometry().plot.x + 'px'; };
-    const ro = new ResizeObserver(() => { r.resize(); fitGutter(); });
+    const ro = new ResizeObserver(() => { r.resize(); fitGutter(); setPaneW(r.size().w || 0); });
     ro.observe(hd);
     r.resize(); fitGutter();
     return () => { hd.removeEventListener('scroll', onScroll); canvas.current && canvas.current.removeEventListener('pointermove', onHover);
@@ -542,6 +543,22 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
     track.addEventListener('pointercancel', up);
     e.preventDefault();
   };
+
+  // The seconds ruler costs a margin, and a margin is a different price on every screen.
+  //
+  // 46px out of a desktop pane is nothing; out of a phone in portrait it is a seventh of
+  // the grid, taken from the axis the notes are drawn along. So the ruler is a WIDE-screen
+  // control: below the cutoff the roll keeps its width and the piece's length is read from
+  // the head bar, which costs nothing at any size and is the number most often wanted.
+  //
+  // Decided HERE because this is where the width is known — the pane already watches its
+  // own box, and the app has no idea how wide the roll ended up after a splitter drag.
+  const RULER_MIN_W = 560;
+  useEffect(() => {
+    const r = roll.current; if (!r) return;
+    const wide = (r.size().w || 0) >= RULER_MIN_W;
+    r.setView({ secPerUnit: wide ? secPerUnit : 0 }).resize();
+  }, [secPerUnit, model, paneW]);
 
   return html`<div class="pane roll" style=${style}>
     ${tools}
