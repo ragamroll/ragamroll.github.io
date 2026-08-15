@@ -348,20 +348,31 @@ export function renderRoll(ctx, m, v, hooks = {}) {
   if (mode === 'roll' && v.secPerUnit > 0) {
     const x = p.x + p.w, secTotal = TOTAL * v.secPerUnit;
     const pxPerSec = v.pxPerUnit / v.secPerUnit;
-    const STEPS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600];
+    // The table runs down to hundredths, because the time axis zooms eightfold and a ruler
+    // that stops subdividing stops being one: at the old floor of a second, zooming in
+    // spread the same few labels further apart and showed nothing between them.
+    const STEPS = [0.01, 0.02, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600];
+    // Chosen by SPACING at both ends rather than by position in the table: the labelled
+    // interval is the first that leaves room to read a number, and the tick interval is the
+    // finest that still leaves the ticks apart. Stepping down one entry from the label
+    // instead gave a tick interval that had nothing to do with how much room there was.
     const big = STEPS.find((s2) => s2 * pxPerSec >= 44) || STEPS[STEPS.length - 1];
-    const small = STEPS[Math.max(0, STEPS.indexOf(big) - 1)];
+    const small = [...STEPS].reverse().find((s2) => s2 < big && s2 * pxPerSec >= 7);
+    // Decimals follow the interval: 0.25s wants two, 30s wants none, and a ruler that
+    // printed "0s 0s 0s" for its first three tenths would be worse than no ruler.
+    const dp = big < 0.1 ? 2 : big < 1 ? 1 : 0;
     const label = (sec) => {
-      if (sec < 60) return sec % 1 === 0 ? `${sec}s` : `${sec.toFixed(1)}s`;
-      const m2 = Math.floor(sec / 60), r2 = Math.round(sec - m2 * 60);
-      return `${m2}:${String(r2).padStart(2, '0')}`;
+      if (sec < 60) return `${sec.toFixed(sec % 1 === 0 && dp === 0 ? 0 : dp)}s`;
+      const m2 = Math.floor(sec / 60), r2 = sec - m2 * 60;
+      return `${m2}:${String(Math.round(r2)).padStart(2, '0')}`;
     };
     ctx.save();
     ctx.beginPath(); ctx.rect(x, p.y - 2, v.w - x, v.h - p.y + 2); ctx.clip();
     ctx.font = '10px ' + mono; ctx.textAlign = 'left';
     // The small ticks first, so a label never has a tick drawn through it.
     ctx.strokeStyle = C.hair; ctx.globalAlpha = .8; ctx.lineWidth = 1;
-    for (let s2 = Math.ceil(Math.max(0, vLo * v.secPerUnit) / small) * small; s2 <= Math.min(secTotal, vHi * v.secPerUnit); s2 += small) {
+    for (let s2 = small ? Math.ceil(Math.max(0, vLo * v.secPerUnit) / small) * small : Infinity;
+      s2 <= Math.min(secTotal, vHi * v.secPerUnit); s2 += small) {
       const y = Y(s2 / v.secPerUnit);
       ctx.beginPath(); ctx.moveTo(x + 1, y); ctx.lineTo(x + 5, y); ctx.stroke();
     }
