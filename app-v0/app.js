@@ -55,6 +55,7 @@ const LS_SWAP = 'ragamroll.rollfirst';   // pane order, once the reader has said
 // pages are the same editor — being asked twice would be the surprise.
 const LS_GMOVE = 'ragamroll.gamakaOnMove';
 const LS_GKA = 'ragamroll.showSource';       // the provenance strip, on or off
+const LS_READ = 'ragamroll.reading';         // the notation folded to its swaras
 const DEFAULT_NAME = 'ragamroll';
 
 // Derive a document base-name (no extension) from an opened file / example name.
@@ -261,6 +262,13 @@ function App({ examples }) {
   // notation. Remembered ON, because someone checking a conversion is checking it for a
   // whole session, not a note.
   const [gkaOn, setGkaOn] = useState(() => localStorage.getItem(LS_GKA) === '1');
+  // Reading rather than writing: the swaras with every {…} folded to a mark. Remembered,
+  // because someone reading a piece is reading it for a while.
+  const [reading, setReading] = useState(() => localStorage.getItem(LS_READ) === '1');
+  useEffect(() => { localStorage.setItem(LS_READ, reading ? '1' : '0'); }, [reading]);
+  // Pointing at a fold shows what is behind it, in the same strip that shows where a note
+  // came from — one place for "what is not on the page", whichever way you asked.
+  const onPeek = useCallback((body) => setGkaText(body || ''), []);
   const [gkaText, setGkaText] = useState('');
   useEffect(() => { localStorage.setItem(LS_GKA, gkaOn ? '1' : '0'); }, [gkaOn]);
   // The index is the ROLL's, and it is read back through the roll rather than kept here:
@@ -648,6 +656,17 @@ function App({ examples }) {
       + ` · ${secPerUnit.toFixed(4)}s per unit · ${(units * secPerUnit).toFixed(2)}s total`);
   }, [effModel, secPerUnit]);
 
+  // What the reading view needs to group swaras by avartana: how long each note token is,
+  // in the order the tokens appear, and the cycle in the same units. From the parsed model,
+  // because the notation alone does not say — a bare swara's length is whatever L= last
+  // said, and the cycle is the tala's own arithmetic.
+  const readingMeta = useMemo(() => {
+    const durations = [];
+    for (const e of effModel.events) if (e.type === 'note') durations.push(e.absLen || 0);
+    const tp = [...effModel.events].reverse().find((e) => e.type === 'tala');
+    return { durations, measure: (tp && tp.props && tp.props.measure > 0) ? tp.props.measure : 0 };
+  }, [effModel]);
+
   // The piece's length as a reader would say it: 2:14 above a minute, 57.6s below, and
   // nothing at all when there is nothing to time.
   const duration = useMemo(() => {
@@ -958,8 +977,10 @@ function App({ examples }) {
         ${!stacked && html`<div class="editor-pane" style=${`order:${rollFirst ? 3 : 1}`}>
           <${EditTools} ragas=${ragaNames} talas=${talaNames} raga=${ragaName} tala=${talaName}
             blank=${noteCount === 0} onRaga=${onPickRaga} onTala=${onPickTala} />
-          <${GkaStrip} on=${gkaOn} onToggle=${() => setGkaOn((v) => !v)} text=${gkaText} has=${hasGka} />
-          <${Editor} value=${text} onInput=${setText} />
+          <${GkaStrip} on=${gkaOn} onToggle=${() => setGkaOn((v) => !v)} text=${gkaText} has=${hasGka}
+            reading=${reading} onReading=${() => setReading((v) => !v)} />
+          <${Editor} value=${text} onInput=${setText} readOnly=${reading} onPeek=${gkaOn ? onPeek : null}
+            durations=${readingMeta.durations} measure=${readingMeta.measure} />
         </div>`}
         ${!stacked && html`<${Splitter} orientation="v" onResize=${onVDrag} style="order:2"
           onSwap=${onSwap} swapTitle=${rollFirst ? 'Swap: put the notation on the left' : 'Swap: put the roll on the left'} />`}
@@ -989,6 +1010,8 @@ function App({ examples }) {
     ${stacked && html`<${EditorDrawer} h=${drawerH} setH=${setDrawerH}
       text=${text} onText=${setText}
       gkaOn=${gkaOn} onGkaToggle=${() => setGkaOn((v) => !v)} gkaText=${gkaText} hasGka=${hasGka}
+      reading=${reading} onReading=${() => setReading((v) => !v)} onPeek=${gkaOn ? onPeek : null}
+      durations=${readingMeta.durations} measure=${readingMeta.measure}
       ragas=${ragaNames} talas=${talaNames} raga=${ragaName} tala=${talaName}
       blank=${noteCount === 0} onRaga=${onPickRaga} onTala=${onPickTala} />`}
     <${Transport} state=${playState} canPlay=${noteCount > 0}

@@ -444,6 +444,27 @@
       white-space:nowrap; padding:.1rem 0; }
     .gka-value code { font-family:var(--mono); color:var(--teal); }
     .gka-hint { color:var(--muted); opacity:.7; font-style:italic; }
+    /* Reading mode: the notation with every {…} folded to a mark. Same box, same type, so
+       switching between writing and reading does not move the text about. */
+    .editor.reading { margin:0; overflow:auto; background:var(--panel2); color:var(--ink);
+      border:1px solid var(--hair); border-radius:6px; padding:.5rem;
+      font-family:var(--mono); font-size:.9rem; line-height:1.6; cursor:default; }
+    /* Swaras flow to fill the width; a directive, a comment or a blank line keeps its own,
+       because each of them says something about the lines that follow it. */
+    /* Each group is a paragraph: the swaras of one avartana (or of as many as it took to
+       close on one), wrapping inside it, with air between groups so the cycles are countable
+       down the page. */
+    .editor.reading .ln { white-space:pre-wrap; }
+    .editor.reading .ln.notes { display:block; margin:0 0 .55rem; }
+    .editor.reading .ln.notes.ragged { border-left:2px solid var(--hair); padding-left:.4rem;
+      margin-left:-.6rem; }
+    .editor.reading .ln.directive, .editor.reading .ln.comment { display:block; }
+    .editor.reading .ln.directive { color:var(--amber); }
+    .editor.reading .ln.comment { color:var(--muted); font-style:italic; }
+    .editor.reading .ln.blank { display:block; height:.5rem; }
+    .editor.reading .fold { color:var(--muted); opacity:.75; padding:0 .1rem; cursor:help; }
+    .editor.reading .fold.curve { color:var(--teal); opacity:.9; }
+    .editor.reading .fold:hover { opacity:1; background:var(--panel); border-radius:3px; }
     /* The piece's length, beside its name. Monospace so it does not jitter as it counts,
        and quiet: it is a fact about the piece, not a control. */
     .toolbar .head-dur { font-family:var(--mono); font-size:.8rem; color:var(--muted);

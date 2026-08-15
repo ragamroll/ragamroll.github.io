@@ -46,6 +46,184 @@ export function blockEnd(s, at) {
   return s.length;
 }
 
+/**
+ * Split notation into what a READER sees and what is folded away.
+ *
+ * A piece with gamakas is mostly braces: one curve is ten pairs of numbers, and a line of
+ * eight ornamented swaras is four hundred characters of which eight are the music. This
+ * returns the text in runs — plain stretches, and the `{…}` blocks between them — so a
+ * view can print the swaras and leave a mark where each block was.
+ *
+ * Pure, and it never loses anything: every block keeps its body, so what is folded can be
+ * shown on demand and the source itself is untouched.
+ *
+ * Whole-line `%` comments are passed through as plain text. A brace inside prose is not a
+ * note's attributes, and folding one would eat the line it was written on.
+ */
+export function collapseNotation(src) {
+  const parts = [];
+  let plain = '', i = 0, atLineStart = true;
+  const flush = () => { if (plain) { parts.push({ text: plain }); plain = ''; } };
+  while (i < src.length) {
+    const c = src[i];
+    if (atLineStart && c === '%') {
+      let e = i; while (e < src.length && src[e] !== '\n') e++;
+      plain += src.slice(i, e); i = e; atLineStart = false; continue;
+    }
+    if (c === '\n') { plain += c; i++; atLineStart = true; continue; }
+    if (c === '{') {
+      const end = blockEnd(src, i), body = src.slice(i + 1, end - 1);
+      let attrs = null;
+      try { attrs = parseAttrs(body); } catch (_) { /* malformed: still folded, still kept */ }
+      flush();
+      parts.push({ body, curve: !!(attrs && curveOf(attrs)),
+        keys: attrs ? Object.keys(attrs) : [] });
+      i = end; atLineStart = false; continue;
+    }
+    plain += c; i++; atLineStart = false;
+  }
+  flush();
+  return parts;
+}
+
+/**
+ * The folded notation, grouped into lines that can FLOW and lines that cannot.
+ *
+ * Folding turns four hundred characters into a dozen, which leaves a line of swaras ending
+ * a fifth of the way across the pane. Reading wants them packed: more of the piece on
+ * screen is the whole point of reading mode.
+ *
+ * But not everything may be packed. A directive line says what follows it — a raga, a tala,
+ * an octave, a tempo — and running the next phrase onto the end of it hides the change. A
+ * comment is prose someone wrote on its own line. A blank line is a break the writer put
+ * there. Those keep their own lines; runs of swaras flow together.
+ *
+ * A line is swaras if it holds a note token: an optional register mark, a swara or rest
+ * letter, optional digits, standing alone. "Tala=adi,1" does not qualify — its 'd' is not
+ * at a token boundary — which is the case that decides whether this is safe.
+ */
+const NOTE_IN_LINE = /(^|\s)(?:>*|<*)[sSrRgGmMpPdDnNzZ]\d*(?=[{\s]|$)/;
+export function foldedLines(src) {
+  const out = [];
+  let cur = null;
+  const start = (kind) => { cur = { kind, parts: [] }; out.push(cur); };
+  for (const line of src.split('\n')) {
+    const kind = !line.trim() ? 'blank'
+      : line.trim().startsWith('%') ? 'comment'
+        : NOTE_IN_LINE.test(line) ? 'notes' : 'directive';
+    start(kind);
+    for (const p of collapseNotation(line)) cur.parts.push(p);
+  }
+  return out;
+}
+
+/**
+ * The folded notation, grouped by AVARTANA.
+ *
+ * Packing swaras across the line makes a piece short; grouping them by the tala makes it
+ * readable. Carnatic notation is read a cycle at a time — the eye wants a line to begin
+ * where a cycle begins — so a run of swaras is cut at the tala's own boundaries rather than
+ * wherever the pane happens to end.
+ *
+ * Not every piece divides neatly. A note may straddle a boundary — twelve-unit notes in an
+ * eight-unit cycle cross every other one — and cutting mid-note would be a lie about where
+ * the cycle starts. So a group that cannot close on its boundary TAKES THE NEXT ONE, up to
+ * four cycles, and closes on the first boundary a note ends on. If none does, it closes
+ * after the straddling note and is marked ragged: the piece genuinely does not line up, and
+ * pretending otherwise would put a cycle mark where there is none.
+ *
+ * `durations` is absLen per note token, in the order walkTokens counts them — which is the
+ * order parse() emits note events in, rests included. `measure` is the cycle in length
+ * units, 0 when there is no tala, in which case nothing is grouped.
+ */
+const MAX_CYCLES = 4;
+export function readingBlocks(src, { durations = [], measure = 0 } = {}) {
+  const lines = foldedLines(src);
+  // Where each note token begins, in units from the top of the piece.
+  const startAt = [];
+  { let t = 0; for (let i = 0; i < durations.length; i++) { startAt.push(t); t += durations[i] || 0; } }
+
+  const out = [];
+  let run = null;          // the note tokens waiting to be cut into cycles
+  const flushRun = () => {
+    if (!run || !run.parts.length) { run = null; return; }
+    if (!(measure > 0)) { out.push({ kind: 'notes', parts: run.parts }); run = null; return; }
+    let group = [], groupStart = null, cycles = 1;
+    const parts = run.parts;
+    // A note's attribute block is a part of its own that FOLLOWS it, so a cut made the
+    // moment a note's clock reaches the boundary leaves the note's own fold at the head of
+    // the next line — "G∿ M" then "· P". Closing a group takes what belongs to its last
+    // note with it: the fold, and the space after it.
+    const absorb = (i) => {
+      while (i + 1 < parts.length && parts[i + 1].ord === undefined
+        && (parts[i + 1].body !== undefined || /^\s*$/.test(parts[i + 1].text || ''))) {
+        group.push(parts[++i]);
+      }
+      return i;
+    };
+    for (let i = 0; i < parts.length; i++) {
+      const item = parts[i];
+      group.push(item);
+      if (item.ord === undefined) continue;              // text or a fold: no clock of its own
+      if (groupStart === null) groupStart = startAt[item.ord] ?? 0;
+      const end = (startAt[item.ord] ?? 0) + (durations[item.ord] || 0);
+      // How many cycles this group must span to CONTAIN this note. Advancing one cycle per
+      // straddling note was not the same thing: a note twelve units long in an eight-unit
+      // cycle needs two at once, and stepping by one meant every note pushed the boundary
+      // just behind itself until the group ran out of cycles and gave up.
+      const need = Math.max(cycles, Math.ceil((end - groupStart) / measure - 1e-9));
+      if (need > MAX_CYCLES) {                           // it does not line up: say so
+        i = absorb(i);
+        out.push({ kind: 'notes', parts: group, cycles, ragged: true });
+        group = []; groupStart = null; cycles = 1;
+        continue;
+      }
+      cycles = need;
+      if (Math.abs(end - (groupStart + measure * cycles)) < 1e-9) {   // closes on a cycle
+        i = absorb(i);
+        out.push({ kind: 'notes', parts: group, cycles });
+        group = []; groupStart = null; cycles = 1;
+      }
+    }
+    // A tail of pure whitespace is not a group. It is what is left after the last cycle
+    // closed, and given a line of its own it draws a blank cycle that is not in the piece.
+    if (group.length) {
+      const hasNotes = group.some((p) => p.ord !== undefined);
+      const prev = out[out.length - 1];
+      if (hasNotes) out.push({ kind: 'notes', parts: group, cycles, ragged: true });
+      else if (prev && prev.kind === 'notes') prev.parts.push(...group);
+    }
+    run = null;
+  };
+
+  let ord = -1;
+  for (const line of lines) {
+    if (line.kind !== 'notes') { flushRun(); out.push(line); continue; }
+    if (!run) run = { parts: [] };
+    // Number the note tokens as they go past, so a part can be found in `durations`.
+    for (const p of line.parts) {
+      if (p.text === undefined) { run.parts.push(p); continue; }   // a fold belongs to the note before it
+      let rest = p.text, buf = '';
+      const re = /(^|\s)((?:>*|<*)[sSrRgGmMpPdDnNzZ]\d*)(?=[{\s]|$)/g;
+      let m2, last = 0;
+      while ((m2 = re.exec(rest))) {
+        const at = m2.index + m2[1].length;
+        buf = rest.slice(last, at);
+        if (buf) run.parts.push({ text: buf });
+        ord += 1;
+        run.parts.push({ text: m2[2], ord });
+        last = at + m2[2].length;
+        re.lastIndex = last;
+      }
+      const tail = rest.slice(last);
+      if (tail) run.parts.push({ text: tail });
+    }
+    run.parts.push({ text: ' ' });
+  }
+  flushRun();
+  return out;
+}
+
 // Capturing head: (octave marks)(swara/rest letter)(length digits)
 const NOTE_HEAD_G = /^(>*|<*)([sSrRgGmMpPdDnNzZ])(\d*)$/;
 

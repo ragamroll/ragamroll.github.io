@@ -20,7 +20,7 @@ import { EditTools } from './EditTools.js';
 const MAX_FRAC = 0.6, OPEN_FRAC = 0.35, MOVED_PX = 3;
 
 export function EditorDrawer({ h, setH, text, onText, ragas, talas, raga, tala, blank, onRaga, onTala,
-  gkaOn, onGkaToggle, gkaText, hasGka }) {
+  gkaOn, onGkaToggle, gkaText, hasGka, reading, onReading, onPeek, durations, measure }) {
   const drag = useRef(null);
   const winH = () => window.innerHeight || 600;
   const clamp = (v) => Math.max(0, Math.min(v, Math.round(winH() * MAX_FRAC)));
@@ -53,8 +53,10 @@ export function EditorDrawer({ h, setH, text, onText, ragas, talas, raga, tala, 
       <!-- The same strip as the side-by-side layout, in the same place relative to the
            notation: above it. Shut, the drawer hides it — which is right, because on a
            phone there is no pointer to hover with and nothing would ever fill it. -->
-      <${GkaStrip} on=${gkaOn} onToggle=${onGkaToggle} text=${gkaText} has=${hasGka} />
-      <${Editor} value=${text} onInput=${onText} />
+      <${GkaStrip} on=${gkaOn} onToggle=${onGkaToggle} text=${gkaText} has=${hasGka}
+        reading=${reading} onReading=${onReading} />
+      <${Editor} value=${text} onInput=${onText} readOnly=${reading} onPeek=${onPeek}
+        durations=${durations} measure=${measure} />
     </div>
   </div>`;
 }
