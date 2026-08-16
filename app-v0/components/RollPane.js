@@ -30,7 +30,8 @@ const cssvar = (k) => getComputedStyle(document.documentElement).getPropertyValu
 export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom = 1, onSetZoom, paint, chrome = true,
   mode = 'roll', curveIndex = -1, onCurveIntent, snapping, onCurvePitch, drawSpan = 22,
   markerA = 0, markerB = 0, gamaka, onGamakaIntent, onGamakaPitch,
-  canPasteGamaka, onCopyGamakaAt, onPasteGamakaAt, onHoverNote, secPerUnit = 0, lanes = 'off', lanesOrder = 'ws', lanesHeadRef,
+  canPasteGamaka, onCopyGamakaAt, onPasteGamakaAt, onHoverNote, secPerUnit = 0, saMidi = null,
+  lanes = 'off', lanesOrder = 'ws', lanesHeadRef,
   onLanesSide, onLanesOrder, onLanesHide }) {
   const holder = useRef(null), content = useRef(null), canvas = useRef(null), gutter = useRef(null);
   const roll = useRef(null);
@@ -555,6 +556,15 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
   //
   // Decided HERE because this is where the width is known — the pane already watches its
   // own box, and the app has no idea how wide the roll ended up after a splitter drag.
+  // Where Sa is, in absolute MIDI, when the reader has pinned it. The roll colours its
+  // pitch chips by which piano key each shruti is nearest, and that question has no answer
+  // without a Sa — so pinning Sa to another note has to re-colour them. Null means auto,
+  // and the roll falls back to the piece's own Sa exactly as it did before.
+  useEffect(() => {
+    const r = roll.current; if (!r) return;
+    r.setView({ saMidi }).render();
+  }, [saMidi, model]);
+
   const RULER_MIN_W = 560;
   useEffect(() => {
     const r = roll.current; if (!r) return;
