@@ -428,16 +428,36 @@
     .lanes-rail { flex:0 0 auto; width:5.6rem; min-width:0; overflow:hidden; position:relative;
       background:var(--panel2); border-radius:4px; }
     .lanes-rail.left { margin-right:.25rem; } .lanes-rail.right { margin-left:.25rem; }
-    .lanes-inner { position:absolute; left:0; right:0; top:0; will-change:transform; }
+    .lanes-clip { position:absolute; left:0; right:0; bottom:0; overflow:hidden; }
+    .lanes-inner { position:absolute; left:0; right:0; will-change:transform; }
+    /* The rail's own controls, in the band where the roll writes its pitch names — beside
+       what they act on, and over nothing, since the groups are clipped out of that band
+       exactly as the canvas clips its notes. */
+    .lanes-head { position:absolute; left:0; right:0; top:0; z-index:4; display:flex;
+      align-items:center; justify-content:center; gap:2px; }
+    .lanes-head button { padding:3px 7px; font-size:14px; line-height:1.1; border-radius:4px;
+      background:var(--panel); color:var(--muted); border:1px solid var(--hair); cursor:pointer; }
+    .lanes-head button:hover { color:var(--ink); border-color:var(--amberSoft); }
     /* The app's own palette, at low alpha over the panel: the lane editor's greens and
        browns are its dark page's, and pasted in here they are two colours from another
        room. Teal for what is written, terracotta for what is sung — the same two the roll
        already uses for a curve and a warning, so the page keeps its vocabulary. */
-    .lane-box { position:absolute; border-radius:3px; overflow:hidden; padding:0 3px;
-      display:flex; align-items:center; font:11px/1.1 var(--mono); color:var(--ink);
+    /* Text at the TOP of its cell, not the middle. Time runs downward here, so the top of
+       a cell is the instant the note begins — and that is where the syllable begins too:
+       the consonant is struck at the onset and it is the VOWEL that stretches through the
+       rest of the cell. Centred, a long note put its syllable half a beat late, which is
+       exactly the wrong place for the one part of it a singer has to arrive at on time.
+       (The lane editor runs time left to right, where its text already starts at the
+       leading edge — the same claim, in that orientation.) */
+    .lane-box { position:absolute; border-radius:3px; overflow:hidden; padding:1px 3px 0;
+      display:flex; align-items:flex-start; font:11px/1.05 var(--mono); color:var(--ink);
       border:1px solid var(--hair); }
     .lane-box.w { left:2px; width:calc(50% - 3px); background:color-mix(in srgb, var(--teal) 22%, var(--panel)); }
     .lane-box.s { left:50%; width:calc(50% - 3px); background:color-mix(in srgb, var(--terra) 22%, var(--panel)); }
+    /* Swapped: the syllables lead. Which one a reader wants on the inside — nearest the
+       notes — depends on which they are following, and both answers are ordinary. */
+    .lanes-rail.swapped .lane-box.w { left:50%; }
+    .lanes-rail.swapped .lane-box.s { left:2px; }
     .lane-box span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     /* The same line the roll draws across its own plot, continued across the rail: what is
        being sung at this instant is the group it is crossing. Teal and 2px, because it is

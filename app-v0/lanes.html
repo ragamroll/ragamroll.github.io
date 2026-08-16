@@ -96,8 +96,24 @@ kbd{background:#2a2e3e;border:1px solid var(--line);border-radius:3px;padding:1p
 #head{position:absolute;top:0;width:2px;background:var(--front);z-index:8;pointer-events:none;
   box-shadow:0 0 6px rgba(201,162,39,.7)}
 .tick{position:absolute;top:0;bottom:0;width:1px;background:#4a4f68}
+/* The tala, across the lanes. Over the beads rather than behind them: the lanes are nearly
+   solid once a piece is placed, and a cycle line behind a syllable is a line nobody sees —
+   which is the whole use of drawing one. The avartana is the landmark; the anga starts and
+   the akshara pulse are texture under it.
+   As gradients, not elements: the lines are periodic, so one declaration states them all
+   instead of several hundred divs that would each have to move on every zoom. */
+#tala{position:absolute;top:0;pointer-events:none;z-index:5;background-repeat:repeat}
+#talaBack{position:absolute;top:0;pointer-events:none;z-index:1;background-repeat:repeat}
+
 .blabel{position:absolute;top:1px;font-size:10px;color:var(--muted);padding-left:3px}
 #ruler{position:relative;height:18px;cursor:crosshair}
+/* The tala gets its own strip, above the source's own block labels. They are two different
+   griddings of the same music — one the tala's cycles, the other where the other notation
+   happened to break a line — and sharing eighteen pixels they simply sat on each other. */
+#talaRuler{position:relative;height:15px}
+.cyc{position:absolute;top:0;font:9px/15px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color:#c07a6e;padding-left:3px}
+
 /* A and B. A long piece heard from the top every time is a long piece heard from the top
    every time; these mark the phrase actually under judgement. */
 .mk{position:absolute;top:0;width:2px;z-index:7;pointer-events:none}
@@ -195,7 +211,10 @@ kbd{background:#2a2e3e;border:1px solid var(--line);border-radius:3px;padding:1p
 </div>
 
 <div id="wrap"><div id="inner">
+  <div id="talaBack"></div>
+  <div id="tala"></div>
   <div id="head" hidden></div>
+  <div id="talaRuler"></div>
   <div id="ruler"></div>
   <div class="row"><div class="rowlab axis" id="labNote"></div><div class="lane roll" id="laneNote"></div></div>
   <div class="row"><div class="rowlab pick-lane" id="labSw" title="Work on the swara lane">swara</div><div class="lane" id="laneSw"></div></div>
@@ -574,11 +593,59 @@ function render(){
   if(!$('head').hidden) headTo(headAt);
   // The lanes are no longer a fixed 150px, so the ticks and the marks are told how far
   // down they reach rather than assuming it.
-  const span=$('laneSa').getBoundingClientRect().bottom-$('ruler').getBoundingClientRect().top;
+  const foot=$('laneSa').getBoundingClientRect().bottom;
+  const span=foot-$('ruler').getBoundingClientRect().top;
   for(const el of $('ruler').querySelectorAll('.tick,.mk')) el.style.height=span+'px';
+  // The tala's lines run from ITS ruler down, so a cycle number sits at the head of the
+  // line it names rather than a strip away from it.
+  drawTala(foot-$('inner').getBoundingClientRect().top);
   refreshSrc(); showTempo();
 }
 const inSel=(k,i)=>!!sel&&sel.k===k&&i>=sel.a&&i<=sel.b;
+
+// ---------- the tala, across the lanes ----------
+// Where in the avartana a syllable falls is what a reader is checking, and the lanes had
+// only the source's own %BB blocks to go by — which are lines of the other notation, not
+// cycles of the tala.
+function drawTala(span){
+  const back=$('talaBack'), over=$('tala'), rul=$('talaRuler');
+  const T=roll&&roll.tala;
+  rul.innerHTML='';
+  if(!T||!(T.measure>0)||!(T.measure*PX>2)){ back.style.backgroundImage=''; over.style.backgroundImage=''; return; }
+  const mPx=T.measure*PX, x0=LAB();
+  const box=el=>{ el.style.left=x0+'px'; el.style.width=Math.max(0,total*PX)+'px'; el.style.height=span+'px'; };
+  box(back); box(over);
+  // the avartana, over everything the beads have covered
+  over.style.backgroundImage='repeating-linear-gradient(to right,'
+    +' rgba(164,84,74,.85) 0 2px, transparent 2px '+mPx+'px)';
+  // the anga starts and the akshara pulse, under the beads: texture rather than landmarks
+  const layers=[];
+  const angs=(T.accents||[]).map(a=>a-1).filter(o=>o>0);
+  if(angs.length){
+    const stops=['transparent 0'];
+    for(const o of angs){ const x=o*PX;
+      stops.push('transparent '+x+'px','rgba(201,162,39,.35) '+x+'px',
+                 'rgba(201,162,39,.35) '+(x+1)+'px','transparent '+(x+1)+'px'); }
+    stops.push('transparent '+mPx+'px');
+    layers.push('repeating-linear-gradient(to right, '+stops.join(', ')+')');
+  }
+  if(T.beat>0&&T.beat*PX>4)
+    layers.push('repeating-linear-gradient(to right, rgba(155,160,184,.18) 0 1px,'
+      +' transparent 1px '+(T.beat*PX)+'px)');
+  back.style.backgroundImage=layers.join(', ');
+  // The cycle count, in the tala's own strip — a number a reader can say out loud, which a
+  // line cannot. Numbered only where the numbers fit: below about thirty pixels a cycle
+  // they run into each other and say less than the ticks alone.
+  // Numbered only where the numbers fit: below about thirty pixels a cycle they run into
+  // each other and say less than the lines alone. No tick marks — the lines themselves
+  // cross this strip, so a mark here would be a second drawing of the same edge.
+  if(mPx<28) return;
+  for(let c=0,t=0;t<total;t+=T.measure,c++){
+    const d=document.createElement('div');
+    d.className='cyc'; d.style.left=(x0+t*PX)+'px'; d.textContent=String(c+1);
+    rul.appendChild(d);
+  }
+}
 
 // ---------- selection: a run of adjacent loose beads ----------
 function pick(k,i,extend){

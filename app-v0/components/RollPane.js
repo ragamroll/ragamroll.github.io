@@ -30,7 +30,8 @@ const cssvar = (k) => getComputedStyle(document.documentElement).getPropertyValu
 export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom = 1, onSetZoom, paint, chrome = true,
   mode = 'roll', curveIndex = -1, onCurveIntent, snapping, onCurvePitch, drawSpan = 22,
   markerA = 0, markerB = 0, gamaka, onGamakaIntent, onGamakaPitch,
-  canPasteGamaka, onCopyGamakaAt, onPasteGamakaAt, onHoverNote, secPerUnit = 0, lanes = 'off', lanesHeadRef }) {
+  canPasteGamaka, onCopyGamakaAt, onPasteGamakaAt, onHoverNote, secPerUnit = 0, lanes = 'off', lanesOrder = 'ws', lanesHeadRef,
+  onLanesSide, onLanesOrder, onLanesHide }) {
   const holder = useRef(null), content = useRef(null), canvas = useRef(null), gutter = useRef(null);
   const roll = useRef(null);
   // The gesture layer reads these through refs, not through its closure: it is mounted
@@ -568,7 +569,8 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
          beside it, so it travels with the roll when the panes are swapped: it is a column
          of the roll's own time axis, and a piece of furniture that could drift away from
          that axis would be worse than none. -->
-    ${lanes !== 'off' && html`<${LanesRail} model=${model} rollRef=${roll} holderRef=${holder} side=${lanes} headRef=${lanesHeadRef} />`}
+    ${lanes !== 'off' && html`<${LanesRail} model=${model} rollRef=${roll} holderRef=${holder} side=${lanes} order=${lanesOrder} headRef=${lanesHeadRef}
+      onSide=${onLanesSide} onOrder=${onLanesOrder} onHide=${onLanesHide} />`}
     <div class="roll-holder" ref=${holder}><div ref=${content}>
       <canvas ref=${canvas}></canvas>
       <!-- The margin strip: hit-testable, and it forbids panning. touch-action is read

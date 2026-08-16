@@ -46,9 +46,15 @@ export function hasLanes(model) {
       || (typeof e.sahitya === 'string' && e.sahitya.trim())));
 }
 
-export function LanesRail({ model, rollRef, holderRef, side = 'left', headRef }) {
+export function LanesRail({ model, rollRef, holderRef, side = 'left', order = 'ws', headRef,
+  onSide, onOrder, onHide }) {
   const inner = useRef(null);
   const rows = useMemo(() => laneRows(model), [model]);
+  // The band across the top of the roll where it writes its pitch names. Notes are clipped
+  // out of it there, so it is the one strip of the rail that can hold chrome without
+  // covering anything — and it is where the rail's own controls belong, next to what they
+  // control rather than in a strip above the whole page.
+  const [band, setBand] = useState(0);
   // The height of the roll's virtual space, and the reason this component re-renders. It
   // changes on a new piece, a time zoom, a grid stretch and a pane resize — every one of
   // which moves where a group belongs — and only some of those pass through a prop.
@@ -61,6 +67,8 @@ export function LanesRail({ model, rollRef, holderRef, side = 'left', headRef })
       const r = rollRef.current;
       if (!r || !inner.current) return;
       setVirt(r.virtH());
+      const pad = r.geometry().plot.y;
+      setBand(pad);                      // the roll's own header height, asked of the roll
       inner.current.style.transform = `translateY(${-hd.scrollTop}px)`;
     };
     sync();
@@ -76,8 +84,31 @@ export function LanesRail({ model, rollRef, holderRef, side = 'left', headRef })
 
   const r = rollRef.current;
   const y = (t) => (r ? r.yVirt(t) : 0);
-  return html`<div class=${'lanes-rail ' + side} style=${`order:${side === 'left' ? 0 : 4}`}>
-    <div class="lanes-inner" ref=${inner} style=${`height:${virt}px`}>
+  // Which column is which is not something the content says: a reader looking at two
+  // columns of syllables has to be told, and the title is where that goes.
+  const first = order === 'sw' ? 'sahitya' : 'written swaras';
+  const second = order === 'sw' ? 'written swaras' : 'sahitya';
+  return html`<div class=${'lanes-rail ' + side + (order === 'sw' ? ' swapped' : '')}
+    title=${`left: ${first} · right: ${second}`}
+    style=${`order:${side === 'left' ? 0 : 4}`}>
+    <!-- The controls, in the roll's header band. Clipping the groups out of that band is
+         the same thing the canvas does with its notes, so the two columns and the roll
+         still show the same slice of the piece. -->
+    <div class="lanes-head" style=${`height:${band}px`}>
+      <button onClick=${onSide} title=${side === 'left' ? 'Move the lanes to the right of the roll'
+        : 'Move the lanes to the left of the roll'}>${side === 'left' ? '⇥' : '⇤'}</button>
+      <button onClick=${onOrder} title=${order === 'sw' ? 'The sahitya is the first column — click to put the written swaras first'
+        : 'The written swaras are the first column — click to put the sahitya first'}>⇄</button>
+      <button onClick=${onHide} title="Hide the lanes">✕</button>
+    </div>
+    <!-- The clip is a BOX, not a property of the moving content: the inner div is
+         translated by the scroll, so a clip-path on it travels with it and stops cutting
+         anything the moment the piece is scrolled. This wrapper stands still, starts below
+         the band, and the inner sits back at the rail's origin inside it — so a group's y
+         is still the roll's yVirt and nothing rides up over the buttons. -->
+    <div class="lanes-clip" style=${`top:${band}px`}>
+      <div class="lanes-inner" ref=${inner}
+        style=${`height:${virt}px;top:${-band}px`}>
       <!-- The playhead, in the SAME virtual space as the groups: it lives inside the inner
            div, so the scroll that moves them moves it, and the app writes its position
            straight to this element on the frame it already computes one. Passing it as a
@@ -86,6 +117,7 @@ export function LanesRail({ model, rollRef, holderRef, side = 'left', headRef })
       ${r && rows.map((g, i) => html`<div key=${i} class=${'lane-box ' + g.lane}
         style=${`top:${y(g.t).toFixed(1)}px;height:${Math.max(9, y(g.t + g.dur) - y(g.t) - 1).toFixed(1)}px`}
         title=${g.text}><span>${g.text}</span></div>`)}
+      </div>
     </div>
   </div>`;
 }

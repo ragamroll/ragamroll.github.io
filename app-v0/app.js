@@ -51,7 +51,8 @@ const EXAMPLES_FALLBACK = ['kalyani-varnam', 'swaravali', 'vathapi', 'varavina']
 const LS_KEY = 'ragamroll.srgm';
 const LS_NAME = 'ragamroll.docname';
 const LS_SWAP = 'ragamroll.rollfirst';   // pane order, once the reader has said which they want
-const LS_LANES = 'ragamroll.lanes';      // where the sung lanes sit beside the roll: left, right or off
+const LS_LANES = 'ragamroll.lanes';      // which side of the roll the sung lanes sit on, and whether
+const LS_LANES_ORDER = 'ragamroll.lanesorder';   // and which of the two columns leads
 // What happens to a gamaka when its note is dragged to another pitch. The gamaka page's
 // key, deliberately: it is one reader's preference about one kind of edit, and the two
 // pages are the same editor — being asked twice would be the surprise.
@@ -950,17 +951,33 @@ function App({ examples }) {
   // pane, so swapping the panes carries them along — they are a column of the roll's own
   // time axis. Offered only for a piece that HAS an alignment, since a rail of empty
   // columns is width taken from the notes for nothing.
+  // 'left' | 'right' | 'off'. One value rather than a side and a flag, because a rail that
+  // is away has no side to speak of — and the way back does not need to remember one: the
+  // side it returns to is the side it was on, which is what the stored value already said
+  // before it was turned off. So the last side rides along in a ref.
   const [lanesSide, setLanesSide] = useState(() => localStorage.getItem(LS_LANES) || 'left');
+  const lastSide = useRef(lanesSide === 'off' ? 'left' : lanesSide);
+  const putSide = useCallback((next) => {
+    if (next !== 'off') lastSide.current = next;
+    localStorage.setItem(LS_LANES, next);
+    setLanesSide(next);
+  }, []);
+  const onLanesSide = useCallback(() => putSide(lastSide.current === 'left' ? 'right' : 'left'), [putSide]);
+  const onLanesHide = useCallback(() => putSide('off'), [putSide]);
+  const onLanesShow = useCallback(() => putSide(lastSide.current), [putSide]);
   // The model the ROLL is given, not the compile flag beside it: `compiled.parsed` says
   // whether the worker has answered, and asking that whether it carries an alignment is
   // a question about a boolean.
   const laneData = useMemo(() => hasLanes(effModel), [effModel]);
-  const onLanes = useCallback(() => setLanesSide((v) => {
-    const next = v === 'left' ? 'right' : v === 'right' ? 'off' : 'left';
-    localStorage.setItem(LS_LANES, next);
+  // Which column is nearest the notes. Which one a reader wants there depends on which
+  // they are following — the syllables or the written swaras — and both answers are
+  // ordinary, so it is a setting rather than a decision made here.
+  const [lanesOrder, setLanesOrder] = useState(() => localStorage.getItem(LS_LANES_ORDER) || 'ws');
+  const onLanesOrder = useCallback(() => setLanesOrder((v) => {
+    const next = v === 'ws' ? 'sw' : 'ws';
+    localStorage.setItem(LS_LANES_ORDER, next);
     return next;
   }), []);
-
   // The divider reports the share of the FIRST column — which is the roll's when the panes
   // are swapped, hence the flip. Side by side only: stacked has a drawer, not a divider.
   const onVDrag = useCallback((clientX) => {
@@ -989,9 +1006,9 @@ function App({ examples }) {
       layout: () => ({ stacked, rollFirst, editorPct, drawerH }),
       // Whether the piece carries a sung alignment, and where its rail is — a guard can
       // then check the BOXES against the roll's own yVirt rather than trusting the flag.
-      lanes: () => ({ has: laneData, side: laneData ? lanesSide : 'off' }),
+      lanes: () => ({ has: laneData, side: laneData ? lanesSide : 'off', order: lanesOrder }),
     };
-  }, [playState, stacked, rollFirst, editorPct, drawerH, laneData, lanesSide]);
+  }, [playState, stacked, rollFirst, editorPct, drawerH, laneData, lanesSide, lanesOrder]);
 
   return html`
     <${Toolbar} docName=${docName} blank=${noteCount === 0} duration=${duration} />
@@ -1025,7 +1042,8 @@ function App({ examples }) {
           gamaka=${rollGamaka} onGamakaIntent=${onGamakaIntent} onGamakaPitch=${onCurvePitch}
           canPasteGamaka=${!!curveClip} onCopyGamakaAt=${onCopyGamakaAt} onPasteGamakaAt=${onPasteGamakaAt}
           secPerUnit=${secPerUnit}
-          lanes=${laneData ? lanesSide : 'off'} lanesHeadRef=${laneHeadRef}
+          lanes=${laneData ? lanesSide : 'off'} lanesOrder=${lanesOrder} lanesHeadRef=${laneHeadRef}
+          onLanesSide=${onLanesSide} onLanesOrder=${onLanesOrder} onLanesHide=${onLanesHide}
           onHoverNote=${gkaOn ? onHoverNote : null}
           onCurvePitch=${onCurvePitch} drawSpan=${curveSpan} markerA=${markA} markerB=${markB}
           tools=${html`<${RollTools} sel=${rollSel} onDelete=${onRollDelete}
@@ -1033,7 +1051,7 @@ function App({ examples }) {
             paint=${rollPaint} onPaint=${() => { setRollPaint((v) => !v); setRollGamaka(false); }}
             gamaka=${rollGamaka} onGamaka=${() => { setRollGamaka((v) => !v); setRollPaint(false); setCurveHz(''); }}
             gmove=${gmove} onGmove=${hasCurves ? onGmove : null}
-            lanes=${lanesSide} onLanes=${laneData ? onLanes : null}
+            lanes=${laneData ? lanesSide : 'off'} onLanes=${laneData ? onLanesShow : null}
             snap=${curveSnap} onSnap=${() => setCurveSnap((v) => !v)}
             mode=${rollMode} onBack=${onCurveBack}
             hasCurve=${!!(effModel && curveNote() && curveNote().curve)}

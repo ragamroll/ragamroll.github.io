@@ -63,16 +63,13 @@ export function RollTools({ sel, onDelete, canUndo, onUndo, zoom, onZoom, paint,
     <button class="rt-gpaste" disabled=${!canPaste} onClick=${onPaste} aria-label="Paste gamaka"
       title=${canPaste ? 'Paste the copied gamaka onto this note — re-anchored to its own pitch' : 'Nothing copied yet'}>📋</button>
     <span class="rt-hz">${hz}</span>` : ''}
-    <!-- Where the sung lanes sit, for a piece that carries them: left of the roll, right
-         of it, or away. Absent for the pieces that carry none, which is most of them —
-         a control for something that is not there is a question with no answer. -->
-    ${onLanes && html`<button class=${'rt-lanes' + (lanes !== 'off' ? ' on' : '')} onClick=${onLanes}
+    <!-- The way BACK, and only that. The lanes carry their own controls in the roll's
+         header band, beside what they act on — but a control that lives inside the thing
+         it shows cannot bring that thing back, so the one button that can is here, and
+         only while there is nothing on screen to press. -->
+    ${onLanes && lanes === 'off' && html`<button class="rt-lanes" onClick=${onLanes}
       aria-label="Sung lanes"
-      title=${lanes === 'left' ? 'The written swaras and sahitya are on the left — click to move them right'
-        : lanes === 'right' ? 'On the right — click to hide them'
-        : 'Show the written swaras and the sahitya beside the roll'}>
-      ${lanes === 'left' ? '⇤ᜎ' : lanes === 'right' ? 'ᜎ⇥' : 'ᜎ'}
-    </button>`}
+      title="Show the written swaras and the sahitya beside the roll">ᜎ</button>`}
     <button class=${'rt-gamaka' + (gamaka ? ' on' : '')} onClick=${onGamaka} aria-label="Shape gamaka"
       title="Shape a gamaka in place: drag across a note to trace it, drag a point to move it, tap one to remove it, shift-drag to re-trace over an existing curve">
       ∿
