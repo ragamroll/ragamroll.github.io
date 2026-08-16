@@ -38,7 +38,12 @@ export function buildRollModel(model) {
     // `gka` rides along untouched: it is where this note came from in another notation
     // system, and the roll shows it beside the note rather than reading it as music.
     return { step, dur: n.absLen, swara: n.swara.toUpperCase(), octave: n.octave, curve, tok: keep[i],
-      gka: typeof n.gka === 'string' ? n.gka : null };
+      gka: typeof n.gka === 'string' ? n.gka : null,
+      // What is sung on this note, aligned to it by hand in the lane editor: the source
+      // notation's written swaras and the sahitya. Carried like `gka` — the roll's
+      // geometry, the audio and the MIDI are all indifferent to them.
+      written: typeof n.written === 'string' ? n.written : null,
+      sahitya: typeof n.sahitya === 'string' ? n.sahitya : null };
   });
 
   // Real composition time: the cursor advances over rests too, so a leading or

@@ -5,6 +5,7 @@ import { TALA_MAP } from './core/parser.js';
 import { setRagas, getRagas, resolveRagaName } from './core/raga-base.js';
 import { setRagaExt } from './core/raga-ext.js';
 import { Editor, GkaStrip } from './components/Editor.js';
+import { hasLanes } from './components/LanesRail.js';
 import { RollPane } from './components/RollPane.js';
 import { RollTools } from './components/RollTools.js';
 import { EditTools } from './components/EditTools.js';
@@ -50,6 +51,7 @@ const EXAMPLES_FALLBACK = ['kalyani-varnam', 'swaravali', 'vathapi', 'varavina']
 const LS_KEY = 'ragamroll.srgm';
 const LS_NAME = 'ragamroll.docname';
 const LS_SWAP = 'ragamroll.rollfirst';   // pane order, once the reader has said which they want
+const LS_LANES = 'ragamroll.lanes';      // where the sung lanes sit beside the roll: left, right or off
 // What happens to a gamaka when its note is dragged to another pitch. The gamaka page's
 // key, deliberately: it is one reader's preference about one kind of edit, and the two
 // pages are the same editor — being asked twice would be the surprise.
@@ -223,6 +225,17 @@ function App({ examples }) {
   const playerRef = useRef(null);
   if (!playerRef.current) playerRef.current = createPlayer('tone');
   const rollApiRef = useRef(null);   // the roll instance, driven imperatively (see RollPane)
+  // The lane rail's playhead. Driven the same way and for the same reason as the roll's:
+  // it is one line moving on the frame the transport clock already ticks, and routing it
+  // through props would re-render a column of text sixty times a second to move it.
+  const laneHeadRef = useRef(null);
+  const setLaneHead = useCallback((units) => {
+    const el = laneHeadRef.current, r = rollApiRef.current;
+    if (!el) return;
+    if (units == null || !r) { el.hidden = true; return; }
+    el.hidden = false;
+    el.style.transform = `translateY(${r.yVirt(units)}px)`;
+  }, []);
   // A hand-stretched grid is view state and does not survive a different piece. resize()
   // rather than render(), because the scroll window is sized from the grid and a narrower
   // grid leaves the div taller than there is anything to show.
@@ -757,6 +770,7 @@ function App({ examples }) {
       const units = loadedOffsetRef.current + Math.max(0, t) / (30 / (loadedTempoRef.current || 120));
       playheadRef.current = units;
       r.setPlayhead(units).render();
+      setLaneHead(units);
       const hd = r.canvas.parentElement.parentElement;
       hd.scrollTop = Math.max(0, Math.min(Math.max(0, r.virtH() - hd.clientHeight),
         r.yVirt(units) - hd.clientHeight * 0.4));
@@ -787,6 +801,7 @@ function App({ examples }) {
     setPlayState('stopped');
     playheadRef.current = null;
     rollApiRef.current?.setPlayhead(null).render();
+    setLaneHead(null);
     const hd = rollApiRef.current && rollApiRef.current.canvas.parentElement.parentElement;
     if (hd) hd.scrollTop = 0;
   }, []);
@@ -801,6 +816,7 @@ function App({ examples }) {
     onStop();                     // also clears a PAUSE: a rewind is not a resume point
     playheadRef.current = at;
     if (rollApiRef.current) rollApiRef.current.setPlayhead(at).render();
+    setLaneHead(at);
     // Playing, it plays AGAIN from there. Setting the state back to 'playing' was a lie:
     // onStop had already stopped the audio and cancelled the frame loop, so the app said
     // it was playing while nothing sounded and the playhead sat still.
@@ -930,6 +946,21 @@ function App({ examples }) {
     return next;
   }), [swapPref, stacked]);
 
+  // Where the sung lanes sit: left of the roll, right of it, or nowhere. Inside the roll
+  // pane, so swapping the panes carries them along — they are a column of the roll's own
+  // time axis. Offered only for a piece that HAS an alignment, since a rail of empty
+  // columns is width taken from the notes for nothing.
+  const [lanesSide, setLanesSide] = useState(() => localStorage.getItem(LS_LANES) || 'left');
+  // The model the ROLL is given, not the compile flag beside it: `compiled.parsed` says
+  // whether the worker has answered, and asking that whether it carries an alignment is
+  // a question about a boolean.
+  const laneData = useMemo(() => hasLanes(effModel), [effModel]);
+  const onLanes = useCallback(() => setLanesSide((v) => {
+    const next = v === 'left' ? 'right' : v === 'right' ? 'off' : 'left';
+    localStorage.setItem(LS_LANES, next);
+    return next;
+  }), []);
+
   // The divider reports the share of the FIRST column — which is the roll's when the panes
   // are swapped, hence the flip. Side by side only: stacked has a drawer, not a divider.
   const onVDrag = useCallback((clientX) => {
@@ -956,8 +987,11 @@ function App({ examples }) {
       // Which arrangement is on screen and which pane leads it. In the deps below, so a
       // guard that swaps the panes is not told about the layout from before the swap.
       layout: () => ({ stacked, rollFirst, editorPct, drawerH }),
+      // Whether the piece carries a sung alignment, and where its rail is — a guard can
+      // then check the BOXES against the roll's own yVirt rather than trusting the flag.
+      lanes: () => ({ has: laneData, side: laneData ? lanesSide : 'off' }),
     };
-  }, [playState, stacked, rollFirst, editorPct, drawerH]);
+  }, [playState, stacked, rollFirst, editorPct, drawerH, laneData, lanesSide]);
 
   return html`
     <${Toolbar} docName=${docName} blank=${noteCount === 0} duration=${duration} />
@@ -991,6 +1025,7 @@ function App({ examples }) {
           gamaka=${rollGamaka} onGamakaIntent=${onGamakaIntent} onGamakaPitch=${onCurvePitch}
           canPasteGamaka=${!!curveClip} onCopyGamakaAt=${onCopyGamakaAt} onPasteGamakaAt=${onPasteGamakaAt}
           secPerUnit=${secPerUnit}
+          lanes=${laneData ? lanesSide : 'off'} lanesHeadRef=${laneHeadRef}
           onHoverNote=${gkaOn ? onHoverNote : null}
           onCurvePitch=${onCurvePitch} drawSpan=${curveSpan} markerA=${markA} markerB=${markB}
           tools=${html`<${RollTools} sel=${rollSel} onDelete=${onRollDelete}
@@ -998,6 +1033,7 @@ function App({ examples }) {
             paint=${rollPaint} onPaint=${() => { setRollPaint((v) => !v); setRollGamaka(false); }}
             gamaka=${rollGamaka} onGamaka=${() => { setRollGamaka((v) => !v); setRollPaint(false); setCurveHz(''); }}
             gmove=${gmove} onGmove=${hasCurves ? onGmove : null}
+            lanes=${lanesSide} onLanes=${laneData ? onLanes : null}
             snap=${curveSnap} onSnap=${() => setCurveSnap((v) => !v)}
             mode=${rollMode} onBack=${onCurveBack}
             hasCurve=${!!(effModel && curveNote() && curveNote().curve)}

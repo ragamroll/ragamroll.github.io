@@ -422,6 +422,28 @@
        The pitch-zoom slider sits under both, along the bottom of the pane. */
     .roll-body { flex:1 1 auto; min-height:0; display:flex; align-items:stretch; }
     .roll-holder { flex:1 1 auto; min-width:0; min-height:0; overflow-y:auto; overflow-x:hidden; }
+    /* The lane rail: what is sung, against the notes it is sung on. It does NOT scroll —
+       it holds one tall inner div translated by the roll's own scrollTop, so the two axes
+       cannot drift and there is no second scrollbar to reconcile. */
+    .lanes-rail { flex:0 0 auto; width:5.6rem; min-width:0; overflow:hidden; position:relative;
+      background:var(--panel2); border-radius:4px; }
+    .lanes-rail.left { margin-right:.25rem; } .lanes-rail.right { margin-left:.25rem; }
+    .lanes-inner { position:absolute; left:0; right:0; top:0; will-change:transform; }
+    /* The app's own palette, at low alpha over the panel: the lane editor's greens and
+       browns are its dark page's, and pasted in here they are two colours from another
+       room. Teal for what is written, terracotta for what is sung — the same two the roll
+       already uses for a curve and a warning, so the page keeps its vocabulary. */
+    .lane-box { position:absolute; border-radius:3px; overflow:hidden; padding:0 3px;
+      display:flex; align-items:center; font:11px/1.1 var(--mono); color:var(--ink);
+      border:1px solid var(--hair); }
+    .lane-box.w { left:2px; width:calc(50% - 3px); background:color-mix(in srgb, var(--teal) 22%, var(--panel)); }
+    .lane-box.s { left:50%; width:calc(50% - 3px); background:color-mix(in srgb, var(--terra) 22%, var(--panel)); }
+    .lane-box span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    /* The same line the roll draws across its own plot, continued across the rail: what is
+       being sung at this instant is the group it is crossing. Teal and 2px, because it is
+       that line and not another one. */
+    .lane-head { position:absolute; left:0; right:0; top:0; height:2px; background:var(--teal);
+      opacity:.95; pointer-events:none; z-index:3; }
     .roll-zt { flex:0 0 auto; width:1.4rem; margin:.2rem .1rem; writing-mode:vertical-lr; direction:rtl;
       accent-color:var(--teal); cursor:pointer; touch-action:none; }
     /* Reversed: dragging RIGHT narrows the range, which is zooming IN — the direction a

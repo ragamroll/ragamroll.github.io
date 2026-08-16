@@ -151,7 +151,18 @@ export function parse(input) {
       } else {
         const cv = curveOf(attrs);      // `gcurve`, or `gamaka` from before it was renamed
         if (cv) ev.gamaka = cv;
+        // What is SUNG on this note, in two lanes: the written swaras of the source
+        // notation, and the syllables of the sahitya. Text, both of them — nothing here
+        // reads them as music, the same way `gka` below is carried rather than played.
+        // A note may carry several of either, separated by spaces, because one ragamroll
+        // note can take a whole gesture's worth of written swaras.
+        //
+        // `swara` is what the lane editor writes; `written` is accepted beside it because
+        // that is the name the lane MODEL uses, and a file carrying either means the same
+        // thing to a reader.
         if (typeof attrs.sahitya === 'string') ev.sahitya = attrs.sahitya;
+        if (typeof attrs.swara === 'string') ev.written = attrs.swara;
+        else if (typeof attrs.written === 'string') ev.written = attrs.written;
         // Provenance: the fragment of ANOTHER notation system that produced this note,
         // written by whatever converted it. Nothing here reads it as music — not the
         // audio, not the MIDI, not the roll's geometry — it exists to be shown beside
