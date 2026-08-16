@@ -130,6 +130,29 @@ kbd{background:#2a2e3e;border:1px solid var(--line);border-radius:3px;padding:1p
 #src{flex:1 1 auto;min-height:120px;resize:none;background:var(--panel);color:var(--ink);
   border:1px solid var(--line);border-radius:5px;padding:8px;
   font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.srchead .tg{display:inline-flex;align-items:center;gap:3px;text-transform:none;letter-spacing:0;
+  color:var(--muted);cursor:pointer}
+.srchead .tg:hover{color:var(--ink)}
+/* Where a note came from, as a STRIP rather than a tooltip: a fragment of another system's
+   notation can be long, and a tooltip over the roll covers the very notes being compared. */
+.gkabar{flex:0 0 auto;overflow-x:auto;white-space:nowrap;padding:2px 0 4px}
+.gkabar code{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#7fd6b0}
+/* Reading mode: the same fold the app's editor uses, from the same function — one gamaka is
+   ten pairs of numbers, so a line of eight ornamented swaras runs to four hundred characters
+   of which eight are the music. */
+.reading{flex:1 1 auto;min-height:120px;overflow:auto;background:var(--panel);color:var(--ink);
+  border:1px solid var(--line);border-radius:5px;padding:8px;cursor:default;
+  font:12.5px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.reading .ln{white-space:pre-wrap}
+.reading .ln.notes{display:block;margin:0 0 .5rem}
+.reading .ln.notes.ragged{border-left:2px solid var(--line);padding-left:6px;margin-left:-8px}
+.reading .ln.directive,.reading .ln.comment{display:block}
+.reading .ln.directive{color:var(--front)}
+.reading .ln.comment{color:var(--muted);font-style:italic}
+.reading .ln.blank{display:block;height:.5rem}
+.reading .fold{color:var(--muted);opacity:.75;padding:0 1px;cursor:help}
+.reading .fold.curve{color:#7fd6b0;opacity:.9}
+.reading .fold:hover{opacity:1;background:var(--bg);border-radius:3px}
 #empty{padding:36px 16px;color:var(--muted);max-width:80ch;line-height:1.6}
 #empty b{color:var(--ink)}
 </style>
@@ -226,8 +249,16 @@ kbd{background:#2a2e3e;border:1px solid var(--line);border-radius:3px;padding:1p
      judgement is made, rather than after a download and a reopen. Editable, because the
      text is the source of truth here as it is everywhere else in ragamroll. -->
 <div id="srcwrap" hidden>
-  <div class="srchead">notation <span class="hint" id="srcnote">what Save would write — edit it and the lanes re-read</span></div>
+  <div class="srchead">notation
+    <label class="tg" title="Read the swaras with every {…} folded to a mark. The notation itself is not changed.">
+      <input type="checkbox" id="read"> read</label>
+    <label class="tg" title="Show where each note came from — the source notation that produced it">
+      <input type="checkbox" id="gkaOn"> source</label>
+    <span class="hint" id="srcnote">what Save would write — edit it and the lanes re-read</span>
+  </div>
+  <div class="gkabar" id="gkaBar" hidden><span id="gkaVal" class="hint"></span></div>
   <textarea id="src" spellcheck="false"></textarea>
+  <div id="reading" class="reading" hidden aria-readonly="true"></div>
 </div>
 
 <script type="module">
@@ -237,6 +268,7 @@ kbd{background:#2a2e3e;border:1px solid var(--line);border-radius:3px;padding:1p
 // page adds is where the sound has got to.
 import { parse } from './core/parser.js';
 import { buildRollModel, gridPitches } from './core/roll-model.js';
+import { readingBlocks } from './core/gamaka-inline.js';
 import { EDO } from './core/shruti.js';
 import { buildSequence } from './core/midi/sequence.js';
 import { scheduleEvents, totalSeconds } from './audio/schedule.js';
@@ -265,6 +297,11 @@ let log=[];                          // undo trail for Detach last
 let mark={a:null,b:null};            // rehearsal region, in units; null = unset
 let picked=null;                     // a note picked in the roll, to take work back from
 let active='sw';                     // the lane the buttons and the keys act on
+// How the notation below is being LOOKED at: folded to its swaras, and whether the strip
+// showing where a note came from is up. Declared here with the other view state rather than
+// beside the code that uses them — applyPrefs() runs at load and reads both, and a `let`
+// below its reader is in the temporal dead zone when that reader runs.
+let reading=false, gkaOn=false;
 
 const NOTE_RE=/^([<>]*)([SRGMPDNzZ])(\d*)(\{[\s\S]*\})?\s*$/;
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
@@ -281,8 +318,20 @@ function attrStr(o){
 }
 
 let roll=null;                       // the app's roll model for this text, or null
+// What the reading view needs to group swaras by avartana: how long each note token is, in
+// the order the tokens appear, and the cycle in the same units. The notation alone does not
+// say — a bare swara's length is whatever L= last said.
+let readMeta={durations:[],measure:0};
+let hasGka=false;
 function parseSrgm(text){
   roll=readPitch(text);
+  readMeta={durations:[],measure:0};
+  try{
+    const m=parse(text);
+    for(const e of m.events) if(e.type==='note') readMeta.durations.push(e.absLen||0);
+    const tp=[...m.events].reverse().find(e=>e.type==='tala');
+    readMeta.measure=(tp&&tp.props&&tp.props.measure>0)?tp.props.measure:0;
+  }catch(e){}
   lastText=text; notes=[]; sw=[]; sa=[]; total=0; log=[]; sel=null; picked=null;
   mark={a:null,b:null};                // a mark belongs to a timeline; a new file is a new one
   const lines=text.split('\n'); let L=1, at=0, block=0;
@@ -308,6 +357,7 @@ function parseSrgm(text){
     line.split(/\s+/).filter(Boolean)
         .forEach(w=>into.push({text:w, note:null, grow:0, block:blk})));
   mk(pend.sw,sw); mk(pend.sa,sa);
+  hasGka=notes.some(n=>typeof n.attrs.gka==='string'&&n.attrs.gka);
   // Carried beads. A '-' bound to a note says the syllable before it is still being sung
   // there; it is not in the %@ / %$ lines because those are the other system's own text,
   // hand-aligned in columns that rewriting would destroy. So the insertions are recorded
@@ -484,6 +534,8 @@ function render(){
     if(n.dur*PX>=26&&nh>=9) d.innerHTML='<span>'+esc(n.tok)+'</span>';
     if(i===picked) d.classList.add('pick');
     d.title=n.tok+(n.attrs.gka?'\ngka: '+n.attrs.gka:'')+'\nstart '+n.start+'  len '+n.dur;
+    d.onmouseenter=()=>peek(n.attrs.gka||'');
+    d.onmouseleave=()=>peek('');
     d.onclick=e=>{
       e.stopPropagation();
       if(e.ctrlKey||e.metaKey){ oneToOne(sel?sel.k:active,{note:i}); return; }
@@ -1108,7 +1160,7 @@ $('save').onclick=()=>{
 const PREFS='lanes.prefs';
 function savePrefs(){
   try{ localStorage.setItem(PREFS,JSON.stringify(
-    {mix, tempo:tempoMult, zoom:PX, sync:syncMs, voice:timbre})); }catch(e){}
+    {mix, tempo:tempoMult, zoom:PX, sync:syncMs, voice:timbre, reading, gka:gkaOn})); }catch(e){}
 }
 function applyPrefs(){
   let o={};
@@ -1121,12 +1173,61 @@ function applyPrefs(){
   if(Number.isFinite(o.sync)) syncMs=o.sync;
   if(typeof o.voice==='string') timbre=o.voice;
   $('voice').value=timbre;
+  reading=!!o.reading; gkaOn=!!o.gka;
+  applyLooks();
   for(const [id,key] of [['vMel','mel'],['vTala','tala'],['vDrone','drone'],['vMaster','master']])
     $(id).value=mix[key];
   $('tempo').value=tempoMult; $('zoom').value=PX; $('sync').value=syncMs;
   showTempo(); applyMix();
 }
 applyPrefs();
+
+// ---------- two ways of looking at the notation ----------
+// The app's editor has these and this page's did not, which made the same file two
+// different things to read depending on which page was open. Same functions underneath —
+// readingBlocks() is where the fold and the avartana grouping live — so the two pages fold
+// a piece identically rather than each having a version of it.
+function peek(text){
+  if(!gkaOn) return;
+  const v=$('gkaVal');
+  if(text){ v.innerHTML=''; const c=document.createElement('code'); c.textContent=text; v.appendChild(c); }
+  else v.textContent=hasGka?'point at a note to see the notation it came from'
+                           :'this piece carries no source notation';
+}
+// READING is a different job from writing, and the notation is written for the writer: one
+// gamaka is ten pairs of numbers, so a line of eight ornamented swaras runs to four hundred
+// characters of which eight are the music. The mark says a note is ornamented without
+// saying how, and can be pointed at to see what is behind it.
+function drawReading(){
+  const el=$('reading');
+  el.innerHTML='';
+  if(!reading||!lastText) return;
+  for(const bk of readingBlocks(lastText,readMeta)){
+    const d=document.createElement('div');
+    d.className='ln '+bk.kind+(bk.ragged?' ragged':'');
+    if(bk.kind==='notes'&&bk.cycles)
+      d.title=bk.ragged?'does not close on a tala cycle'
+                       :bk.cycles+' avartana'+(bk.cycles>1?'s':'');
+    for(const p of bk.parts){
+      if(p.text!==undefined){ d.appendChild(document.createTextNode(p.text)); continue; }
+      const sp=document.createElement('span');
+      sp.className='fold'+(p.curve?' curve':'');
+      sp.title=p.body; sp.textContent=p.curve?'\u223f':'\u00b7';
+      sp.onmouseenter=()=>peek(p.body); sp.onmouseleave=()=>peek('');
+      d.appendChild(sp);
+    }
+    el.appendChild(d);
+  }
+}
+function applyLooks(){
+  $('read').checked=reading; $('gkaOn').checked=gkaOn;
+  $('src').hidden=reading; $('reading').hidden=!reading;
+  $('gkaBar').hidden=!gkaOn;
+  peek('');
+  drawReading();
+}
+$('read').onchange=e=>{ reading=e.target.checked; savePrefs(); applyLooks(); };
+$('gkaOn').onchange=e=>{ gkaOn=e.target.checked; savePrefs(); applyLooks(); };
 
 // ---------- the notation, below the lanes ----------
 // Shown as it stands and editable, because the text is the source of truth: a `written:`
@@ -1140,6 +1241,9 @@ function refreshSrc(){
   $('srcwrap').hidden=false;
   const next=composeSrgm();
   if(el.value!==next) el.value=next;
+  // The fold is of the text as it stands, so placing a group has to redraw it — the swaras
+  // do not move, but the sahitya: it just gained is behind one of those marks.
+  if(reading){ lastText=next; drawReading(); }
 }
 $('src').oninput=e=>{
   clearTimeout(typing);

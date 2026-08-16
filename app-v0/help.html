@@ -42,6 +42,8 @@
     <li><b>Ragamroll</b> (top-right): the ascii roll; the playing row highlights during playback.</li>
     <li><b>Notation</b> (bottom): the Carnatic-textbook single-line form with barlines.</li>
     <li>Drag the dividers between panes to resize.</li>
+    <li><b>Sung lanes</b> (beside the roll): the written swaras and the sahitya of a piece
+    that has been aligned — see <a href="#lanes">The sahitya and the written swaras</a>.</li>
   </ul>
 
   <h2>Writing srgm — the melody</h2>
@@ -174,6 +176,113 @@ G2 G2 P4 P4  D2 P2 &gt;S4 S4</code></pre>
     <li><b>Re-trace a curve that already has one:</b> hold <b>Shift</b> and drag across the note. Once a note carries a gamaka, an ordinary drag always moves the nearest point — at normal zoom a note is only a couple of dozen pixels tall and a trace begins right where its first point sits, so there is nowhere left to press that means "start again". Shift says which you meant.</li>
     <li><b>Where a point lands:</b> with <b>snap</b> on, on the 53-EDO grid — the same lines the roll draws, all 53 of them, not just the raga's own notes. An ornament moves <i>between</i> the notes, so it needs the finer grid. Turn <b>snap</b> off and a point goes exactly where you put it; the notation carries two decimals, so it survives being saved and reopened.</li>
     <li class="sub">The grid bounds are a view convenience — they aren't saved; the notes and rests you write are.</li>
+  </ul>
+
+  <h2 id="lanes">The sahitya and the written swaras</h2>
+  <p>Notation converted from another system often arrives with that system's own
+  <b>written swaras</b> and the <b>sahitya</b> (the lyrics) sitting above the notes, as
+  <code>%@</code> and <code>%$</code> lines. Those lines say <i>what is sung</i>; nothing in
+  them says <i>which note carries it</i>. Deciding that is a judgement of the ear, one note
+  at a time — so it has a page of its own.</p>
+  <p><b><a href="./lanes.html">Open the lane editor &rarr;</a></b> <span class="sub">(also
+  reachable at <code>/lanes.html</code>)</span></p>
+
+  <h3>What it shows</h3>
+  <ul>
+    <li>The <b>ragamroll on its side</b>: time runs left to right, pitch up the lane on the
+    raga's own shruti rows, each note's gamaka drawn through it at the pitch it actually
+    reaches. It is only as tall as the piece's range.</li>
+    <li>Below it, the <b>written swaras</b> and the <b>sahitya</b> as loose beads waiting to
+    be placed, and the <b>tala</b> across all three lanes — the avartana in terracotta with
+    the anga starts and the akshara pulse under it, and each cycle numbered in its own ruler
+    above the source's <code>%BB</code> block labels.</li>
+    <li>The <b>notation</b> below that, which is exactly what a Save would write, updating as
+    you place groups. It is editable, and it has the same <b>read</b> and <b>source</b>
+    toggles the app's editor has.</li>
+  </ul>
+
+  <h3>Placing a group</h3>
+  <ul>
+    <li>Work left to right. The <b>frontier</b> note is ringed in gold — one per lane, since
+    the two move independently. Click a bead, <b>shift-click</b> a later one to take the
+    whole run, then <b>Attach</b> (or <kbd>Enter</kbd>) to bind that group to the frontier
+    note. A group belongs to exactly one note.</li>
+    <li><b>Ctrl-click</b> the last bead of a run — or the last note of it in the roll — and
+    the whole run is bound at once, <b>one bead per note</b>. Most of a piece runs note for
+    note; binding those one at a time is typing out a decision already made.</li>
+    <li><b>Leave empty</b> (<kbd>Space</kbd>) passes over a note: nothing is sung there. For
+    a long stretch — whole sections of a varnam have no sahitya, the swaras being the
+    syllables — click the lane's name to aim at it, then <b>shift-click</b> the last note of
+    the stretch. What was left empty stays drawn as a thin bar.</li>
+    <li>A syllable that runs <b>across two notes</b>: drag the right edge of an attached
+    sahitya bead to show it still sounding past its note, or press <b>Carry –</b> on the note
+    it runs into — which says the syllable continues, rather than that the note is silent.</li>
+    <li>Taking work back: <b>Detach last</b> (<kbd>Ctrl-Z</kbd>) unwinds the end;
+    <b>alt-click</b> a bead takes that lane back from its note on; <b>alt-click</b> a note in
+    the roll, or click it and press <b>Detach from here</b>, takes both lanes back. It has to
+    take what follows — those groups were placed against this one.</li>
+  </ul>
+
+  <h3>Hearing it</h3>
+  <ul>
+    <li>Play, with a playhead across all three lanes, a mixer, a listening speed independent
+    of the piece's own tempo, and a choice of instrument that takes effect mid-phrase.</li>
+    <li>Click the <b>ruler</b> to set <b>A</b>, <b>shift-click</b> for <b>B</b>: play begins
+    at A and turns back at B, so pressing play again plays the same phrase again. Pause holds
+    its place; rewind returns to A.</li>
+    <li>The <b>tala starts silent</b> and the drone barely on — a strum on every akshara is
+    exactly what buries the gesture you are judging. Levels, speed, zoom and the A/V trim are
+    remembered for this browser.</li>
+  </ul>
+
+  <h3>What the alignment is written as</h3>
+  <p>The result goes on the notes themselves, as two attributes:</p>
+  <pre><code>&lt;D2{gka:"((S↑ N&lt;&lt;)S↑)D",swara:"N D",sahitya:"ro",gcurve:[…]}</code></pre>
+  <p><code>swara:</code> is the written swaras of the source notation for that note (several,
+  space-separated, where one ragamroll note takes a whole gesture's worth), and
+  <code>sahitya:</code> the syllables. A lone <code>-</code> means the previous syllable is
+  still being sung on this note. Nothing plays them — not the audio, not the MIDI, not the
+  roll's geometry; they are carried so they can be shown.</p>
+
+  <h3 id="lanes-line">The <code>%LANES</code> line</h3>
+  <p>One JSON object on a comment line, holding what the attributes above <em>cannot</em>
+  say — the state of the work rather than its result. Every other reader skips it.</p>
+  <pre><code>%LANES {"sw":115,"sa":115,
+        "grow":{"sw":{},"sa":{"4":8.36,"9":0.57,…}},
+        "ins":{"sw":[],"sa":[[5,"-"],[12,"-"],…]},
+        "ab":[null,null]}</code></pre>
+  <table>
+    <tr><th>key</th><th>what it holds</th></tr>
+    <tr><td><code>sw</code> / <code>sa</code></td><td>the <b>frontier</b> in each lane — the
+      index of the next note to be filled. It is the only record of a <i>leave empty</i>:
+      those notes carry no attribute, so without it the work would resume before them.</td></tr>
+    <tr><td><code>grow</code></td><td><b>sustains</b>, per lane, by bead index → extra length
+      in units. <code>"4":8.36</code> = the fifth sahitya bead keeps sounding 8.36 units past
+      its note. Rounded to two decimals so the file stays readable.</td></tr>
+    <tr><td><code>ins</code></td><td><b>carried beads</b>, by position → text.
+      <code>[5,"-"]</code> = a <code>-</code> was inserted at bead 5. Recorded here rather
+      than written into the <code>%@</code> / <code>%$</code> lines, because those are the
+      other system's own text, hand-aligned in columns a rewrite would flatten.</td></tr>
+    <tr><td><code>ab</code></td><td>the <b>A–B</b> rehearsal region in length-units,
+      <code>null</code> when unset.</td></tr>
+  </table>
+  <p class="sub">Delete the line and you lose the frontier, the sustains, the carries and the
+  marks — but not the alignment itself, which lives on the notes. The editor would re-derive
+  a frontier from the last attached note and carry on. Note the order on load: insertions are
+  replayed <em>before</em> the note attributes are matched back to beads, or every group
+  after the first carry lands one note off.</p>
+
+  <h3>Reading it in the app</h3>
+  <ul>
+    <li>A piece carrying an alignment shows it beside the roll — two columns, each group
+    against the note it is sung on, with the playhead crossing them. A piece carrying none
+    shows nothing, and no control for it.</li>
+    <li>The lanes' own buttons sit in the band across the top of the roll: which side of the
+    roll they sit on, which column leads, and away. Only the way back is in the roll's
+    strip, and only while they are hidden.</li>
+    <li>A syllable is drawn at the <b>top</b> of its cell, because the consonant is struck at
+    the note's onset and it is the vowel that stretches through the rest.</li>
+    <li>The app is a reader here: editing an alignment is the lane editor's job.</li>
   </ul>
 
   <div class="back" style="border-top:1px solid #333; border-bottom:0; margin-top:2rem;">

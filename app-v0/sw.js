@@ -1,4 +1,4 @@
-const CACHE = 'ragamroll-db1e902';
+const CACHE = 'ragamroll-a363f87';
 
 // SERVED FROM A LOCAL SERVER: stand down entirely.
 //
