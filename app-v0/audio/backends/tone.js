@@ -271,6 +271,15 @@ export function createToneBackend() {
       transport().start('+' + Math.max(0.06, outputDelay(rawCtx())).toFixed(3));
     },
     pause() { transport().pause(); },
+    // Move the play position without playing. The point is a run that starts somewhere
+    // other than the top: scheduled callbacks before `sec` simply never fire, and the
+    // ones after it keep the times they were given. Only meaningful between load() and
+    // play(), or while paused — a started transport would race its own clock.
+    seek(sec) {
+      if (total <= 0) return;
+      ended = false;            // a seek is a fresh intention, not the end that was reached
+      transport().seconds = Math.max(0, Math.min(total, sec));
+    },
     stop() {
       ended = false;
       const tr = transport();

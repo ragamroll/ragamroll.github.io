@@ -12,6 +12,7 @@
  * @property {(events: ScheduledEvent[], totalSec: number, opts?: {talaGain?: number, talaVoice?: string}) => (void|Promise<void>)} load  // talaGain (0..1) scales tala velocity; talaVoice picks the tala voice ('reed'|'mallet'|'membrane') for the tala browser — omit for the composition's fixed 'veena' accent strum
  * @property {() => Promise<void>} play    // start from 0, or resume from pause; awaits audio unlock
  * @property {() => void} pause            // freeze; position() holds
+ * @property {(sec: number) => void} seek    // move the play position (clamped to 0..totalSec) without playing; events before it do not fire. Call between load() and play(), or while paused
  * @property {() => void} stop             // stop + reset position() to 0
  * @property {() => number} position       // 0..1 fraction of totalSec elapsed
  * @property {() => number} latency        // output latency in seconds (for A/V sync compensation); 0 if unknown

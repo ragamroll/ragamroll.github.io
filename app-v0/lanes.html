@@ -1,0 +1,1087 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>srgm lane editor</title>
+<style>
+:root{
+  --bg:#14151d; --panel:#1c1e29; --line:#2b2e3d; --ink:#e6e7f0; --muted:#9ba0b8;
+  --note:#33415e; --noteF:#3d6a8a; --rest:#232633; --front:#c9a227;
+  --swara:#3f6b4d; --swaraF:#4f8a61; --sah:#7a4f28; --sahF:#9c6634;
+  --sel:#c9a227;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);height:100vh;display:flex;
+  flex-direction:column;
+  font:14px/1.4 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:9px 13px;
+  background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+button,label.btn{background:#2a2e3e;color:var(--ink);border:1px solid var(--line);
+  border-radius:4px;padding:5px 10px;cursor:pointer;font:inherit}
+button:hover:not(:disabled),label.btn:hover{background:#343950}
+button:disabled{opacity:.4;cursor:default}
+input[type=file]{display:none}
+.sp{flex:1}
+.hint{color:var(--muted);font-size:12.5px}
+/* The mixer. A drone is not a nicety here: a swara is judged against a reference, and the
+   tala against a pulse — being able to take either away, or to hear one alone, is part of
+   deciding which syllable belongs to which gesture. */
+.mix{display:inline-flex;gap:9px;align-items:center}
+.mix label{display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--muted)}
+.mix input[type=range]{width:52px;accent-color:var(--front);vertical-align:middle}
+kbd{background:#2a2e3e;border:1px solid var(--line);border-radius:3px;padding:1px 5px;font-size:11px}
+#wrap{flex:0 0 auto;overflow-x:auto;overflow-y:hidden;padding-bottom:20px}
+#inner{position:relative}
+.row{display:flex;align-items:stretch}
+.rowlab{position:sticky;left:0;z-index:6;width:74px;min-width:74px;background:var(--bg);
+  border-right:1px solid var(--line);color:var(--muted);font-size:10.5px;
+  letter-spacing:.1em;text-transform:uppercase;display:flex;align-items:center;padding-left:8px}
+.lane{position:relative;height:44px;flex:1;background:var(--panel);
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+/* The roll lane carries a pitch axis, so its height is the piece's range and not a
+   constant. Set in script; everything inside it is placed against yOf(step). */
+.lane.roll{height:auto}
+/* Which lane the buttons and the keys act on. It was implied by whatever happened to be
+   selected, and defaulted to the swaras — so 'leave empty' could not be aimed at the
+   sahitya at all without first selecting a syllable somewhere. */
+.rowlab.pick-lane{cursor:pointer}
+.rowlab.on{color:var(--ink);background:#20232f;box-shadow:inset 3px 0 0 var(--sel)}
+/* A note the frontier has passed with nothing put on it: left empty on purpose, which is a
+   claim and not an absence — long stretches of a varnam have no sahitya but the swaras. */
+.gap{position:absolute;top:50%;height:2px;margin-top:-1px;border-radius:2px;opacity:.75}
+.gap.sw{background:#40624c} .gap.sa{background:#6d4526}
+.rowlab.axis{position:relative;display:block;padding:0}
+.rowlab.axis .cap{position:absolute;top:2px;left:8px}
+.rowlab.axis .pl{position:absolute;right:6px;transform:translateY(-50%);
+  font:10px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#7d8199}
+.prow{position:absolute;left:0;right:0;height:1px;background:#262a38}
+.prow.sa{background:#39405a}
+.gklayer{position:absolute;left:0;top:0;pointer-events:none;z-index:2}
+.gklayer polyline{fill:none;stroke:#7fd6b0;stroke-width:1.4;vector-effect:non-scaling-stroke;
+  stroke-linejoin:round;stroke-linecap:round;opacity:.9}
+.seg{position:absolute;top:4px;bottom:4px;border-radius:3px;overflow:hidden;
+  display:flex;align-items:center;padding:0 3px;white-space:nowrap;
+  font:12.5px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  border:1px solid rgba(255,255,255,.13)}
+.seg.note{background:var(--note);color:#aeb6cc;top:auto;bottom:auto;z-index:3;
+  font-size:9px;padding:0 2px}
+.seg.note.filled{background:var(--noteF);color:#fff}
+.seg.note.rest{background:var(--rest);color:#6b7086;border-style:dotted}
+/* The frontier ring, on a bar a few pixels tall: an outline rather than a 4px inset,
+   which on this scale would BE the note. */
+.seg.note.frontSw{outline:2px solid var(--swaraF);outline-offset:1px}
+.seg.note.frontSa{outline:2px solid var(--sahF);outline-offset:1px}
+.seg.note.frontSw.frontSa{outline:2px solid var(--swaraF);outline-offset:1px;
+  box-shadow:0 0 0 4px rgba(156,102,52,.55)}
+.target{position:absolute;top:3px;bottom:3px;border-radius:3px;pointer-events:none;
+  display:flex;align-items:center;justify-content:center;
+  font:11px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.target.sw{border:2px dashed var(--swaraF);color:var(--swaraF)}
+.target.sa{border:2px dashed var(--sahF);color:var(--sahF)}
+.seg.sw{background:var(--swara)} .seg.sw.att{background:var(--swaraF)}
+.seg.sa{background:var(--sah)}   .seg.sa.att{background:var(--sahF)}
+.seg.free{opacity:.72;border-style:dashed;cursor:pointer}
+.seg.sel{outline:2px solid var(--sel);outline-offset:-2px;opacity:1}
+.seg.note.pick{outline:2px solid var(--sel);outline-offset:2px;z-index:4}
+.grip{position:absolute;right:0;top:0;bottom:0;width:7px;cursor:ew-resize;
+  background:linear-gradient(90deg,transparent,rgba(0,0,0,.4))}
+/* The curve sits behind the swara, edge to edge of its note: a shape to read at a glance,
+   not a plot to measure. vector-effect keeps the stroke one pixel wide however far the
+   viewBox is stretched — without it a wide note draws a fat smear and a narrow one a
+   hairline. */
+.seg.note>span{position:relative;z-index:1}
+/* The playhead, over all three lanes at once: what you are hearing, against the notes and
+   against the beads waiting to be placed on them. */
+#head{position:absolute;top:0;width:2px;background:var(--front);z-index:8;pointer-events:none;
+  box-shadow:0 0 6px rgba(201,162,39,.7)}
+.tick{position:absolute;top:0;bottom:0;width:1px;background:#4a4f68}
+.blabel{position:absolute;top:1px;font-size:10px;color:var(--muted);padding-left:3px}
+#ruler{position:relative;height:18px;cursor:crosshair}
+/* A and B. A long piece heard from the top every time is a long piece heard from the top
+   every time; these mark the phrase actually under judgement. */
+.mk{position:absolute;top:0;width:2px;z-index:7;pointer-events:none}
+.mk>span{position:absolute;top:0;left:2px;font:700 10px/13px ui-monospace,Menlo,monospace;
+  padding:0 4px;border-radius:0 3px 3px 0;color:#12131a}
+.mk.a{background:#4f8a61} .mk.a>span{background:#4f8a61}
+.mk.b{background:#a4544a} .mk.b>span{background:#a4544a}
+/* The notation fills what is left below the lanes, which is most of the window: three
+   lanes are 150px and a varnam is not. */
+#srcwrap{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;padding:0 13px 10px}
+.srchead{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+  padding:2px 0 4px;display:flex;gap:10px;align-items:baseline}
+.srchead .hint{text-transform:none;letter-spacing:0}
+#src{flex:1 1 auto;min-height:120px;resize:none;background:var(--panel);color:var(--ink);
+  border:1px solid var(--line);border-radius:5px;padding:8px;
+  font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+#empty{padding:36px 16px;color:var(--muted);max-width:80ch;line-height:1.6}
+#empty b{color:var(--ink)}
+</style>
+</head>
+<body>
+
+<header>
+  <label class="btn">Open .srgm<input type="file" id="file" accept=".srgm,.txt"></label>
+  <button id="save" disabled>Save .srgm</button>
+  <span class="sp"></span>
+  <button id="attach" disabled>Attach &crarr;</button>
+  <button id="skip" disabled>Leave empty</button>
+  <button id="carry" disabled title="This note carries the previous syllable — binds a '-' to the frontier note, for a syllable that runs across two notes">Carry &ndash;</button>
+  <button id="undo" disabled>Detach last</button>
+  <button id="unpin" disabled title="Click a note in the roll first. Takes back what is bound to it — and everything placed after it, since the work runs left to right and a group that follows a mistake was placed against it.">Detach from here</button>
+  <button id="rew" disabled title="Back to A, or to the start of the piece">&#9198;</button>
+  <button id="play" disabled title="Hear the piece — the judgement is one of the ear">Play &#9654;</button>
+  <button id="stop" disabled title="Stop">&#9632;</button>
+  <label class="hint" id="syncBox" title="A/V trim. The playhead is drawn at the audio clock MINUS the output delay the device reports; where that report is wrong the line and the sound disagree. Positive moves the line later (right). Remembered for this browser — it is a property of the machine, not of the piece.">sync
+    <input type="number" id="sync" step="10" value="0" style="width:56px">ms
+    <span id="latAt"></span>
+  </label>
+  <label class="hint" title="Play slower to hear a gesture, or faster to hear the phrase. Takes effect on the next Play.">tempo
+    <input type="range" id="tempo" min="0.25" max="2" step="0.05" value="1">
+    <span id="tempoAt">1.0&times;</span>
+  </label>
+  <label class="hint" id="voiceBox" title="Melody voice. Takes effect where the piece stands — a gesture is judged against a timbre, and waiting for the next play to hear it is waiting too long. The sampled ones (marked) are fetched when picked; until they arrive, and offline, they play as the synth.">&#127925;
+    <select id="voice">
+      <option value="soft-am">Soft</option>
+      <option value="bowed-fm">Bowed</option>
+      <option value="reed-fm">Reed</option>
+      <option value="pluck">Pluck</option>
+      <option value="violin">Violin &#9670;</option>
+      <option value="flute">Flute &#9670;</option>
+      <option value="guitar">Guitar &#9670;</option>
+      <option value="harmonium">Harmonium &#9670;</option>
+    </select>
+  </label>
+  <span class="mix">
+    <label title="Melody">mel<input type="range" id="vMel" min="0" max="1" step="0.05" value="1"></label>
+    <label title="Tala — off to begin with: the strum is what buries a syllable">tala<input type="range" id="vTala" min="0" max="1" step="0.05" value="0"></label>
+    <label title="Drone — the reference the ear judges a swara against. Barely on to begin with.">drone<input type="range" id="vDrone" min="0" max="1" step="0.05" value="0.25"></label>
+    <label title="Master">out<input type="range" id="vMaster" min="0" max="1" step="0.05" value="1"></label>
+  </span>
+  <label class="hint">zoom <input type="range" id="zoom" min="3" max="46" value="14" style="vertical-align:middle"></label>
+  <span class="hint" id="ab" title="Click the ruler to set A, shift-click for B. Play starts at A and turns back at B."></span>
+  <span class="hint" id="status">no file</span>
+</header>
+
+<div id="empty">
+  Open a <code>.srgm</code> from <code>gka2ragamroll.js</code>.<br><br>
+  The top lane is the ragamroll itself, on its side: time runs left to right as it does for
+  the beads, and a note sits at its own pitch on the raga's own shruti rows, with its gamaka
+  drawn through it. It is the real sound and its timing, and it is not editable here.
+  Below it sit the written swaras and the sahitya, as loose beads waiting to be placed.<br><br>
+  Work left to right. The <b>frontier</b> note is ringed in gold. Click a bead to select it,
+  <b>shift-click</b> a later one to take the whole run, then <kbd>Attach</kbd> to bind that group
+  to the frontier note. The note fills, those beads lock, and the frontier moves on.
+  <kbd>Leave empty</kbd> passes over a note — that is how silence is written, since there is no
+  rest in the notation and an unfilled note simply has nothing sung on it.<br><br>
+  A group belongs to exactly one note. Drag the right edge of an attached sahitya bead to show a
+  syllable still sounding past its note, or press <kbd>Carry &ndash;</kbd> on the note it runs into —
+  one syllable, two notes.<br><br>
+  Click the ruler to set <b>A</b>, where Play begins; <b>shift-click</b> for <b>B</b>, where it turns
+  back to A. Play pauses where it stands and resumes from there.<br><br>
+  Click a lane's name to work on it — <kbd>Leave empty</kbd> and <kbd>Carry</kbd> say which
+  lane they will act on. Long stretches with no sahitya are ordinary: <b>shift-click</b> the
+  last note of the stretch in the roll and the frontier steps over all of it, and what was
+  left empty stays drawn as a thin bar under those notes.<br><br>
+  Where a stretch runs note for note, <b>ctrl-click</b> the last bead of the run — or the
+  last note of it in the roll — and the whole run is bound at once, one bead per note.
+  <b>alt-click</b> takes work back: on a bead, that lane from its note on; on a note, both
+  lanes from there on.<br><br>
+  To take work back in the middle of a piece — the case a half-finished file always turns
+  into — click the note in the roll and press <kbd>Detach from here</kbd>. It releases that
+  note's groups and every group placed after them, and rewinds the frontier to it.<br><br>
+  <kbd>Enter</kbd> attach · <kbd>Space</kbd> leave empty · <kbd>-</kbd> carry · <kbd>Ctrl-Z</kbd> detach last
+  · <kbd>a</kbd>/<kbd>b</kbd> mark at the frontier
+</div>
+
+<div id="wrap"><div id="inner">
+  <div id="head" hidden></div>
+  <div id="ruler"></div>
+  <div class="row"><div class="rowlab axis" id="labNote"></div><div class="lane roll" id="laneNote"></div></div>
+  <div class="row"><div class="rowlab pick-lane" id="labSw" title="Work on the swara lane">swara</div><div class="lane" id="laneSw"></div></div>
+  <div class="row"><div class="rowlab pick-lane" id="labSa" title="Work on the sahitya lane">sahitya</div><div class="lane" id="laneSa"></div></div>
+</div></div>
+
+<!-- The notation, in the room the lanes leave. It is what a Save would write, updating as
+     groups are placed — so a `written:` appearing on a note is visible at the moment the
+     judgement is made, rather than after a download and a reopen. Editable, because the
+     text is the source of truth here as it is everywhere else in ragamroll. -->
+<div id="srcwrap" hidden>
+  <div class="srchead">notation <span class="hint" id="srcnote">what Save would write — edit it and the lanes re-read</span></div>
+  <textarea id="src" spellcheck="false"></textarea>
+</div>
+
+<script type="module">
+// The audio is the APP's, not a second one written here. A gamaka is a pitch curve the
+// player already knows how to bend through, the tala already has a voice, and the whole
+// reason for hearing this file inside ragamroll is that it sounds like ragamroll. What the
+// page adds is where the sound has got to.
+import { parse } from './core/parser.js';
+import { buildRollModel, gridPitches } from './core/roll-model.js';
+import { EDO } from './core/shruti.js';
+import { buildSequence } from './core/midi/sequence.js';
+import { scheduleEvents, totalSeconds } from './audio/schedule.js';
+import { createPlayer } from './audio/player.js';
+import { droneFreqs } from './audio/drone.js';
+import { saBaseOf } from './core/retune.js';
+import { setRagas, getRagas } from './core/raga-base.js';
+import { setRagaExt } from './core/raga-ext.js';
+
+// The raga database decides what pitch a swara IS, so it is loaded before anything can be
+// played. Failing that, the page still edits — it simply cannot be heard.
+let ragaReady = fetch('./core/raga-db.json').then(r => r.json())
+  .then(db => { setRagas(db); setRagaExt(db); }).catch(() => {});
+
+// ---------- model ----------
+// notes[]   the ragamroll timeline: the real sound and its timing. Fixed.
+// sw[]/sa[] beads {text, note:index|null, grow:units}. `note` IS the edit - a bead
+//           belongs to exactly one note, or to none yet. Every position on screen is
+//           a consequence of that; nothing is positioned by hand.
+let lastText='', notes=[], sw=[], sa=[], total=0;
+let PX=14, sel=null, srcName='aligned.srgm';
+let front={sw:0, sa:0};              // index into notes: the slot being filled
+let resumed={sw:0,sa:0,mismatch:0};
+let blockSpan={};      // block number -> {start,end} in units
+let log=[];                          // undo trail for Detach last
+let mark={a:null,b:null};            // rehearsal region, in units; null = unset
+let picked=null;                     // a note picked in the roll, to take work back from
+let active='sw';                     // the lane the buttons and the keys act on
+
+const NOTE_RE=/^([<>]*)([SRGMPDNzZ])(\d*)(\{[\s\S]*\})?\s*$/;
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+function parseAttrs(b){
+  return JSON.parse(('{'+b+'}')
+    .replace(/([{,]\s*)([A-Za-z_]\w*)(\s*:)/g,'$1"$2"$3').replace(/,(\s*[}\]])/g,'$1'));
+}
+function attrStr(o){
+  const ord=['gka','swara','sahitya','gcurve','gamaka'];
+  return Object.keys(o)
+    .sort((a,b)=>(ord.indexOf(a)<0?99:ord.indexOf(a))-(ord.indexOf(b)<0?99:ord.indexOf(b)))
+    .map(k=>k+':'+JSON.stringify(o[k])).join(',');
+}
+
+let roll=null;                       // the app's roll model for this text, or null
+function parseSrgm(text){
+  roll=readPitch(text);
+  lastText=text; notes=[]; sw=[]; sa=[]; total=0; log=[]; sel=null; picked=null;
+  mark={a:null,b:null};                // a mark belongs to a timeline; a new file is a new one
+  const lines=text.split('\n'); let L=1, at=0, block=0;
+  const pend={sw:[],sa:[]}; let session=null;
+  for(let i=0;i<lines.length;i++){
+    const t=lines[i].trim();
+    if(t.startsWith('%BB')){ block++; continue; }
+    if(t.startsWith('%@')){ pend.sw.push([block,t.slice(2)]); continue; }
+    if(t.startsWith('%$')){ pend.sa.push([block,t.slice(2)]); continue; }
+    if(t.startsWith('%LANES')){ try{ session=JSON.parse(t.slice(6).trim()); }catch(e){} continue; }
+    if(t.startsWith('%')) continue;
+    const lm=/^L\s*=\s*([\d.]+)$/.exec(t); if(lm){ L=parseFloat(lm[1])||1; continue; }
+    const m=NOTE_RE.exec(t); if(!m) continue;
+    const dur=(/^\d+$/.test(m[3])?parseInt(m[3],10):1)*L;
+    let attrs={}; if(m[4]){ try{attrs=parseAttrs(m[4].slice(1,-1));}catch(e){} }
+    notes.push({line:i, tok:m[1]+m[2]+(m[3]||''), start:at, dur,
+                rest:(m[2]==='z'||m[2]==='Z'), attrs, block});
+    at+=dur;
+  }
+  total=at;
+  // beads: split at the spaces, text kept verbatim - '-' and ',' carry meaning
+  const mk=(src,into)=>src.forEach(([blk,line])=>
+    line.split(/\s+/).filter(Boolean)
+        .forEach(w=>into.push({text:w, note:null, grow:0, block:blk})));
+  mk(pend.sw,sw); mk(pend.sa,sa);
+  // Carried beads. A '-' bound to a note says the syllable before it is still being sung
+  // there; it is not in the %@ / %$ lines because those are the other system's own text,
+  // hand-aligned in columns that rewriting would destroy. So the insertions are recorded
+  // by position and replayed here — BEFORE the resume below, which walks the bead queue
+  // in order and would otherwise find every group off by one.
+  if(session&&session.ins) for(const k of ['sw','sa']){
+    const arr=laneOf(k);
+    for(const [i,t] of (session.ins[k]||[])){
+      const at=Math.max(0,Math.min(i,arr.length));
+      arr.splice(at,0,{text:t, note:null, grow:0, ins:true,
+                       block:(arr[at]||arr[at-1]||{block:1}).block});
+    }
+  }
+
+  // where each block sits on the timeline - a block is one source line of
+  // notation, and its %@ / %$ annotate exactly those notes, so it is a real
+  // anchor for initial placement
+  blockSpan={};
+  notes.forEach(n=>{
+    const b=blockSpan[n.block]||(blockSpan[n.block]={start:n.start,end:n.start});
+    if(n.start<b.start) b.start=n.start;
+    if(n.start+n.dur>b.end) b.end=n.start+n.dur;
+  });
+
+  // Resume. Groups were written left to right onto notes, so replaying the
+  // notes in order and consuming beads off the head of the queue rebuilds
+  // exactly what was there. Text is checked rather than trusted: a file edited
+  // by hand may disagree, and then those beads are left loose rather than
+  // silently mis-bound.
+  resumed={sw:0,sa:0,mismatch:0};
+  const restore=(key,beads,laneKey)=>{
+    let head=0;
+    notes.forEach((n,ni)=>{
+      const v=n.attrs[key]; if(typeof v!=='string'||!v.trim()) return;
+      const want=v.trim().split(/\s+/);
+      const have=beads.slice(head,head+want.length).map(b=>b.text);
+      if(have.length!==want.length||have.join(' ')!==want.join(' ')){ resumed.mismatch++; return; }
+      for(let j=0;j<want.length;j++) beads[head+j].note=ni;
+      head+=want.length; resumed[laneKey]+=want.length;
+    });
+  };
+  restore('swara',sw,'sw'); restore('sahitya',sa,'sa');
+  notes.forEach(n=>{ delete n.attrs.swara; delete n.attrs.sahitya; });  // re-derived on save
+
+  const lastOf=beads=>{ let m=-1; beads.forEach(b=>{ if(b.note!=null&&b.note>m) m=b.note; }); return m; };
+  front.sw=firstAudible(lastOf(sw)+1);
+  front.sa=firstAudible(lastOf(sa)+1);
+  if(session){
+    if(Number.isFinite(session.sw)) front.sw=session.sw;      // preserves 'leave empty' steps
+    if(Number.isFinite(session.sa)) front.sa=session.sa;
+    if(Array.isArray(session.ab)){ mark.a=session.ab[0]; mark.b=session.ab[1]; }
+    const g=session.grow||{};
+    for(const k of ['sw','sa']) for(const i of Object.keys(g[k]||{}))
+      if(laneOf(k)[i]) laneOf(k)[i].grow=g[k][i];
+  }
+}
+const firstAudible=i=>{ while(i<notes.length&&notes[i].rest) i++; return i; };
+const laneOf=k=>k==='sw'?sw:sa;
+
+// ---------- layout ----------
+// attached beads share their note's span; loose beads queue from the frontier on.
+function layout(k){
+  const beads=laneOf(k), out=[], byNote={};
+  beads.forEach((b,i)=>{ if(b.note!=null) (byNote[b.note]=byNote[b.note]||[]).push(i); });
+  for(const ni of Object.keys(byNote)){
+    const n=notes[ni], ids=byNote[ni], w=n.dur/ids.length;
+    ids.forEach((i,j)=>out[i]={start:n.start+w*j, dur:w+(beads[i].grow||0), att:true});
+  }
+  // Loose beads sit inside their own block, spread over whatever of it the
+  // frontier has not passed. The block is what the %@ / %$ line described, so
+  // this puts every bead within a note or two of where it belongs before the
+  // user touches anything.
+  const f=front[k], fs=f<notes.length?notes[f].start:total;
+  const groups={};
+  beads.forEach((b,i)=>{ if(b.note==null) (groups[b.block]=groups[b.block]||[]).push(i); });
+  for(const blk of Object.keys(groups)){
+    const sp=blockSpan[blk]||{start:fs,end:total};
+    const from=Math.max(sp.start,fs);                 // never behind the frontier
+    const to=Math.max(from+0.6,sp.end);
+    const ids=groups[blk], w=(to-from)/ids.length;
+    ids.forEach((i,j)=>out[i]={start:from+w*j, dur:w, att:false, block:+blk});
+  }
+  return out;
+}
+
+// ---------- pitch ----------
+// The note lane is a ragamroll, laid on its side: X is time, as the beads are, and Y is
+// PITCH. It reads the app's own roll model rather than a second reconstruction here — the
+// 53-EDO step of a note is what the RAGA says it is, not what its MIDI number reconstructs,
+// and a gamaka is stored note-relative and has to be resolved against it. buildRollModel
+// numbers its notes by `tok`, the ordinal among ALL note tokens with the rests included,
+// which is exactly how this page indexes its own — so the two line up without a search.
+//
+// Only as tall as the piece is wide in pitch: the range of every note AND of every point
+// its gamaka passes through, since a curve that swings out of the frame is a curve that
+// cannot be read.
+let pitch={};                          // page note index -> {step, curve}
+let lo=0, hi=EDO, PPS=2;               // step bounds, and pixels per 53-EDO step
+const PITCH_PAD=2;
+function readPitch(text){
+  pitch={};
+  let rm=null;
+  try{ rm=buildRollModel(parse(text)); }catch(e){ rm=null; }
+  if(!rm){ lo=0; hi=EDO; PPS=2; return null; }
+  const vals=[];
+  for(const n of rm.notes){
+    pitch[n.tok]={step:n.step, curve:n.curve};
+    vals.push(n.step);
+    if(n.curve) for(const [,v] of n.curve) vals.push(v);
+  }
+  lo=(vals.length?Math.min(...vals):0)-PITCH_PAD;
+  hi=(vals.length?Math.max(...vals):EDO)+PITCH_PAD;
+  // A range is a range whatever its size, so the scale gives way rather than the frame:
+  // a piece inside one octave is drawn open, a piece across three is drawn tight, and
+  // both fit the same band of screen.
+  PPS=Math.max(0.9,Math.min(3.4,170/Math.max(1,hi-lo)));
+  return rm;
+}
+const laneH=()=>Math.round((hi-lo)*PPS)+10;
+const yOf=step=>(hi-step)*PPS+5;
+// A bar thick enough to see and thin enough to sit ON its pitch rather than across three of
+// them. It follows the scale, so a piece drawn open gets bars that can hold their token.
+const noteH=()=>Math.max(5,Math.min(14,Math.round(PPS*3)));
+
+// ---------- render ----------
+const $=id=>document.getElementById(id);
+function render(){
+  $('inner').style.width=Math.max(700,total*PX+260)+'px';
+  for(const id of ['laneNote','laneSw','laneSa','ruler']) $(id).innerHTML='';
+
+  const H=laneH();
+  $('laneNote').style.height=H+'px';
+
+  // the pitch rows the raga names, and the axis beside them. Sa is drawn brighter: a roll
+  // with no anchor in it is a set of dots, and the octave is what the eye counts from.
+  const rows=roll?gridPitches(roll.notes,lo,hi,roll.raga):[];
+  for(const r of rows){
+    const y=yOf(r.step);
+    if(y<0||y>H) continue;
+    const g=document.createElement('div');
+    g.className='prow'+(/^S/.test(r.label)?' sa':'');
+    g.style.top=Math.round(y)+'px';
+    $('laneNote').appendChild(g);
+  }
+  $('labNote').innerHTML='<span class="cap">ragamroll</span>'
+    +rows.filter(r=>/^[SP]/.test(r.label)).map(r=>{
+      const y=yOf(r.step);
+      return (y<8||y>H-2)?'':'<span class="pl" style="top:'+Math.round(y)+'px">'+esc(r.label)+'</span>';
+    }).join('');
+
+  let lastBlock=0;
+  notes.forEach((n,i)=>{
+    if(n.block!==lastBlock){
+      lastBlock=n.block;
+      const tk=document.createElement('div');
+      tk.className='tick'; tk.style.left=(LAB()+n.start*PX)+'px';
+      $('ruler').appendChild(tk);
+      const lb=document.createElement('div');
+      lb.className='blabel'; lb.style.left=(LAB()+n.start*PX+3)+'px'; lb.textContent='BB '+n.block;
+      $('ruler').appendChild(lb);
+    }
+    const filled=sw.some(b=>b.note===i)||sa.some(b=>b.note===i);
+    const p=pitch[i];
+    const d=document.createElement('div');
+    d.className='seg note'+(n.rest?' rest':'')+(filled?' filled':'')
+              +(i===front.sw?' frontSw':'')+(i===front.sa?' frontSa':'');
+    d.style.left=(n.start*PX)+'px'; d.style.width=Math.max(3,n.dur*PX-2)+'px';
+    // A rest has no pitch to be drawn at, so it lies along the floor of the lane: the
+    // silence is still time, and the beads above it still have to be placed over it.
+    const nh=noteH(), y=p?yOf(p.step)-nh/2:H-4;
+    d.style.top=y.toFixed(1)+'px'; d.style.height=(p?nh:2)+'px';
+    // The token only where it fits. At this scale most notes are a bar, and a bar that is
+    // trying to hold text is a bar you cannot see the pitch of.
+    if(n.dur*PX>=26&&nh>=9) d.innerHTML='<span>'+esc(n.tok)+'</span>';
+    if(i===picked) d.classList.add('pick');
+    d.title=n.tok+(n.attrs.gka?'\ngka: '+n.attrs.gka:'')+'\nstart '+n.start+'  len '+n.dur;
+    d.onclick=e=>{
+      e.stopPropagation();
+      if(e.ctrlKey||e.metaKey){ oneToOne(sel?sel.k:active,{note:i}); return; }
+      if(e.shiftKey){ leaveThrough(active,i); return; }
+      if(e.altKey){ detachAt(i); return; }
+      picked=(picked===i?null:i); sel=null; render();
+    };
+    $('laneNote').appendChild(d);
+  });
+
+  // Every gamaka in ONE overlay across the lane, in the lane's own pitch coordinates. Per
+  // note it could only ever be a shape scaled to its own box — which is what this was —
+  // and a gesture that leans a third below its note would have been drawn inside it.
+  const paths=[];
+  notes.forEach((n,i)=>{
+    const p=pitch[i];
+    if(!p||!p.curve||p.curve.length<2) return;
+    paths.push('<polyline points="'+p.curve
+      .map(([u,v])=>((n.start+u*n.dur)*PX).toFixed(1)+','+yOf(v).toFixed(1)).join(' ')+'"/>');
+  });
+  if(paths.length){
+    const w=Math.max(1,total*PX+40);
+    $('laneNote').insertAdjacentHTML('beforeend',
+      '<svg class="gklayer" width="'+w+'" height="'+H+'" viewBox="0 0 '+w+' '+H+'">'+paths.join('')+'</svg>');
+  }
+
+  for(const which of ['a','b']){
+    const u=mark[which];
+    if(u==null) continue;
+    const d=document.createElement('div');
+    d.className='mk '+which;
+    d.style.left=(LAB()+u*PX)+'px'; d.style.height='168px';
+    d.innerHTML='<span>'+which.toUpperCase()+'</span>';
+    $('ruler').appendChild(d);
+  }
+
+  for(const k of ['sw','sa']){
+    const beads=laneOf(k), pos=layout(k), lane=$(k==='sw'?'laneSw':'laneSa');
+    // the slot an Attach would fill, drawn in this lane's own colour. The two
+    // frontiers move independently, so one shared marker on the note lane could
+    // only ever be ambiguous.
+    const f=front[k];
+    if(f<notes.length){
+      const n=notes[f], t=document.createElement('div');
+      t.className='target '+k;
+      t.style.left=(n.start*PX)+'px'; t.style.width=Math.max(10,n.dur*PX-2)+'px';
+      // textContent escapes by itself — esc() as well printed the entity, so a target on a
+      // note with an octave mark read "&gt;S". The note lane two lines up builds a string
+      // with innerHTML, which is where esc() belongs.
+      t.textContent=n.tok;
+      lane.appendChild(t);
+    }
+    // What was left empty, drawn. A note the frontier has gone past with nothing on it in
+    // this lane is a decision — 'nothing is sung here' — and it looked exactly like a note
+    // not yet reached.
+    const has=new Set();
+    beads.forEach(b=>{ if(b.note!=null) has.add(b.note); });
+    for(let i=0;i<front[k]&&i<notes.length;i++){
+      if(notes[i].rest||has.has(i)) continue;
+      const g=document.createElement('div');
+      g.className='gap '+k;
+      g.style.left=(notes[i].start*PX+1)+'px'; g.style.width=Math.max(2,notes[i].dur*PX-4)+'px';
+      g.title=notes[i].tok+' — left empty';
+      lane.appendChild(g);
+    }
+    beads.forEach((b,i)=>{
+      const p=pos[i]; if(!p) return;
+      const d=document.createElement('div');
+      d.className='seg '+k+(p.att?' att':' free')+(inSel(k,i)?' sel':'');
+      d.style.left=(p.start*PX)+'px'; d.style.width=Math.max(9,p.dur*PX-2)+'px';
+      d.innerHTML='<span>'+esc(b.text)+'</span>'+(p.att&&k==='sa'?'<div class="grip"></div>':'');
+      d.title=b.text+(b.note!=null?'  → note '+b.note:'  (loose, from block '+b.block+')');
+      d.onmousedown=e=>{ if(e.target.classList.contains('grip')) startGrow(e,k,i); };
+      d.onclick=e=>{
+        e.stopPropagation();
+        if(e.ctrlKey||e.metaKey){ oneToOne(k,{bead:i}); return; }
+        if(e.altKey){ if(b.note!=null) detachAt(b.note,k); return; }
+        pick(k,i,e.shiftKey);
+      };
+      lane.appendChild(d);
+    });
+  }
+  const nsw=sw.filter(b=>b.note==null).length, nsa=sa.filter(b=>b.note==null).length;
+  const at=k=>front[k]<notes.length?notes[front[k]].tok+' ('+front[k]+')':'end';
+  $('status').textContent='swara → '+at('sw')+'   sahitya → '+at('sa')
+    +'  ·  '+nsw+' swaras and '+nsa+' syllables left'
+    + ((resumed.sw||resumed.sa)?'  ·  resumed '+(resumed.sw+resumed.sa)+' placed':'')
+    + (resumed.mismatch?'  ·  '+resumed.mismatch+' group(s) did not match the beads — left loose':'');
+  $('labSw').className='rowlab pick-lane'+(active==='sw'?' on':'');
+  $('labSa').className='rowlab pick-lane'+(active==='sa'?' on':'');
+  const lane=active==='sw'?'swara':'sahitya';
+  $('skip').textContent='Leave empty \u00b7 '+lane;
+  $('carry').textContent='Carry \u2013 \u00b7 '+lane;
+  $('attach').disabled=!sel; $('undo').disabled=!log.length; $('skip').disabled=!notes.length;
+  const back=picked==null?null:rewindInfo(picked);
+  const nback=back?Object.keys(back).reduce((t,k)=>t+back[k].beads.length,0):0;
+  $('unpin').disabled=!back||!Object.keys(back).length;
+  $('unpin').textContent=back&&Object.keys(back).length
+    ? 'Detach from '+notes[picked].tok+(nback?' ('+nback+')':'')
+    : 'Detach from here';
+  $('carry').disabled=!notes.length; $('rew').disabled=!notes.length;
+  const at1=u=>u==null?'\u2013':String(Math.round(u*100)/100);
+  $('ab').textContent=(mark.a==null&&mark.b==null)?'':('A '+at1(mark.a)+' \u00b7 B '+at1(mark.b));
+  // The head is positioned in pixels, so a zoom moves every note out from under it unless
+  // it is redrawn too — visible whenever the piece is not playing, since a tick would
+  // otherwise put it right within the frame.
+  if(!$('head').hidden) headTo(headAt);
+  // The lanes are no longer a fixed 150px, so the ticks and the marks are told how far
+  // down they reach rather than assuming it.
+  const span=$('laneSa').getBoundingClientRect().bottom-$('ruler').getBoundingClientRect().top;
+  for(const el of $('ruler').querySelectorAll('.tick,.mk')) el.style.height=span+'px';
+  refreshSrc(); showTempo();
+}
+const inSel=(k,i)=>!!sel&&sel.k===k&&i>=sel.a&&i<=sel.b;
+
+// ---------- selection: a run of adjacent loose beads ----------
+function pick(k,i,extend){
+  active=k;                                       // clicking in a lane is choosing it
+  if(laneOf(k)[i].note!=null) return;             // attached beads are spoken for
+  if(extend&&sel&&sel.k===k) sel={k, a:Math.min(sel.a,i), b:Math.max(sel.b,i)};
+  else sel={k, a:i, b:i};
+  for(let j=sel.a;j<=sel.b;j++) if(laneOf(k)[j].note!=null){ sel={k,a:i,b:i}; break; }
+  render();
+}
+$('wrap').onclick=()=>{ sel=null; picked=null; render(); };
+
+// ---------- attach / leave empty / detach ----------
+$('attach').onclick=()=>{
+  if(!sel) return;
+  const k=sel.k, f=front[k];
+  if(f>=notes.length) return;
+  for(let j=sel.a;j<=sel.b;j++) laneOf(k)[j].note=f;
+  log.push({k, a:sel.a, b:sel.b, prev:f});
+  front[k]=firstAudible(f+1); sel=null; render();
+};
+$('labSw').onclick=e=>{ active='sw'; e.stopPropagation(); render(); };
+$('labSa').onclick=e=>{ active='sa'; e.stopPropagation(); render(); };
+$('skip').onclick=()=>{
+  const k=sel?sel.k:active, f=front[k];
+  if(f>=notes.length) return;
+  log.push({k, a:-1, b:-1, prev:f});
+  front[k]=firstAudible(f+1); render();
+};
+// A note that carries the previous syllable rather than starting a new one.
+//
+// 'ro' is sung across N D D P M, and those five written swaras are two ragamroll notes:
+// <D2 and P3. A bead belongs to exactly ONE note, so 'ro' can only be bound to the first
+// of them — and then P3 reads as if nothing were being sung on it, which is a different
+// claim from silence. The carried '-' is that claim written down: the syllable continues.
+// Stretching the bead's right edge says the same thing about its DURATION; this says it
+// about the NOTE, which is what a resume, a save and the next reader all read.
+$('carry').onclick=()=>{
+  const k=sel?sel.k:active, f=front[k];
+  if(f>=notes.length) return;
+  const beads=laneOf(k);
+  // At the head of the loose queue, which is where the attached prefix ends: the resume
+  // walks notes in order consuming beads off that head, and an insertion anywhere else
+  // would put every later group on the wrong note.
+  let i=beads.findIndex(b=>b.note==null); if(i<0) i=beads.length;
+  beads.splice(i,0,{text:'-', note:f, grow:0, ins:true, block:notes[f].block});
+  log.push({k, a:-1, b:-1, ins:i, prev:f});
+  front[k]=firstAudible(f+1); sel=null; render();
+};
+// Everything a lane has placed at or after a note.
+//
+// Not just that note's own beads. The attached beads have to remain a PREFIX of the bead
+// queue: they are replayed in order against the notes that carry them, so a hole in the
+// middle costs every group after it on the next reload — silently, since the file still
+// looks placed. Taking back a decision therefore takes back the decisions made after it,
+// which is also what it means: those groups were placed against this one.
+//
+// A frontier that has run past the note is rewound too, even with nothing attached — that
+// is how 'leave empty' is taken back.
+function rewindInfo(idx){
+  const info={};
+  for(const k of ['sw','sa']){
+    const beads=[];
+    laneOf(k).forEach((b,i)=>{ if(b.note!=null&&b.note>=idx) beads.push([i,b.note]); });
+    if(beads.length||front[k]>idx) info[k]={beads, front:front[k]};
+  }
+  return info;
+}
+// `only` restricts it to one lane — an alt-click lands on a bead, and a bead belongs to a
+// lane, so taking it back should not take the other lane's work with it. The button has no
+// lane to speak of and takes both.
+function detachAt(idx,only){
+  const info=rewindInfo(idx);
+  const ks=Object.keys(info).filter(k=>!only||k===only);
+  if(!ks.length) return;
+  const took={};
+  for(const k of ks){
+    took[k]=info[k];
+    for(const [i] of info[k].beads) laneOf(k)[i].note=null;
+    front[k]=firstAudible(idx);
+  }
+  log.push({rewind:took, at:idx});
+  picked=null; sel=null; render();
+}
+$('unpin').onclick=()=>{ if(picked!=null) detachAt(picked); };
+
+// ---------- leaving a stretch empty ----------
+// Whole sections of a varnam have no sahitya: the swaras ARE the syllables there, and the
+// lane has nothing to say about a hundred notes running. One press per note is not a way to
+// say that, so shift-click the last note of the stretch and the frontier steps over all of
+// it at once — the same three-modifier vocabulary as the roll's other two: ctrl binds, alt
+// takes back, shift passes over.
+function leaveThrough(k,idx){
+  const prev=front[k];
+  let f=firstAudible(prev);
+  while(f<=idx&&f<notes.length) f=firstAudible(f+1);
+  // A note the frontier is already past leaves f where it started, and nothing is recorded:
+  // an entry that changes nothing is worse than none, since the next Ctrl-Z would spend
+  // itself on it and the stretch before would look un-undoable.
+  if(f===prev) return;
+  front[k]=f;
+  log.push({rewind:{[k]:{beads:[], front:prev}}});   // one entry, and one Ctrl-Z to undo it
+  sel=null; picked=null; render();
+}
+
+// ---------- one to one ----------
+// Most of a piece is not a judgement. Where the written swaras run note for note against
+// the roll — which is what a stretch looks like once the gestures either side of it have
+// been sorted out — binding them one at a time is typing out a decision already made.
+// Ctrl-click the last of them and the whole run goes on at once, one bead per note.
+//
+// Bounded either by a BEAD (click in a lane: bind up to and including this one) or by a
+// NOTE (click in the roll: bind up to and including this note). They are the same walk from
+// the frontier; only the endpoint differs, and each side knows its own count.
+//
+// Rests are passed over exactly as a single Attach passes over them: nothing is sung on a
+// silence, and a run that stopped dead at one would be no use across a phrase break.
+function oneToOne(k,{bead,note}){
+  const beads=laneOf(k);
+  const first=beads.findIndex(b=>b.note==null);
+  if(first<0) return;                                  // nothing loose left to place
+  // How many to place. A bead already spoken for is behind the head of the loose queue and
+  // so counts negative, which the walk below reads as nothing to do — one decision about
+  // that, in the loop, rather than a guard here saying the same thing in other words.
+  let want;
+  if(bead!=null) want=bead-first+1;
+  else{
+    want=0;
+    for(let i=firstAudible(front[k]);i<=note&&i<notes.length;i=firstAudible(i+1)) want++;
+  }
+  const pairs=[]; let f=firstAudible(front[k]);
+  for(let j=0;j<want&&f<notes.length&&first+j<beads.length;j++){
+    pairs.push([first+j,f]);
+    f=firstAudible(f+1);
+  }
+  if(!pairs.length) return;
+  const prev=front[k];
+  for(const [i,n] of pairs) beads[i].note=n;
+  front[k]=f;
+  // One entry, and the same shape a detach leaves: a batch of bindings and where the
+  // frontier was. Undo puts them back to loose, which is what they were.
+  log.push({rewind:{[k]:{beads:pairs.map(([i])=>[i,null]), front:prev}}});
+  sel=null; picked=null; render();
+}
+$('undo').onclick=()=>{
+  const e=log.pop(); if(!e) return;
+  if(e.rewind){
+    for(const k of Object.keys(e.rewind)){
+      for(const [i,n] of e.rewind[k].beads) laneOf(k)[i].note=n;
+      front[k]=e.rewind[k].front;
+    }
+    sel=null; picked=null; render(); return;
+  }
+  if(e.ins!=null) laneOf(e.k).splice(e.ins,1);
+  else if(e.a>=0) for(let j=e.a;j<=e.b;j++) laneOf(e.k)[j].note=null;
+  front[e.k]=e.prev; sel=null; render();
+};
+document.addEventListener('keydown',e=>{
+  // A TEXTAREA is not an INPUT, and the notation below the lanes is one: Space in it was
+  // being read as 'leave empty' and never reaching the text.
+  if(/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+  if(e.key==='Enter'){ $('attach').click(); e.preventDefault(); }
+  else if(e.key===' '){ $('skip').click(); e.preventDefault(); }
+  else if(e.key==='-'){ $('carry').click(); e.preventDefault(); }
+  else if(e.key==='Home'){ $('rew').click(); e.preventDefault(); }
+  else if(e.key==='a'||e.key==='b'){
+    const f=front[sel?sel.k:active];
+    if(f<notes.length) setMark(e.key,notes[f].start);
+    e.preventDefault();
+  }
+  else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){ $('undo').click(); e.preventDefault(); }
+});
+
+// ---------- A and B ----------
+// Snapped to a note start: a run that begins half way through a note begins on a sound
+// already in progress, which is not what anyone means by "from here".
+function setMark(which,u){
+  const cur=mark[which];
+  mark[which]=(cur!=null&&Math.abs(cur-u)<1e-6)?null:u;      // the same place twice clears it
+  render();
+}
+$('ruler').onclick=e=>{
+  e.stopPropagation();                       // not also a click on the lanes, which clears the selection
+  if(!notes.length) return;
+  const u=(e.clientX-$('ruler').getBoundingClientRect().left-LAB())/PX;
+  let best=notes[0].start;
+  for(const n of notes) if(Math.abs(n.start-u)<Math.abs(best-u)) best=n.start;
+  setMark(e.shiftKey?'b':'a',best);
+};
+
+// ---------- sustain: a syllable still sounding past its note ----------
+let grow=null;
+function startGrow(e,k,i){ e.preventDefault(); grow={k,i,x0:e.clientX,g0:laneOf(k)[i].grow||0}; }
+window.addEventListener('mousemove',e=>{
+  if(!grow) return;
+  laneOf(grow.k)[grow.i].grow=Math.max(0,grow.g0+(e.clientX-grow.x0)/PX);
+  render();
+});
+window.addEventListener('mouseup',()=>{ grow=null; });
+$('zoom').oninput=e=>{ PX=+e.target.value; render(); savePrefs(); };
+
+// ---------- io ----------
+$('file').onchange=e=>{
+  const f=e.target.files[0]; if(!f) return;
+  srcName=f.name.replace(/\.srgm$/,'')+'-aligned.srgm';
+  const r=new FileReader();
+  r.onload=()=>{ parseSrgm(r.result); $('empty').style.display='none';
+                 $('save').disabled=false; $('play').disabled=false;
+                 render(); };
+  r.readAsText(f);
+};
+// ---------- playing it ----------
+// The point of doing this inside ragamroll rather than beside it. Deciding which syllable
+// belongs to a gesture, or how long one keeps sounding, is a judgement of the EAR — reading
+// gka:"((D)/R↑(,))\\S↑" and inferring is what the standalone tool made you do.
+//
+// The playhead is drawn in UNITS, the same axis the lanes are laid out on, so it passes
+// each bead as the note under it sounds. Seconds come back from the player and 30/T turns
+// them into units — the same conversion the app's roll uses, because a unit is an eighth
+// note and T is quarter-notes per minute.
+let player=null, playing=false, paused=false, raf=0, spu=0.25, headAt=0;
+// What is currently LOADED into the player. A pause may only be resumed into the same
+// piece at the same speed; edit the notation or move the tempo and the schedule under the
+// paused transport is no longer the piece on screen, so the next Play loads afresh.
+let loadedKey='';
+const runKey=()=>lastText+'\u0000'+playTempo()+'\u0000'+timbre;
+// A tempo to listen AT, which is not the piece's tempo. A varnam at T333 goes past faster
+// than a decision can be made about it; half speed is often the only way to hear which
+// swara a gesture is leaning on. It never touches the file — this is a listening speed.
+let tempoMult=1;
+// What the device says its output delay is, and what a pair of ears says about that. The
+// measurement is right on most machines and badly wrong on some, and there is no way to
+// find out from in here — so it is shown, and it can be trimmed.
+let syncMs=parseFloat(localStorage.getItem('lanes.sync'))||0;
+let timbre='soft-am';               // melody voice; part of what is loaded, so part of runKey
+const BPM_MIN=20, BPM_MAX=600;
+function compTempo(){
+  try{ const m=parse(lastText); return (m.meta&&m.meta.tempo>0)?m.meta.tempo:120; }catch(e){ return 120; }
+}
+function playTempo(){ return Math.max(BPM_MIN,Math.min(BPM_MAX,Math.round(compTempo()*tempoMult))); }
+// Read out of the text, not remembered: editing T below the lanes changes the piece's tempo,
+// and a readout that still showed the old one would be lying about what Play will do.
+function showTempo(){
+  $('tempoAt').textContent=tempoMult.toFixed(2).replace(/0$/,'')+'\u00d7'
+    +(notes.length?' \u00b7 '+playTempo()+' bpm':'');
+}
+function ensurePlayer(){ if(!player) player=createPlayer('tone'); return player; }
+// Everything positioned in #inner has to clear the row-label column: the lanes begin after
+// it, so a bare `units*PX` puts unit zero on top of the labels rather than on the first
+// note. Read from the DOM rather than written as 74 twice.
+const LAB=()=>{ const e=document.querySelector('.rowlab'); return e?e.getBoundingClientRect().width:0; };
+function headTo(units){
+  const h=$('head');
+  h.hidden=false;
+  h.style.left=(LAB()+units*PX)+'px';
+  h.style.height=$('inner').scrollHeight+'px';
+  // Keep it on screen without fighting a hand that has scrolled somewhere deliberately:
+  // only pull when it has actually left the window.
+  //
+  // The window is not the whole wrap. The label column is STICKY, so once anything is
+  // scrolled it sits over content [scrollLeft, scrollLeft+LAB] — and the head, being the
+  // higher layer, is drawn ON TOP of the labels while the notes it is pointing at are
+  // hidden UNDERNEATH them. For a whole label's width of travel the line and the sound
+  // therefore disagree about where they are, which is exactly what that looks like.
+  // The visible lane begins at scrollLeft+LAB, so that is what "on screen" means here.
+  const w=$('wrap'), x=LAB()+units*PX;
+  // PLAYING: the head is held and the music moves under it. Letting it run to the right
+  // edge and then jumping the roll back puts the passage you are listening to somewhere
+  // new twice a screen, and the eye has to find it again each time. Held at mid-screen
+  // instead, so what is coming is always the right half of the window.
+  //
+  // Until it reaches that point — the opening of a piece, or a rehearsal region near the
+  // left — there is nothing to scroll: scrollLeft floors at 0 and the head walks out to
+  // the hold. At the other end the wrap runs out and it walks on to the right edge. Both
+  // fall out of the clamp rather than being cased.
+  const hold=Math.max(LAB()+40,w.clientWidth*0.5);
+  if(playing) w.scrollLeft=x-hold;                 // negative is a scroll of 0; the DOM clamps
+  else {
+    // Not playing, so nothing is chasing anything: only pull when the head has actually
+    // left the window. The visible lane begins after the sticky label column.
+    const left=w.scrollLeft+LAB();
+    if(x<left+40||x>w.scrollLeft+w.clientWidth-80) w.scrollLeft=Math.max(0,x-w.clientWidth*0.35);
+  }
+  // Belt and braces: never draw the line over the labels. A scroll that has not happened
+  // yet (or one the wrap refused, at either end) must not put it there.
+  h.style.visibility=(x<w.scrollLeft+LAB()-1)?'hidden':'visible';
+}
+function tick(){
+  if(!playing||!player) return;
+  const secs=player.position()*player._total;
+  // Minus the output delay: the clock runs ahead of the speaker by a buffer's worth, and a
+  // line that arrives before the sound is worse than none for a judgement made by ear.
+  const lat=player.latency?player.latency():0;
+  const at=Math.max(0,secs-lat+syncMs/1000);
+  // Never behind where the run began: the latency pull-back is a correction to a clock
+  // that is ahead, not a licence to draw the head before the first note of the phrase.
+  headAt=Math.max(startUnits(),at/spu);
+  headTo(headAt);
+  // B is where the phrase ends, so the run turns back to A rather than stopping there:
+  // pressing Play again plays the same phrase again, which is the whole use of a pair.
+  if(mark.b!=null&&headAt>=mark.b){ pausePlay(); rewindTo(startUnits()); return; }
+  raf=requestAnimationFrame(tick);
+}
+const startUnits=()=>mark.a!=null?mark.a:0;
+function rewindTo(u){
+  headAt=u;
+  if(player&&player.seek) player.seek(u*spu);
+  headTo(u);
+}
+// Pause holds its place. Resuming is then the same phrase continuing, not the piece from
+// the top — which is the difference between listening again to a passage and listening
+// through everything before it once more.
+function pausePlay(){
+  if(!playing) return;
+  playing=false; paused=true; cancelAnimationFrame(raf);
+  player.pause(); player.droneOff();
+  $('play').textContent='Resume \u25B6';
+}
+function stopPlay(){
+  playing=false; paused=false; loadedKey=''; cancelAnimationFrame(raf);
+  if(player){ player.droneOff(); player.stop(); }
+  headAt=startUnits();
+  // Left showing where a Play would begin, when that is not the beginning.
+  if(mark.a!=null) headTo(mark.a); else $('head').hidden=true;
+  $('play').textContent='Play \u25B6'; $('stop').disabled=true;
+}
+async function resumePlay(){
+  await player.play();
+  $('latAt').textContent='(dev '+Math.round((player.latency?player.latency():0)*1000)+'ms)';
+  playing=true; paused=false;
+  $('play').textContent='Pause \u23F8'; $('stop').disabled=false;
+  applyMix();
+  raf=requestAnimationFrame(tick);
+}
+// Everything a run needs loaded, in one place: the play button, and a voice changed
+// mid-phrase, are the same act of loading.
+//
+// The model is cloned with the listening tempo in it, so the sequence, the seconds it
+// reports and the playhead all agree. Changing meta on the parsed model itself would leave
+// the file's own tempo altered for everything else that reads it.
+async function loadRun(){
+  const parsed=parse(lastText);
+  const at=playTempo();
+  const model={...parsed, meta:{...parsed.meta, tempo:at}};
+  spu=30/at;
+  const seq=buildSequence(model);
+  const secs=totalSeconds(seq);
+  if(!(secs>0)) return 0;
+  const p=ensurePlayer();
+  p.setTimbre(timbre);                 // read at load(), so it has to be said before it
+  p._total=secs;
+  p.onended=()=>stopPlay();
+  p.load(scheduleEvents(seq),secs,{talaGain:mix.tala});
+  loadedKey=runKey();
+  return secs;
+}
+$('play').onclick=async()=>{
+  if(playing){ pausePlay(); return; }
+  await ragaReady;
+  if(paused&&player&&loadedKey===runKey()){ await resumePlay(); return; }
+  const secs=await loadRun();
+  if(!secs) return;
+  // From A. load() puts the transport back to zero, so the seek belongs after it — and
+  // the head is moved before a note sounds, so the eye is already where the ear will be.
+  rewindTo(Math.min(startUnits(),secs/spu));
+  await resumePlay();
+};
+// A voice picked mid-phrase takes effect on the phrase. The timbre is read at load(), so
+// this is a reload — of the same piece, resumed where it stands rather than from the top,
+// which is the only way the two voices can be compared on the passage that raised the
+// question.
+$('voice').onchange=async e=>{
+  timbre=e.target.value;
+  savePrefs();
+  ensurePlayer().setTimbre(timbre);     // a gesture, so a sampled set can start fetching now
+  if(!playing&&!paused) return;
+  const was=playing, at=headAt;
+  if(playing){ playing=false; cancelAnimationFrame(raf); player.pause(); }
+  await ragaReady;
+  if(!await loadRun()) return;
+  rewindTo(at);
+  if(was) await resumePlay(); else paused=true;
+};
+// Back to the top of the phrase without giving up the run: mid-playback it jumps and keeps
+// going, paused it moves the place a Resume will start from, stopped it just says where the
+// next Play begins. All three are the same seek — a rewind is a position, not a state.
+$('rew').onclick=()=>{ rewindTo(startUnits()); };
+$('stop').onclick=stopPlay;
+$('sync').oninput=e=>{ syncMs=parseFloat(e.target.value)||0; savePrefs(); };
+$('tempo').oninput=e=>{
+  tempoMult=parseFloat(e.target.value);
+  showTempo(); savePrefs();
+};
+
+// The mix is live: a slider moved mid-phrase takes effect on the phrase, which is the only
+// way it is any use for listening to one.
+// What this page is FOR decides these. The judgement is which syllable belongs to which
+// gesture, and a tala strum on every akshara is exactly what buries the gesture — so it
+// starts silent, and the drone barely on, as a reference to reach for rather than a wall
+// to hear over. Both are a slider away, and the slider is remembered.
+const mix={mel:1, tala:0, drone:0.25, master:1};
+function applyMix(){
+  if(!player) return;
+  player.setMasterVolume(mix.master);
+  player.setTalaVolume(mix.tala);
+  player.setMelodyMuted(mix.mel<=0);
+  if(playing&&mix.drone>0) player.setDrone(droneFreqs(saMidiOf()), mix.drone); else player.droneOff();
+}
+// The drone follows the PIECE's Sa, so it is a reference rather than a drone in some other
+// key — which is the difference between a drone that helps a judgement and one that fights
+// it. Derived the way the app derives it: the raga's own Sa, plus the shift in its header.
+function saMidiOf(){
+  try{ return 60+saBaseOf(parse(lastText), getRagas()); }catch(e){ return 60; }
+}
+for(const [id,key] of [['vMel','mel'],['vTala','tala'],['vDrone','drone'],['vMaster','master']]){
+  $(id).oninput=e=>{ mix[key]=parseFloat(e.target.value); applyMix(); savePrefs(); };
+}
+
+// The file as it stands. One function, so what is shown below the lanes and what a Save
+// writes cannot drift apart — they were the same code by accident before, which is how two
+// copies of anything begin.
+function composeSrgm(){
+  notes.forEach(n=>{ delete n.attrs.swara; delete n.attrs.sahitya; });
+  const put=(beads,key)=>{
+    const by={};
+    beads.forEach(b=>{ if(b.note!=null) (by[b.note]=by[b.note]||[]).push(b.text); });
+    for(const ni of Object.keys(by)) notes[ni].attrs[key]=by[ni].join(' ');
+  };
+  put(sw,'swara'); put(sa,'sahitya');
+  const out=lastText.split('\n');
+  for(const n of notes){ const a=attrStr(n.attrs); out[n.line]=n.tok+(a?'{'+a+'}':''); }
+  // where the frontier had reached, and any sustains - so work resumes exactly.
+  const grow={sw:{},sa:{}};
+  for(const k of ['sw','sa']) laneOf(k).forEach((b,i)=>{ if(b.grow) grow[k][i]=Math.round(b.grow*100)/100; });
+  // The carried beads, by the position they occupy in the bead queue, and the rehearsal
+  // region — neither of which exists anywhere else in the file.
+  const ins={sw:[],sa:[]};
+  for(const k of ['sw','sa']) laneOf(k).forEach((b,i)=>{ if(b.ins) ins[k].push([i,b.text]); });
+  const line='%LANES '+JSON.stringify({sw:front.sw, sa:front.sa, grow, ins,
+                                       ab:[mark.a, mark.b]});
+  const at=out.findIndex(l=>l.trim().startsWith('%LANES'));
+  if(at>=0) out[at]=line; else {
+    const hdr=out.findIndex(l=>/^O\s*=/.test(l.trim()));
+    out.splice(hdr>=0?hdr+1:0,0,line);
+  }
+  return out.join('\n');
+}
+$('save').onclick=()=>{
+  const a=document.createElement('a');
+  a.download=srcName;
+  a.href=URL.createObjectURL(new Blob([composeSrgm()],{type:'text/plain'}));
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+};
+
+// ---------- what the ear was left set to ----------
+// Levels, listening speed, zoom and the A/V trim are properties of a SESSION, not of a
+// piece: they describe this machine and this pair of ears, so they are remembered here and
+// never written into the file. (The rehearsal region and the frontiers are the opposite —
+// they are about the piece, and they ride in %LANES.)
+const PREFS='lanes.prefs';
+function savePrefs(){
+  try{ localStorage.setItem(PREFS,JSON.stringify(
+    {mix, tempo:tempoMult, zoom:PX, sync:syncMs, voice:timbre})); }catch(e){}
+}
+function applyPrefs(){
+  let o={};
+  try{ o=JSON.parse(localStorage.getItem(PREFS))||{}; }catch(e){}
+  const was=parseFloat(localStorage.getItem('lanes.sync'));   // the earlier, sync-only key
+  if(o.sync==null&&Number.isFinite(was)) o.sync=was;
+  if(o.mix) for(const k of Object.keys(mix)) if(Number.isFinite(o.mix[k])) mix[k]=o.mix[k];
+  if(Number.isFinite(o.tempo)) tempoMult=o.tempo;
+  if(Number.isFinite(o.zoom)) PX=o.zoom;
+  if(Number.isFinite(o.sync)) syncMs=o.sync;
+  if(typeof o.voice==='string') timbre=o.voice;
+  $('voice').value=timbre;
+  for(const [id,key] of [['vMel','mel'],['vTala','tala'],['vDrone','drone'],['vMaster','master']])
+    $(id).value=mix[key];
+  $('tempo').value=tempoMult; $('zoom').value=PX; $('sync').value=syncMs;
+  showTempo(); applyMix();
+}
+applyPrefs();
+
+// ---------- the notation, below the lanes ----------
+// Shown as it stands and editable, because the text is the source of truth: a `written:`
+// appears on its note the moment a group is attached, and an edit here is read back as a
+// new file. The %LANES line rides along, so the frontiers — which live nowhere else —
+// survive the round trip through the box.
+let typing=0;
+function refreshSrc(){
+  if(typing) return;                       // never rewrite what a hand is in the middle of
+  const el=$('src'); if(!el||!notes.length) return;
+  $('srcwrap').hidden=false;
+  const next=composeSrgm();
+  if(el.value!==next) el.value=next;
+}
+$('src').oninput=e=>{
+  clearTimeout(typing);
+  typing=setTimeout(()=>{
+    typing=0;
+    parseSrgm(e.target.value);             // the text IS the state: re-read it whole
+    render();
+  },500);
+};
+</script>
+</body>
+</html>
