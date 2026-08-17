@@ -178,6 +178,21 @@ G2 G2 P4 P4  D2 P2 &gt;S4 S4</code></pre>
     <li class="sub">The grid bounds are a view convenience — they aren't saved; the notes and rests you write are.</li>
   </ul>
 
+  <h2 id="share-links">Sharing a piece, and opening one from elsewhere</h2>
+  <p><b>Share</b> copies a self-contained link: the whole notation, deflated and packed into
+  the URL's <code>#</code> fragment. Fragments are never sent to a server, so the piece
+  travels from your browser to the reader's and nowhere else — nothing is uploaded and
+  nothing is stored anywhere. <b>Open ▾ → Open link</b> takes one back, from this or any
+  other host.</p>
+  <p>Opening a link replaces what is in the editor, names it <code>shared</code>, and clears
+  the fragment so your later edits are not overridden the next time you reload. It never
+  starts playing on its own.</p>
+  <p><b>Writing links from another program:</b> the format is a short one — UTF-8, zlib
+  deflate, base64url, behind a <code>pako:</code> prefix — and it is specified, with
+  reference implementations in JavaScript and Python and a test vector, in
+  <a href="https://github.com/ragamroll/ragamroll/blob/master/docs/open-in-ragamroll.md">docs/open-in-ragamroll.md</a>.
+  Any program that can produce srgm can hand a piece straight to this app.</p>
+
   <h2 id="lanes">The sahitya and the written swaras</h2>
   <p>Notation converted from another system often arrives with that system's own
   <b>written swaras</b> and the <b>sahitya</b> (the lyrics) sitting above the notes, as
