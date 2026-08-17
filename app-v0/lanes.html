@@ -162,6 +162,7 @@ kbd{background:#2a2e3e;border:1px solid var(--line);border-radius:3px;padding:1p
 <header>
   <label class="btn">Open .srgm<input type="file" id="file" accept=".srgm,.txt"></label>
   <button id="save" disabled>Save .srgm</button>
+  <button id="toapp" disabled title="Open this piece in the app — the notation travels in the link, nothing is uploaded">In the app &#8599;</button>
   <span class="sp"></span>
   <button id="attach" disabled>Attach &crarr;</button>
   <button id="skip" disabled>Leave empty</button>
@@ -268,7 +269,8 @@ kbd{background:#2a2e3e;border:1px solid var(--line);border-radius:3px;padding:1p
 // page adds is where the sound has got to.
 import { parse } from './core/parser.js';
 import { buildRollModel, gridPitches } from './core/roll-model.js';
-import { readingBlocks } from './core/gamaka-inline.js';
+import { readingBlocks, walkTokens } from './core/gamaka-inline.js';
+import { encodeShareToken, readSharedSource } from './core/share.js';
 import { EDO } from './core/shruti.js';
 import { buildSequence } from './core/midi/sequence.js';
 import { scheduleEvents, totalSeconds } from './audio/schedule.js';
@@ -334,23 +336,33 @@ function parseSrgm(text){
   }catch(e){}
   lastText=text; notes=[]; sw=[]; sa=[]; total=0; log=[]; sel=null; picked=null;
   mark={a:null,b:null};                // a mark belongs to a timeline; a new file is a new one
-  const lines=text.split('\n'); let L=1, at=0, block=0;
+  // Walked as TOKENS, not as lines. A note is a token, and the app writes several to a
+  // line — so a line-based reader saw nothing at all in a piece handed over from there,
+  // which is most pieces. walkTokens is the app's own walker, and using it is also what
+  // makes writing back safe: the same walk puts the attributes on the same tokens.
+  let L=1, at=0, block=0;
   const pend={sw:[],sa:[]}; let session=null;
-  for(let i=0;i<lines.length;i++){
-    const t=lines[i].trim();
-    if(t.startsWith('%BB')){ block++; continue; }
-    if(t.startsWith('%@')){ pend.sw.push([block,t.slice(2)]); continue; }
-    if(t.startsWith('%$')){ pend.sa.push([block,t.slice(2)]); continue; }
-    if(t.startsWith('%LANES')){ try{ session=JSON.parse(t.slice(6).trim()); }catch(e){} continue; }
-    if(t.startsWith('%')) continue;
-    const lm=/^L\s*=\s*([\d.]+)$/.exec(t); if(lm){ L=parseFloat(lm[1])||1; continue; }
-    const m=NOTE_RE.exec(t); if(!m) continue;
-    const dur=(/^\d+$/.test(m[3])?parseInt(m[3],10):1)*L;
-    let attrs={}; if(m[4]){ try{attrs=parseAttrs(m[4].slice(1,-1));}catch(e){} }
-    notes.push({line:i, tok:m[1]+m[2]+(m[3]||''), start:at, dur,
-                rest:(m[2]==='z'||m[2]==='Z'), attrs, block});
+  walkTokens(text,(t)=>{
+    if(t.isComment){
+      const c=t.raw.trim();
+      if(c.startsWith('%BB')) block++;
+      else if(c.startsWith('%LANES')){ try{ session=JSON.parse(c.slice(6).trim()); }catch(e){} }
+      else if(c.startsWith('%@')) pend.sw.push([block,c.slice(2)]);
+      else if(c.startsWith('%$')) pend.sa.push([block,c.slice(2)]);
+      return;
+    }
+    if(!t.isNote){
+      const lm=/^L\s*=\s*([\d.]+)$/.exec(t.head);
+      if(lm) L=parseFloat(lm[1])||1;
+      return;
+    }
+    const dur=(/^\d+$/.test(t.len)?parseInt(t.len,10):1)*L;
+    let attrs={};
+    if(t.hadBrace){ try{ attrs=parseAttrs(t.body); }catch(e){} }
+    notes.push({ord:t.ordinal, tok:t.octMarks+t.letter+t.len, start:at, dur,
+                rest:(t.letter==='z'||t.letter==='Z'), attrs, block});
     at+=dur;
-  }
+  });
   total=at;
   // beads: split at the spaces, text kept verbatim - '-' and ',' carry meaning
   const mk=(src,into)=>src.forEach(([blk,line])=>
@@ -905,10 +917,33 @@ $('file').onchange=e=>{
   srcName=f.name.replace(/\.srgm$/,'')+'-aligned.srgm';
   const r=new FileReader();
   r.onload=()=>{ parseSrgm(r.result); $('empty').style.display='none';
-                 $('save').disabled=false; $('play').disabled=false;
+                 $('save').disabled=false; $('play').disabled=false; $('toapp').disabled=false;
                  render(); };
   r.readAsText(f);
 };
+// ---------- the two pages, one piece ----------
+// The app and this page edit the same notation from opposite ends — it writes the music and
+// this places what is sung on it — so a piece has to be able to cross between them without
+// a file and a filesystem in the middle. It travels the way a share link travels: packed
+// into the fragment, which no server ever sees.
+$('toapp').onclick=async()=>{
+  const src=notes.length?composeSrgm():lastText;
+  if(!src) return;
+  const url=new URL('index.html',location.href);
+  window.open(url.href+'#'+await encodeShareToken(src),'_blank','noopener');
+};
+// A piece handed over by the app. The hash is cleared afterwards for the same reason the
+// app clears it: what is edited here from now on is not what the link said.
+readSharedSource().then(src=>{
+  if(src==null) return;
+  srcName='shared-aligned.srgm';
+  parseSrgm(src);
+  $('empty').style.display='none';
+  $('save').disabled=false; $('play').disabled=false; $('toapp').disabled=false;
+  render();
+  try{ history.replaceState(null,'',location.pathname+location.search); }catch(e){}
+}).catch(()=>{});
+
 // ---------- playing it ----------
 // The point of doing this inside ragamroll rather than beside it. Deciding which syllable
 // belongs to a gesture, or how long one keeps sounding, is a judgement of the EAR — reading
@@ -1127,8 +1162,18 @@ function composeSrgm(){
     for(const ni of Object.keys(by)) notes[ni].attrs[key]=by[ni].join(' ');
   };
   put(sw,'swara'); put(sa,'sahitya');
-  const out=lastText.split('\n');
-  for(const n of notes){ const a=attrStr(n.attrs); out[n.line]=n.tok+(a?'{'+a+'}':''); }
+  // Written back through the SAME walk that read it, by ordinal — so a note keeps the line
+  // it was written on and the company it was written in. Rewriting whole lines worked only
+  // because this page had only ever seen notation with one note to a line.
+  const byOrd=new Map();
+  for(const n of notes) byOrd.set(n.ord,n);
+  const out=walkTokens(lastText,(t)=>{
+    if(!t.isNote) return;
+    const n=byOrd.get(t.ordinal);
+    if(!n) return;
+    const a=attrStr(n.attrs);
+    return n.tok+(a?'{'+a+'}':'');
+  }).split('\n');
   // where the frontier had reached, and any sustains - so work resumes exactly.
   const grow={sw:{},sa:{}};
   for(const k of ['sw','sa']) laneOf(k).forEach((b,i)=>{ if(b.grow) grow[k][i]=Math.round(b.grow*100)/100; });

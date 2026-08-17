@@ -25,7 +25,7 @@ const clampBpm = (v) => Math.max(BPM_MIN, Math.min(BPM_MAX, v));
 export function Transport({ state, canPlay, onPlay, onPause, onStop,
   talaVol, onTalaVol, talaMuted, onToggleTala, melodyMuted, onToggleMelody,
   droneVol, onDroneVol, droneMuted, onToggleDrone, masterVol, onMasterVol,
-  onSave, onExportMidi, onShare, shared, compositionTempo, tempoOverride, onTempo, onResetTempo,
+  onSave, onExportMidi, onShare, shared, onLanes, compositionTempo, tempoOverride, onTempo, onResetTempo,
   saPitch, autoSaMidi, onSetSa, onRewind}) {
   const overridden = tempoOverride != null;
   const eff = overridden ? tempoOverride : compositionTempo;
@@ -41,6 +41,11 @@ export function Transport({ state, canPlay, onPlay, onPause, onStop,
     <button class="doc-btn" title="Export the melody as a .mid file" onClick=${onExportMidi}>Export MIDI</button>
     <button class=${'doc-btn' + (shared ? ' ok' : '')} title="Copy a shareable link (composition packed into the URL)"
             onClick=${onShare}>${shared ? 'Copied ✓' : 'Share'}</button>
+    <!-- The other end of the same piece: the lane editor places the written swaras and the
+         sahitya on these notes. It goes by link rather than by file, so nothing has to be
+         saved and found again to cross between the two. -->
+    <button class="doc-btn" title="Open this piece in the lane editor — where the written swaras and the sahitya are placed on its notes"
+            onClick=${onLanes}>Lanes ↗</button>
 
     <label class="sapick" title="Sa reference pitch — transposes playback (Auto = the raga's Sa)">
       Sa

@@ -45,7 +45,7 @@ const KIND_LABEL = { aroha: 'arohana · avarohana', signature: 'signature phrase
 // exists to let you hear. The slider goes where you like from there.
 const PREVIEW_DRONE = 0.22;
 
-export function RagaDialog({ ragas, player, saMidi = 60, droneLevel = 0.5, ragaName, stopMain, onClose }) {
+export function RagaDialog({ ragas, player, saMidi = 60, droneLevel = 0.5, ragaName, stopMain, onEdit, onClose }) {
   // The corpus, fetched once when the dialog opens. Absent in a dev tree where the
   // notation generator has never run — then every raga still gets its scale row, which is
   // what the browser could always play, rather than an empty dialog and no explanation.
@@ -198,6 +198,12 @@ export function RagaDialog({ ragas, player, saMidi = 60, droneLevel = 0.5, ragaN
                  onInput=${(e) => onDrone(parseFloat(e.target.value))} />
         </label>
         <b class="rg-sheetname">${titleCase(padMelaName(raga))}</b>
+        <!-- Into the editor. The curation page has carried an "edit in the app" link since
+             there was a curation page: a browser is for finding the phrase, and the moment
+             you have found it the thing you want is to change it. It was lost when the
+             generated page stopped being published and this dialog took its place. -->
+        ${onEdit && html`<button class="rg-edit" title="Open this notation in the editor"
+          onClick=${() => { stop(); onEdit(src, `${padMelaName(raga)}-${kind}`); }}>Edit ↗</button>`}
         <button title="Close" onClick=${() => { stop(); setOpen(null); }}>✕</button>
       </div>
       <${RollPane} model=${parse(src)} api=${rollApi} allow=${[]} sel=${null} zoom=${1} chrome=${false} />

@@ -194,6 +194,13 @@ function App({ examples }) {
       setShared(true); setTimeout(() => setShared(false), 1500);
     } catch { try { window.prompt('Copy this share link:', url); } catch { /* ignore */ } }
   }, [text]);
+  // The same piece, handed to the page that aligns it. A link rather than a file: the two
+  // pages are two ends of one job, and saving something to find it again in a file picker
+  // is the paperwork this removes.
+  const onLanes = useCallback(async () => {
+    const url = new URL('lanes.html', location.href);
+    window.open(url.href + '#' + (await shareUrl(text)).split('#')[1], '_blank', 'noopener');
+  }, [text]);
   // Open a pasted share link (from this or any other host). Returns true on
   // success so the menu can close / show an error.
   const onOpenLink = useCallback(async (input) => {
@@ -1014,7 +1021,8 @@ function App({ examples }) {
     <${Toolbar} docName=${docName} blank=${noteCount === 0} duration=${duration} />
     ${dialog === 'ragas' && html`<${RagaDialog} ragas=${getRagas()} player=${playerRef.current}
                                          saMidi=${saMidi} droneLevel=${droneLevel} ragaName=${ragaName}
-                                         stopMain=${onStop} onClose=${onCloseDialog} />`}
+                                         stopMain=${onStop} onClose=${onCloseDialog}
+                                         onEdit=${(src, name) => { openSharedRef.current(src, name); onCloseDialog(); }} />`}
     ${dialog === 'talas' && html`<${TalaDialog} talas=${TALA_MAP} player=${playerRef.current}
                                          saMidi=${saMidi} droneLevel=${droneLevel}
                                          stopMain=${onStop} onClose=${onCloseDialog} />`}
@@ -1076,7 +1084,8 @@ function App({ examples }) {
                   melodyMuted=${melodyMuted} onToggleMelody=${onToggleMelody}
                   talaVol=${talaVol} onTalaVol=${onTalaVol} talaMuted=${talaMuted} onToggleTala=${onToggleTala}
                   droneVol=${droneVol} onDroneVol=${onDroneVol} droneMuted=${droneMuted} onToggleDrone=${onToggleDrone}
-                  onSave=${onSave} onExportMidi=${onExportMidi} onShare=${onShare} shared=${shared} />
+                  onSave=${onSave} onExportMidi=${onExportMidi} onShare=${onShare} shared=${shared}
+                  onLanes=${onLanes} />
     <${ControlBar} examples=${examples} exampleValue=${exampleValue}
                 onNew=${onNew} onOpen=${onOpen} onExample=${onExample} onOpenLink=${onOpenLink}
                 onOpenRagas=${onOpenRagas} onOpenTalas=${onOpenTalas}
