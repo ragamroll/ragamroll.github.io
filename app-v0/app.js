@@ -20,6 +20,7 @@ import { Toolbar, ControlBar } from './components/Toolbar.js';
 import { EditorDrawer } from './components/EditorDrawer.js';
 import { Diagnostics } from './components/Diagnostics.js';
 import { RagaDialog } from './components/RagaDialog.js';
+import { InstrumentDialog } from './components/InstrumentDialog.js';
 import { TalaDialog } from './components/TalaDialog.js';
 import { ScaleDialog } from './components/ScaleDialog.js';
 import { buildSequence } from './core/midi/sequence.js';
@@ -57,6 +58,10 @@ const LS_LANES_ORDER = 'ragamroll.lanesorder';   // and which of the two columns
 // key, deliberately: it is one reader's preference about one kind of edit, and the two
 // pages are the same editor — being asked twice would be the surprise.
 const LS_GMOVE = 'ragamroll.gamakaOnMove';
+// What the reader has made of the plucked voice. It belongs to the browser, not to a piece:
+// it is how this instrument sounds to this pair of ears, the same class of thing as the
+// mixer levels, and no notation should carry it.
+const LS_INSTR = 'ragamroll.instrument';
 const LS_GKA = 'ragamroll.showSource';       // the provenance strip, on or off
 const LS_READ = 'ragamroll.reading';         // the notation folded to its swaras
 const DEFAULT_NAME = 'ragamroll';
@@ -649,8 +654,35 @@ function App({ examples }) {
     stopRef.current(); newDoc(); setExampleValue(''); setDocName(name || 'shared'); setText(src);
   };
   // Melody instrument voice (applies on the next Play — the synth is rebuilt at load).
-  const [timbre, setTimbre] = useState('soft-am');
+  // Pluck by default: it is the voice built from parts, the one with a panel, and the one
+  // this app sounds like.
+  const [timbre, setTimbre] = useState('pluck');
   const onTimbre = useCallback((t) => setTimbre(t), []);
+  // The instrument's own settings, remembered and pushed into the voice whenever one is
+  // built — a voice is rebuilt on every play, so anything not pushed back would last until
+  // the next press of Play and no longer.
+  const [instr, setInstr] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(LS_INSTR)) || {}; } catch { return {}; }
+  });
+  const [instrOpen, setInstrOpen] = useState(false);
+  useEffect(() => {
+    const p = playerRef.current;
+    if (!p || !p.setVoiceParam) return;
+    for (const [k, val] of Object.entries(instr)) p.setVoiceParam(k, val);
+  }, [instr, timbre]);
+  const onInstrSet = useCallback((key, value) => {
+    playerRef.current?.setVoiceParam?.(key, value);
+    setInstr((prev) => {
+      const next = { ...prev, [key]: value };
+      try { localStorage.setItem(LS_INSTR, JSON.stringify(next)); } catch { /* private mode */ }
+      return next;
+    });
+  }, []);
+  const onInstrReset = useCallback(() => {
+    playerRef.current?.resetVoiceParams?.();
+    setInstr({});
+    try { localStorage.removeItem(LS_INSTR); } catch { /* private mode */ }
+  }, []);
   const saBase = useMemo(() => saBaseOf(model, getRagas()), [model]);
   // Sa reference pitch: null = auto (the raga's natural Sa, MIDI 60+saBase, so
   // playback is unshifted and goldens/MIDI stay exact); a MIDI number pins Sa to
@@ -659,6 +691,13 @@ function App({ examples }) {
   const [saPitch, setSaPitch] = useState(null);
   const onSetSa = useCallback((m) => setSaPitch(m), []);
   const saMidi = saPitch != null ? saPitch : autoSaMidi;
+  // A note, on the piece's own Sa, so a change in the instrument panel can be heard without
+  // a piece playing. Declared HERE and not up with the panel's other handlers: it reads
+  // saMidi, and a const below its reader is in the temporal dead zone when that reader runs
+  // — the seventh time this file has had that fault, and it takes the app down on load.
+  const onInstrAudition = useCallback(() => {
+    playerRef.current?.previewNote?.({ freq: midiToFreq(saMidi), durSec: 1.6 });
+  }, [saMidi]);
   const shift = saPitch != null ? saPitch - autoSaMidi : 0;
 
   const noteCount = useMemo(() => model.events.filter(e => e.type === 'note' && !e.rest).length, [model]);
@@ -1019,6 +1058,10 @@ function App({ examples }) {
 
   return html`
     <${Toolbar} docName=${docName} blank=${noteCount === 0} duration=${duration} />
+    ${instrOpen && html`<${InstrumentDialog} values=${instr} onSet=${onInstrSet}
+                                        onReset=${onInstrReset} onAudition=${onInstrAudition}
+                                        playing=${playState === 'playing'}
+                                        onClose=${() => setInstrOpen(false)} />`}
     ${dialog === 'ragas' && html`<${RagaDialog} ragas=${getRagas()} player=${playerRef.current}
                                          saMidi=${saMidi} droneLevel=${droneLevel} ragaName=${ragaName}
                                          stopMain=${onStop} onClose=${onCloseDialog}
@@ -1090,7 +1133,8 @@ function App({ examples }) {
                 onNew=${onNew} onOpen=${onOpen} onExample=${onExample} onOpenLink=${onOpenLink}
                 onOpenRagas=${onOpenRagas} onOpenTalas=${onOpenTalas}
                 onOpenScale=${onOpenScale} scaleActive=${!!scale}
-                timbre=${timbre} onTimbre=${onTimbre} />
+                timbre=${timbre} onTimbre=${onTimbre}
+                onOpenInstrument=${() => setInstrOpen(true)} />
     <${Footer} />
   `;
 }

@@ -512,6 +512,19 @@
     /* Into the editor, from the raga browser. Quiet — it is the way out of the dialog, not
        the reason you opened it. */
     .rg-sheethd .rg-edit { color:var(--amber); }
+    /* The instrument panel. A column of sliders with the name a player would use on the
+       left and the value as they would say it on the right. */
+    .instr-btn { padding:.15rem .4rem; }
+    .instr-box { max-width:min(520px, 94vw); }
+    .instr-body { display:flex; flex-direction:column; gap:.15rem; }
+    .instr-hint { margin:.1rem 0 .5rem; color:var(--muted); font-size:.82rem; line-height:1.45; }
+    .instr-foot { margin-top:.6rem; }
+    .instr-row { display:grid; grid-template-columns:7.5rem 1fr 4.2rem; align-items:center;
+      gap:.5rem; padding:.12rem 0; cursor:pointer; }
+    .instr-row:hover { background:var(--panel2); border-radius:4px; }
+    .instr-name { font-size:.86rem; color:var(--ink); }
+    .instr-row input[type=range] { width:100%; accent-color:var(--amber); }
+    .instr-val { font-family:var(--mono); font-size:.78rem; color:var(--muted); text-align:right; }
     .toolbar .head-dur { font-family:var(--mono); font-size:.8rem; color:var(--muted);
       margin-left:.4rem; white-space:nowrap; }
     .roll-hs { flex:0 0 auto; height:.55rem; margin:.15rem .5rem 0 2.6rem; position:relative;

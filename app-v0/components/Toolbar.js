@@ -1,7 +1,7 @@
 import { html } from '../vendor/htm-preact.js';
 import { useState, useEffect, useCallback } from '../vendor/hooks.module.js';
 import { OpenMenu } from './OpenMenu.js';
-import { MELODY_VOICES } from '../audio/voices.js';
+import { MELODY_VOICES, isTunable } from '../audio/voices.js';
 // The voices come from the backend's own list. Kept here as a second copy, this menu
 // offered two names — `pluck` and `reed-fm` — that no backend case implemented, and both
 // played as the bowed synth without a word.
@@ -64,7 +64,7 @@ export function Toolbar({ docName, blank, duration }) {
 }
 
 export function ControlBar({ onNew, onOpen, examples, exampleValue, onExample, onOpenLink,
-  onOpenRagas, onOpenTalas, onOpenScale, scaleActive, timbre, onTimbre }) {
+  onOpenRagas, onOpenTalas, onOpenScale, scaleActive, timbre, onTimbre, onOpenInstrument }) {
   return html`<div class="controlbar">
     <${OpenMenu} examples=${examples} exampleValue=${exampleValue} onNew=${onNew} onOpen=${onOpen} onExample=${onExample} onOpenLink=${onOpenLink} />
     <button onClick=${onOpenRagas}>Ragas</button>
@@ -76,5 +76,9 @@ export function ControlBar({ onNew, onOpen, examples, exampleValue, onExample, o
         ${MELODY_VOICES.map(([v, label]) => html`<option key=${v} value=${v}>${label}</option>`)}
       </select>
     </label>
+    <!-- Only the voice that is built from parts has parts to move. A settings button beside
+         a preset would open on an apology. -->
+    ${isTunable(timbre) && html`<button class="instr-btn" onClick=${onOpenInstrument}
+      title="Open this instrument: the string, its body and its room">⚙</button>`}
   </div>`;
 }

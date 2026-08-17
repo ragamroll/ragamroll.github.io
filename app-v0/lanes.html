@@ -959,7 +959,20 @@ let tempoMult=1;
 // measurement is right on most machines and badly wrong on some, and there is no way to
 // find out from in here — so it is shown, and it can be trimmed.
 let syncMs=parseFloat(localStorage.getItem('lanes.sync'))||0;
-let timbre='soft-am';               // melody voice; part of what is loaded, so part of runKey
+let timbre='pluck';                 // melody voice; part of what is loaded, so part of runKey
+// The instrument's own settings, as the APP's panel left them. The panel lives there — this
+// page has no room for one and no need of its own — but the sound has to be the same sound:
+// a string tuned in one window and heard untuned in the other is two instruments, and the
+// point of crossing between the pages is that it is one piece.
+//
+// Read on every load, not once: the panel may be open in another tab, and the settings are
+// the browser's rather than either page's.
+function applyInstrument(p){
+  if(!p||!p.setVoiceParam) return;
+  let o={};
+  try{ o=JSON.parse(localStorage.getItem('ragamroll.instrument'))||{}; }catch(e){}
+  for(const [k,v] of Object.entries(o)) p.setVoiceParam(k,v);
+}
 // Filled from the backend's own list rather than written out here. Two of the names this
 // menu used to carry were not voices at all — nothing implemented them, and they played as
 // the bowed synth.
@@ -979,7 +992,10 @@ function showTempo(){
   $('tempoAt').textContent=tempoMult.toFixed(2).replace(/0$/,'')+'\u00d7'
     +(notes.length?' \u00b7 '+playTempo()+' bpm':'');
 }
-function ensurePlayer(){ if(!player) player=createPlayer('tone'); return player; }
+function ensurePlayer(){
+  if(!player){ player=createPlayer('tone'); window.__lanesPlayer=player; }   // named for the guards
+  return player;
+}
 // Everything positioned in #inner has to clear the row-label column: the lanes begin after
 // it, so a bare `units*PX` puts unit zero on top of the labels rather than on the first
 // note. Read from the DOM rather than written as 74 twice.
@@ -1083,6 +1099,7 @@ async function loadRun(){
   if(!(secs>0)) return 0;
   const p=ensurePlayer();
   p.setTimbre(timbre);                 // read at load(), so it has to be said before it
+  applyInstrument(p);
   p._total=secs;
   p.onended=()=>stopPlay();
   p.load(scheduleEvents(seq),secs,{talaGain:mix.tala});
@@ -1107,7 +1124,8 @@ $('play').onclick=async()=>{
 $('voice').onchange=async e=>{
   timbre=e.target.value;
   savePrefs();
-  ensurePlayer().setTimbre(timbre);     // a gesture, so a sampled set can start fetching now
+  ensurePlayer().setTimbre(timbre);
+  applyInstrument(player);
   if(!playing&&!paused) return;
   const was=playing, at=headAt;
   if(playing){ playing=false; cancelAnimationFrame(raf); player.pause(); }
