@@ -181,16 +181,7 @@ kbd{background:#2a2e3e;border:1px solid var(--line);border-radius:3px;padding:1p
     <span id="tempoAt">1.0&times;</span>
   </label>
   <label class="hint" id="voiceBox" title="Melody voice. Takes effect where the piece stands — a gesture is judged against a timbre, and waiting for the next play to hear it is waiting too long. The sampled ones (marked) are fetched when picked; until they arrive, and offline, they play as the synth.">&#127925;
-    <select id="voice">
-      <option value="soft-am">Soft</option>
-      <option value="bowed-fm">Bowed</option>
-      <option value="reed-fm">Reed</option>
-      <option value="pluck">Pluck</option>
-      <option value="violin">Violin &#9670;</option>
-      <option value="flute">Flute &#9670;</option>
-      <option value="guitar">Guitar &#9670;</option>
-      <option value="harmonium">Harmonium &#9670;</option>
-    </select>
+    <select id="voice"></select>
   </label>
   <span class="mix">
     <label title="Melody">mel<input type="range" id="vMel" min="0" max="1" step="0.05" value="1"></label>
@@ -271,6 +262,7 @@ import { parse } from './core/parser.js';
 import { buildRollModel, gridPitches } from './core/roll-model.js';
 import { readingBlocks, walkTokens } from './core/gamaka-inline.js';
 import { encodeShareToken, readSharedSource } from './core/share.js';
+import { MELODY_VOICES } from './audio/voices.js';
 import { EDO } from './core/shruti.js';
 import { buildSequence } from './core/midi/sequence.js';
 import { scheduleEvents, totalSeconds } from './audio/schedule.js';
@@ -968,6 +960,14 @@ let tempoMult=1;
 // find out from in here — so it is shown, and it can be trimmed.
 let syncMs=parseFloat(localStorage.getItem('lanes.sync'))||0;
 let timbre='soft-am';               // melody voice; part of what is loaded, so part of runKey
+// Filled from the backend's own list rather than written out here. Two of the names this
+// menu used to carry were not voices at all — nothing implemented them, and they played as
+// the bowed synth.
+for(const [v,label] of MELODY_VOICES){
+  const o=document.createElement('option');
+  o.value=v; o.textContent=label;
+  $('voice').appendChild(o);
+}
 const BPM_MIN=20, BPM_MAX=600;
 function compTempo(){
   try{ const m=parse(lastText); return (m.meta&&m.meta.tempo>0)?m.meta.tempo:120; }catch(e){ return 120; }

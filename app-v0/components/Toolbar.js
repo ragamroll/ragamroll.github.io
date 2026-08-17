@@ -1,20 +1,10 @@
 import { html } from '../vendor/htm-preact.js';
 import { useState, useEffect, useCallback } from '../vendor/hooks.module.js';
 import { OpenMenu } from './OpenMenu.js';
-// The synthesised voices, then the SAMPLED ones — real recordings of the instrument,
-// fetched when you pick them. They are last because they are the ones that need the
-// network: offline, or before they arrive, they play as the synth and say nothing about
-// it, which is better than silence and better than a warning nobody can act on.
-const TIMBRES = [
-  ['soft-am', 'Soft'],
-  ['bowed-fm', 'Bowed'],
-  ['reed-fm', 'Reed'],
-  ['pluck', 'Pluck'],
-  ['violin', 'Violin ◆'],
-  ['flute', 'Flute ◆'],
-  ['guitar', 'Guitar ◆'],
-  ['harmonium', 'Harmonium ◆'],
-];
+import { MELODY_VOICES } from '../audio/voices.js';
+// The voices come from the backend's own list. Kept here as a second copy, this menu
+// offered two names — `pluck` and `reed-fm` — that no backend case implemented, and both
+// played as the bowed synth without a word.
 
 // Fullscreen, which on a phone is what gets rid of the address bar — the gamaka page's
 // button, and the reason it has one: that bar is 60-odd pixels of a roll you are trying
@@ -83,7 +73,7 @@ export function ControlBar({ onNew, onOpen, examples, exampleValue, onExample, o
             title="Experimental: override the scale pitches (53-EDO)">Scale ⚙${scaleActive ? ' •' : ''}</button>
     <label class="timbre" title="Melody instrument voice (applies on next play)">🎻
       <select value=${timbre} onChange=${(e) => onTimbre(e.target.value)}>
-        ${TIMBRES.map(([v, label]) => html`<option key=${v} value=${v}>${label}</option>`)}
+        ${MELODY_VOICES.map(([v, label]) => html`<option key=${v} value=${v}>${label}</option>`)}
       </select>
     </label>
   </div>`;
