@@ -616,7 +616,11 @@ function App({ examples }) {
   // level so the user need not slide back to zero and up again. Dragging the
   // slider also unmutes (intent to hear). Effective level = muted ? 0 : vol.
   const [talaVol, setTalaVol] = useState(0.5);
-  const [talaMuted, setTalaMuted] = useState(false);
+  // MUTED to begin with. The tala is a pulse to check a phrase against, not an accompaniment
+  // to hear it over, and a strum on every akshara is the thing that buries the gesture most
+  // of this app exists to show. It is one click away, and the level it comes back at is now
+  // one you can hear.
+  const [talaMuted, setTalaMuted] = useState(true);
   const onTalaVol = useCallback((v) => { setTalaVol(v); setTalaMuted(false); }, []);
   const onToggleTala = useCallback(() => setTalaMuted((m) => !m), []);
   const talaLevel = talaMuted ? 0 : talaVol;

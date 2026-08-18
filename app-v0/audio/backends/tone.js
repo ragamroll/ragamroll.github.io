@@ -17,8 +17,17 @@ const gainDb = (v) => (v > 0 ? 20 * Math.log10(v) : -Infinity);
 // Tala/drone taper: square the slider so the softer band spans more of the
 // travel — the old low end now sits around mid-slider (~-12 dB at 0.5).
 const trackDb = (v) => gainDb(v * v);
-// Tala sits a further -8 dB under the taper (it should stay under the melody).
-const talaDb = (v) => trackDb(v) - 8;
+// The tala keeps the SOFTER taper off its slider but not the squared one, and not the -8dB
+// the drone-style taper had under it. Measured against the string as it now sounds, that
+// combination put the tala 28dB under the melody at the middle of its own slider — which is
+// not "under the melody", it is not there. A gentler curve and a lift bring it to about
+// six decibels under at the same position: present, and still underneath.
+//
+// The lift is +8 rather than +2 because the accent-strum voice is a pair of PluckSynths,
+// which are quiet for their nominal level in a way the envelope-driven percussion voices
+// are not — the number is trimmed against what the strum actually sounds like, not against
+// what its dB says.
+const talaDb = (v) => gainDb(v) + 8;
 // Drone variant: extra headroom since its three S/P/>S voices sum.
 const droneDb = (v) => trackDb(v) - 14;
 

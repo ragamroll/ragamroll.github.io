@@ -24,11 +24,16 @@ const MEL_PEAK = 0.2;     // matches core/roll-audio.js's voice()
 const STRUM_PEAK = 0.24;
 const DRONE_PEAK = 0.09;
 
-// The Tone backend takes its track levels in dB (a squared taper, tala -8dB under it,
-// drone -14dB). These are the linear equivalents, so the two backends sound alike at
-// the same slider position rather than only being correct in isolation.
+// The Tone backend takes its track levels in dB (a squared taper for the drone, -14dB under
+// it; the tala off the taper entirely). These are the linear equivalents, so the two backends
+// sound alike at the same slider position rather than only being correct in isolation.
 const trackGain = (v) => (v > 0 ? v * v : 0);
-const talaGainOf = (v) => trackGain(v) * 0.4;      // ≈ -8 dB
+// Tala: linear off the slider, no squared taper and no attenuation under it — the Tone side
+// was lifted for the same reason (its tala was inaudible at mid-slider). The lift is NOT the
+// same number on both sides: Tone's +8 dB is paid to a pair of quiet PluckSynths, while this
+// backend's strum is an oscillator already at STRUM_PEAK, level with the melody. Matching the
+// dB literally would put this tala OVER the melody; matching the intent is `v`.
+const talaGainOf = (v) => (v > 0 ? v : 0);
 const droneGainOf = (v) => trackGain(v) * 0.2;     // ≈ -14 dB
 
 export function createWebAudioBackend(context) {
