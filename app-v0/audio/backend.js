@@ -65,6 +65,110 @@ export function outputDelay(ctx) {
 }
 
 /**
+ * A PLAYHEAD CLOCK: the transport's own reading, carried forward with wall time between
+ * its updates.
+ *
+ * Both backends read a clock that steps rather than flows. Tone's transport advances in
+ * its scheduler's steps, and an AudioContext's currentTime advances a render quantum at a
+ * time (and, where the device batches its callbacks, several at once). Sampled every
+ * animation frame in the app, the transport reading repeated for two to thirteen frames
+ * and then jumped: 60fps with no dropped frames, 26 value changes a second, up to 216ms of
+ * a motionless playhead, per-frame advance varying more than its own mean (cv 1.24). The
+ * loop was never the problem — the number it drew was.
+ *
+ * The audio is exact and untouched by any of this. This is only what the DRAWING is told.
+ *
+ * Between updates the reading is carried forward by elapsed wall time, because a running
+ * transport advances at one second per second. The carry is:
+ *
+ *  - CAPPED (`MAX_CARRY`), so a clock that has genuinely stalled — a suspended context, a
+ *    backgrounded tab — is believed rather than extrapolated off the end of the piece.
+ *  - only applied while RUNNING. `running` is the caller's answer, not a guess from the
+ *    numbers: a paused transport reports the same seconds as a stalled one, and a playhead
+ *    that keeps gliding over silence is a worse fault than the one being fixed.
+ *  - MONOTONIC within a run. The carry lags by at most the frame on which a change is
+ *    noticed, so it under-predicts rather than over-predicts; the clamp is there for the
+ *    case it does not.
+ *
+ * reset() is required at every point where the position moves by something other than
+ * time passing — load, play, pause, stop, seek. Without it a resume carries the length of
+ * the pause into the first frame after it.
+ */
+export const MAX_CARRY = 0.25;   // seconds of wall time a stalled reading is carried
+export const ORIGIN_SMOOTHING = 0.12;   // how hard a new reading pulls the origin
+
+/**
+ * @param {() => number} now  wall clock in ms; injectable so a test can hold it still
+ */
+export function makePlayClock(now = () => performance.now(), smoothing = ORIGIN_SMOOTHING) {
+  // The wall-clock instant that maps to position 0 — an ORIGIN, not a position. Deriving
+  // the playhead from it is what makes the motion even: every frame is (now - origin),
+  // which advances by exactly the frame's own duration whether or not the transport said
+  // anything. Simply carrying the last reading forward and SNAPPING to each new one was
+  // measurably better than raw (26Hz -> 59Hz) and still stepped, because the snap is
+  // itself a jump of whatever the reading had drifted by.
+  let origin = null;
+  let raw = -1, out = 0;
+  return {
+    reset() { origin = null; raw = -1; out = 0; },
+    /** @param {number} seconds transport reading @param {boolean} running is it advancing */
+    read(seconds, running) {
+      const t = now();
+      // Paused or stopped: the transport IS the answer, and the origin is re-derived so a
+      // resume starts from where the line is rather than from where it would have been.
+      if (!running) { origin = t - seconds * 1000; raw = seconds; out = seconds; return seconds; }
+      const est = t - seconds * 1000;
+      if (origin == null) origin = est;
+      // Each new reading corrects the origin by a FRACTION of its disagreement. A reading
+      // is noticed up to a frame after it changed, so the estimates it gives are late by a
+      // varying amount; taken whole, that jitter would be drawn. Taken a tenth at a time,
+      // it averages out and the correction is spread over frames too small to see.
+      else if (seconds !== raw) origin += smoothing * (est - origin);
+      raw = seconds;
+      // Never further ahead than the last real reading plus the carry cap: a suspended
+      // context or a backgrounded tab stops the transport but not the wall clock, and
+      // without this the playhead would run off the end of a piece that is not playing.
+      const p = Math.min((t - origin) / 1000, seconds + MAX_CARRY);
+      out = Math.max(out, p);   // within a run the line does not go back up the roll
+      return out;
+    },
+  };
+}
+
+/**
+ * outputDelay, but STEADY — the same measurement with its per-frame noise taken out.
+ *
+ * The delay is a property of the device, and the playhead subtracts it from the drawn
+ * position on every frame. getOutputTimestamp reports it afresh each time it is asked and
+ * disagrees with itself by a few milliseconds: measured over four seconds of playback,
+ * mean 149.4ms with a spread of 130 to 154. That is ±12ms of pure noise added straight
+ * onto the line's position, and with the transport clock smoothed it was ALL of the
+ * jitter that was left — the position itself was even to a twentieth (cv 0.05), the line
+ * drawn from it was not (cv 0.32).
+ *
+ * A slow average keeps the number honest while making it still: it ignores the
+ * frame-to-frame disagreement entirely.
+ *
+ * But it must not CRAWL between two honest answers. A context that has not rendered yet
+ * reports a fraction of its real delay — 24ms against the 150ms it settles at, measured
+ * from a cold start — and averaging that in a twentieth at a time drags the playhead
+ * across more than a tenth of a second over the first seconds of a piece: smooth, and
+ * wrong, and worse than the jitter it was there to remove. A disagreement bigger than
+ * anything the noise produces is not noise; it is the situation having changed, and it is
+ * taken at once. That covers the warm-up and a change of output device alike.
+ */
+export const LATENCY_JUMP = 0.03;   // seconds of disagreement taken as a real change
+
+export function makeLatencyMeter(smoothing = 0.05, jump = LATENCY_JUMP) {
+  let v = null;
+  return (ctx) => {
+    const d = outputDelay(ctx);
+    v = (v == null || Math.abs(d - v) > jump) ? d : v + smoothing * (d - v);
+    return v;
+  };
+}
+
+/**
  * The NATIVE AudioContext behind whatever a backend hands over.
  *
  * Tone bundles standardized-audio-context, and what it calls the raw context is that

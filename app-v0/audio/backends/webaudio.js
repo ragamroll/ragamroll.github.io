@@ -1,5 +1,5 @@
 import { midiToFreq } from '../schedule.js';
-import { outputDelay } from '../backend.js';
+import { makePlayClock, makeLatencyMeter } from '../backend.js';
 
 // A SynthBackend on bare Web Audio — no library, no bundle. The counterpart to
 // backends/tone.js, for pages that want the roll to SOUND without carrying 353KB of
@@ -53,6 +53,12 @@ export function createWebAudioBackend(context) {
   let offsetSec = 0;          // how far into the piece a resume should start
   let endTimer = null, fadeTimer = null;
   let masterVol = 1, talaVol = 1, droneVol = 0.5, melodyMuted = false;
+  // What position() hands the DRAWING. ctx.currentTime advances a render quantum at a
+  // time, and on a device that batches its audio callbacks it advances several at once —
+  // a stepped playhead, from a clock the notes themselves are perfectly placed against.
+  // See makePlayClock. Reset wherever the position moves without time passing.
+  const clock = makePlayClock();
+  const meter = makeLatencyMeter();
 
   function graph() {
     const c = ctx();
@@ -137,10 +143,11 @@ export function createWebAudioBackend(context) {
       clearTimers();
       kill();
       events = evs || []; total = totalSec || 0;
-      state = 'stopped'; ended = false; offsetSec = 0;
+      state = 'stopped'; ended = false; offsetSec = 0; clock.reset();
     },
     async play() {
       if (total <= 0 || state === 'playing') return;
+      clock.reset();          // a resume starts a new run of the clock, not a continuation
       graph();
       const c = ctx();
       if (c.state === 'suspended') { try { await c.resume(); } catch (_) { /* stays suspended */ } }
@@ -155,7 +162,7 @@ export function createWebAudioBackend(context) {
         endTimer = null;
         // Natural end: position() must read 1 until load()/stop() resets it, so this
         // is a terminal state rather than a stop() (which would zero it).
-        state = 'stopped'; ended = true; offsetSec = 0; kill();
+        state = 'stopped'; ended = true; offsetSec = 0; clock.reset(); kill();
         if (b.onended) b.onended();
       }, Math.max(0, (total - offsetSec) * 1000 - LEAD * 1000) + LEAD * 1000 + 30);
     },
@@ -163,19 +170,23 @@ export function createWebAudioBackend(context) {
       if (state !== 'playing') return;
       offsetSec = Math.min(total, elapsed());
       clearTimers(); kill();
-      state = 'paused';
+      state = 'paused'; clock.reset();
     },
     stop() {
       clearTimers(); kill();
-      state = 'stopped'; ended = false; offsetSec = 0;
+      state = 'stopped'; ended = false; offsetSec = 0; clock.reset();
     },
     position() {
       if (ended) return 1;
       if (total <= 0) return 0;
-      if (state === 'playing') return Math.min(1, Math.max(0, elapsed() / total));
+      // Smoothed for the playhead only — the oscillators keep the exact times they were
+      // scheduled at, and nothing here is read by the audio path.
+      if (state === 'playing') return Math.min(1, Math.max(0, clock.read(elapsed(), true) / total));
       return Math.min(1, offsetSec / total);
     },
-    latency() { return outputDelay(actx); },
+    // Steadied: the playhead subtracts this every frame, and the raw measurement
+    // disagrees with itself by a few milliseconds each time it is asked.
+    latency() { return meter(actx); },
     // Sound ONE note now, for auditioning while a curve is being shaped. Never touches
     // the transport: nothing here reads or writes originSec/offsetSec/state, so a
     // preview is invisible to position() whatever is playing.
@@ -261,7 +272,7 @@ export function createWebAudioBackend(context) {
       clearTimers(); kill(); b.droneOff();
       for (const n of [melBus, talaBus, droneBus, master]) { try { n && n.disconnect(); } catch (_) { /* gone */ } }
       master = melBus = talaBus = droneBus = null;
-      state = 'stopped'; ended = false; offsetSec = 0; events = []; total = 0;
+      state = 'stopped'; ended = false; offsetSec = 0; events = []; total = 0; clock.reset();
     },
   };
   return b;

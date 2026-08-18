@@ -1,6 +1,6 @@
 import * as Tone from '../../vendor/tone.js';
 import { midiToFreq } from '../schedule.js';
-import { outputDelay } from '../backend.js';
+import { outputDelay, makePlayClock, makeLatencyMeter } from '../backend.js';
 import { SYNTH_VOICES, STRING_PARAMS, STRING_DEFAULTS } from '../voices.js';
 
 // The ONLY module that references Tone.js. Encapsulates all Tone version specifics.
@@ -404,6 +404,11 @@ export function createToneBackend() {
   let melodyMuted = false;  // remembered so a reload keeps the melody muted
   let masterDb = 0;         // canonical master level (dB); fades ramp around it
   let fadeTimer = null;     // pending fadeOutStop teardown; cancelled by a new load/play
+  // What position() hands the DRAWING: the transport's reading, smoothed between its
+  // steps (see makePlayClock). Reset wherever the position moves by something other than
+  // time passing — load, play, pause, stop, seek.
+  const clock = makePlayClock();
+  const meter = makeLatencyMeter();   // steady output delay, for the same reason
   let total = 0;
   let ended = false;
   const clearFade = () => { if (fadeTimer) { clearTimeout(fadeTimer); fadeTimer = null; } };
@@ -431,6 +436,7 @@ export function createToneBackend() {
       const talaGain = opts.talaGain != null ? opts.talaGain : 1;
       clearFade();         // a new load supersedes any pending fade teardown
       b.disposeMelody();   // keep the drone playing across sequence reloads
+      clock.reset();       // a different piece: nothing about the old one carries forward
       total = totalSec;
       ended = false;
       synth = makeMelody(timbre, stringOver);
@@ -498,6 +504,8 @@ export function createToneBackend() {
       if (total <= 0) return;
       clearFade();                      // don't let a stale teardown stop this run
       ended = false;
+      // A resume must not carry the length of the PAUSE into its first frame.
+      clock.reset();
       await Tone.start();               // unlock AudioContext on the user gesture
       // WAIT FOR THE CLOCK TO MOVE before scheduling anything against it.
       //
@@ -525,7 +533,7 @@ export function createToneBackend() {
       // needs to get sound out is what it needs to get the FIRST sound out.
       transport().start('+' + Math.max(0.06, outputDelay(rawCtx())).toFixed(3));
     },
-    pause() { transport().pause(); },
+    pause() { transport().pause(); clock.reset(); },
     // Move the play position without playing. The point is a run that starts somewhere
     // other than the top: scheduled callbacks before `sec` simply never fire, and the
     // ones after it keep the times they were given. Only meaningful between load() and
@@ -533,10 +541,15 @@ export function createToneBackend() {
     seek(sec) {
       if (total <= 0) return;
       ended = false;            // a seek is a fresh intention, not the end that was reached
+      // The position moved without time passing, and a monotonic clock would otherwise
+      // refuse to follow a seek BACKWARDS — it would hold the old position until playback
+      // caught up with it.
+      clock.reset();
       transport().seconds = Math.max(0, Math.min(total, sec));
     },
     stop() {
       ended = false;
+      clock.reset();
       const tr = transport();
       tr.stop();
       tr.position = 0;
@@ -558,10 +571,17 @@ export function createToneBackend() {
       if (total <= 0) return 0;
       // Tone's transport can report a ~1e-16 residue after stop(); clamp so the
       // contract's "stop resets position() to 0" holds exactly.
-      const s = transport().seconds;
-      return s < 1e-6 ? 0 : Math.min(1, s / total);
+      const tr = transport();
+      const s = tr.seconds;
+      if (s < 1e-6) return 0;
+      // Smoothed for the playhead, not for the audio: transport().seconds moves in the
+      // scheduler's steps, and drawing it raw is a line that sits still and then lurches.
+      return Math.min(1, clock.read(s, tr.state === 'started') / total);
     },
-    latency() { return outputDelay(rawCtx()); },
+    // Steadied, because the playhead subtracts this every frame — see makeLatencyMeter.
+    // The START runway below still asks outputDelay directly: that is one reading at one
+    // moment, and it wants the freshest one rather than the calmest.
+    latency() { return meter(rawCtx()); },
     // The instrument panel's surface: what the loaded voice can be told, what it is set to
     // now, and a way to move one. A voice with nothing to say returns null, and a host that
     // asks about one draws no panel.
