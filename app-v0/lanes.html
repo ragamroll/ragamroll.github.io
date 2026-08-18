@@ -170,7 +170,7 @@ kbd{background:#2a2e3e;border:1px solid var(--line);border-radius:3px;padding:1p
   <button id="undo" disabled>Detach last</button>
   <button id="unpin" disabled title="Click a note in the roll first. Takes back what is bound to it — and everything placed after it, since the work runs left to right and a group that follows a mistake was placed against it.">Detach from here</button>
   <button id="rew" disabled title="Back to A, or to the start of the piece">&#9198;</button>
-  <button id="play" disabled title="Hear the piece — the judgement is one of the ear">Play &#9654;</button>
+  <button id="play" disabled title="Play — the judgement is one of the ear">&#9654;</button>
   <button id="stop" disabled title="Stop">&#9632;</button>
   <label class="hint" id="syncBox" title="A/V trim. The playhead is drawn at the audio clock MINUS the output delay the device reports; where that report is wrong the line and the sound disagree. Positive moves the line later (right). Remembered for this browser — it is a property of the machine, not of the piece.">sync
     <input type="number" id="sync" step="10" value="0" style="width:56px">ms
@@ -1052,6 +1052,15 @@ function tick(){
   if(mark.b!=null&&headAt>=mark.b){ pausePlay(); rewindTo(startUnits()); return; }
   raf=requestAnimationFrame(tick);
 }
+// A GLYPH, and the word in the title. The strip is a row of icons — open, save, attach,
+// carry, rewind, stop — and one button spelling itself out was the only thing in it wearing
+// a label. What the button means still has to be readable by something that is not an eye,
+// which is what the title is for.
+function setPlayBtn(glyph, word){
+  const b=$('play');
+  b.textContent=glyph;
+  b.title=word+' \u2014 the judgement is one of the ear';
+}
 const startUnits=()=>mark.a!=null?mark.a:0;
 function rewindTo(u){
   headAt=u;
@@ -1065,7 +1074,7 @@ function pausePlay(){
   if(!playing) return;
   playing=false; paused=true; cancelAnimationFrame(raf);
   player.pause(); player.droneOff();
-  $('play').textContent='Resume \u25B6';
+  setPlayBtn('\u25B6', 'Resume');
 }
 function stopPlay(){
   playing=false; paused=false; loadedKey=''; cancelAnimationFrame(raf);
@@ -1073,13 +1082,13 @@ function stopPlay(){
   headAt=startUnits();
   // Left showing where a Play would begin, when that is not the beginning.
   if(mark.a!=null) headTo(mark.a); else $('head').hidden=true;
-  $('play').textContent='Play \u25B6'; $('stop').disabled=true;
+  setPlayBtn('\u25B6', 'Play'); $('stop').disabled=true;
 }
 async function resumePlay(){
   await player.play();
   $('latAt').textContent='(dev '+Math.round((player.latency?player.latency():0)*1000)+'ms)';
   playing=true; paused=false;
-  $('play').textContent='Pause \u23F8'; $('stop').disabled=false;
+  setPlayBtn('\u23F8', 'Pause'); $('stop').disabled=false;
   applyMix();
   raf=requestAnimationFrame(tick);
 }
