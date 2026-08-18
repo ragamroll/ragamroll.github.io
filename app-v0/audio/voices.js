@@ -78,9 +78,9 @@ export const STRING_PARAMS = [
 // half a decibel a second, and a plucked note that does not decay is what a compressor
 // sounds like, which is exactly what this voice was accused of.
 export const STRING_DEFAULTS = {
-  dampening: 1250, sustain: 6, attackNoise: 1.8, pickMul: 4, detune: 1.002, drive: 0,
-  body1: 9, body2: 6, body3: 3, bodyHz: [105, 200, 430], bodyQ: [0.8, 1.0, 1.3],
-  tameHz: 1300, damping: 15, roomSize: 0.22, roomWet: 0.08, out: -4,
+  dampening: 2717.0971011239694, sustain: 6, attackNoise: 1.8, pickMul: 5.364893652938356,
+  detune: 1.0024, drive: 0, body1: 10, body2: 6.5, body3: 14, bodyHz: [105, 200, 430],
+  bodyQ: [0.8, 1, 1.3], tameHz: 1300, damping: 5, roomSize: 0.22, roomWet: 0.08, out: 1,
 };
 
 // Slider position (0..1) <-> value, for the three scales. The panel stores and applies the
