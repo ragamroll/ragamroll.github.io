@@ -383,10 +383,33 @@ function makeTala(timbre) {
       const out = new Tone.Volume(0).toDestination();
       const voices = [new Tone.PluckSynth(), new Tone.PluckSynth()];
       for (const v of voices) { v.set({ attackNoise: 0.6, dampening: 2200, resonance: 0.9 }); v.connect(out); }
+      // The LAST TIME each string was struck, and the invariant that goes with it: a string
+      // cannot be plucked twice at the same instant. Tone agrees — a second start at a time
+      // that is not strictly greater throws out of the callback it is in, taking the rest of
+      // that callback's work with it.
+      //
+      // The transport handed the same instant to one voice twice when the end of a piece
+      // re-fired the opening strum (fixed at its source, in the end callback below); it was
+      // seen once more afterwards, rarely, from somewhere not yet identified. This is the
+      // layer that owns the rule, so this is where the rule is kept: strike the string that
+      // was struck LONGEST AGO, and if even that one was struck at this very instant, do not
+      // strike it. Two identical strums at one moment are not two strums — they are one,
+      // played twice as loud, and the difference is inaudible either way.
+      const struck = voices.map(() => -Infinity);
       let next = 0;
       return {
         volume: out.volume,
-        triggerAttackRelease(...a) { const v = voices[next]; next = (next + 1) % voices.length; v.triggerAttackRelease(...a); },
+        triggerAttackRelease(...a) {
+          const time = a[2];
+          let i;
+          if (typeof time !== 'number') { i = next; next = (next + 1) % voices.length; }
+          else {
+            i = struck.indexOf(Math.min(...struck));      // the string that has rested longest
+            if (!(time > struck[i])) return;              // ...and even it is mid-attack: skip
+            struck[i] = time;
+          }
+          voices[i].triggerAttackRelease(...a);
+        },
         dispose() { for (const v of voices) v.dispose(); out.dispose(); },
       };
     }
@@ -474,26 +497,31 @@ export function createToneBackend() {
         }, e.startSec);
       }
       if (totalSec > 0) {
-        tr.schedule((time) => {
-          // Halt the transport internally (not via the public b.stop(), which
-          // resets `ended`): after a natural end position() must report 1.
+        tr.schedule(() => {
+          // NOTHING IS DONE TO THE TRANSPORT HERE. This callback only notices the end;
+          // stopping is the page thread's job, a tick later.
           //
-          // WITH THE CALLBACK'S OWN TIME, and with everything that is not audio work
-          // moved off this callback. Tone raises a flag while it invokes a scheduled
-          // callback, and any of its calls made with the time omitted warns — the
-          // transport was being stopped at an implicit "now" from inside the audio
-          // thread's own dispatch, which is both the warning and a real jitter: "now"
-          // there is whenever the callback happened to run, not the moment scheduled.
+          // Stopping a transport from inside its own scheduled callback does not stop it.
+          // It resets to zero and keeps ticking for the remainder of its lookahead, so
+          // every event scheduled at 0 FIRES AGAIN — measured against Tone directly, three
+          // extra events on every run of the pattern and nineteen once in five. In this
+          // app that is the tala's opening strum sounding again a few milliseconds after
+          // the piece has finished, on every single play that reached its end: the window
+          // after the end measured LOUDER than the piece itself, by up to six times.
           //
-          // The rest — resetting the position, disposing voices, telling the host — is
-          // bookkeeping. It ran here only because this is where the end was noticed, and
-          // a dispose on the audio callback is how a teardown ends up racing the render
-          // it is tearing down. Handed to a timeout, it happens on the page's own thread
-          // a tick later, which is soon enough for something that has already stopped.
-          const t = transport();
-          t.stop(time);
+          // And when a re-fire landed twice inside one instant, the strum's two PluckSynths
+          // were asked for two notes at one time, which throws "Start time must be strictly
+          // greater than previous start time" and kills the callback it is in. That error,
+          // about one run in seven, is what led here; the extra strum was on every one.
+          //
+          // The stop below omits its time deliberately. That is what the previous version
+          // was avoiding — Tone warns about an implicit "now" while it is invoking a
+          // scheduled callback — but out here there is no callback in flight, no flag
+          // raised and no warning: "now" on the page thread is simply now.
           ended = true;
           setTimeout(() => {
+            const t = transport();
+            t.stop();
             t.position = 0;
             if (b.onended) b.onended();
           }, 0);
