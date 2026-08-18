@@ -193,6 +193,29 @@ G2 G2 P4 P4  D2 P2 &gt;S4 S4</code></pre>
   <a href="https://github.com/ragamroll/ragamroll/blob/master/docs/open-in-ragamroll.md">docs/open-in-ragamroll.md</a>.
   Any program that can produce srgm can hand a piece straight to this app.</p>
 
+  <h2 id="instrument">The instrument</h2>
+  <p>The <b>Pluck</b> voice is not a preset — it is a string, a body and a room, and the
+  <b>⚙</b> beside the voice picker opens them: how bright the string is, how long it rings,
+  how hard it is picked, a little drive, the three resonances of the body, damping, room and
+  level.</p>
+  <ul>
+    <li><b>It is live.</b> Turn something while a phrase repeats — nothing stops — and that is
+    the only way an instrument is really judged. With nothing playing, each change strikes a
+    note so you can hear it; <b>♪</b> asks for one on demand.</li>
+    <li><b>Sustain is a time</b>, and the same time at every pitch: six seconds rings under
+    the hand, one second is stopped almost as it speaks. <b>Damping</b> is how much of the top
+    the body absorbs, so right is more.</li>
+    <li>The <b>body resonances do not follow the note</b>. A box rings where it rings whatever
+    is played on it, and that fixed response is most of what separates an instrument from a
+    waveform — it also means the same setting sounds different at a different Sa.</li>
+    <li>The settings are remembered for this browser, and they follow the piece into the lane
+    editor.</li>
+    <li><b>⭳ Save</b> writes them to <code>pluck-settings.json</code>. To make a setting the
+    one everybody gets, drop that file in the repo and run
+    <code>node tools/apply-instrument.mjs pluck-settings.json --apply</code>, which folds it
+    into the built-in instrument rather than leaving anyone to hand-edit a number.</li>
+  </ul>
+
   <h2 id="lanes">The sahitya and the written swaras</h2>
   <p>Notation converted from another system often arrives with that system's own
   <b>written swaras</b> and the <b>sahitya</b> (the lyrics) sitting above the notes, as

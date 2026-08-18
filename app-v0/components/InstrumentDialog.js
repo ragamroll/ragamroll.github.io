@@ -28,6 +28,18 @@ export function InstrumentDialog({ values, onSet, onReset, onAudition, playing, 
   // brightness, the pair), so without a note to strike they change nothing you can hear.
   const hear = () => { if (!playing) onAudition(); };
   const reset = () => { setV({ ...STRING_DEFAULTS }); onReset(); };
+  // Down to a file, so a setting that took an afternoon of listening can become the one
+  // everybody gets. The WHOLE object, not the handful that differ from today's defaults:
+  // what is wanted in the repo is an instrument, not a patch against one — and a patch
+  // against a default that later moves is a setting that quietly changes underneath you.
+  const save = () => {
+    const body = JSON.stringify({ ...STRING_DEFAULTS, ...v }, null, 2) + '\n';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([body], { type: 'application/json' }));
+    a.download = 'pluck-settings.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
 
   // Numbers as a player reads them. The audio wants a ratio; a reader wants cents.
   const shown = (p, x) => {
@@ -48,6 +60,8 @@ export function InstrumentDialog({ values, onSet, onReset, onAudition, playing, 
       <div class="dialog-head">
         <strong>Instrument · plucked string</strong>
         <button title="Play a note with these settings" onClick=${onAudition}>♪</button>
+        <button class="instr-save" title="Download these settings as a file — tools/apply-instrument.mjs makes them the built-in ones"
+                onClick=${save}>⭳ Save</button>
         <button title="Back to the built-in settings" onClick=${() => { reset(); if (!playing) onAudition(); }}>Reset</button>
         <button title="Close" onClick=${onClose}>✕</button>
       </div>
