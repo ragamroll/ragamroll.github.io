@@ -136,6 +136,20 @@ kbd{background:#2a2e3e;border:1px solid var(--line);border-radius:3px;padding:1p
 /* Where a note came from, as a STRIP rather than a tooltip: a fragment of another system's
    notation can be long, and a tooltip over the roll covers the very notes being compared. */
 .gkabar{flex:0 0 auto;overflow-x:auto;white-space:nowrap;padding:2px 0 4px}
+/* The instrument panel: a floating box rather than a lane, because it belongs to the ear
+   and not to the piece, and because the lanes have no width to give it. */
+#instrBox{position:absolute;right:14px;top:46px;z-index:30;width:min(430px,92vw);
+  background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px 10px;
+  box-shadow:0 10px 30px rgba(0,0,0,.45)}
+.ihead{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-bottom:6px;
+  border-bottom:1px solid var(--line);margin-bottom:6px}
+.ihead b{flex:0 0 auto;font-size:12.5px}
+#ipresets{display:inline-flex;gap:3px;margin-left:auto}
+#ipresets button,.ihead button{padding:1px 6px;font-size:11px}
+.irow{display:grid;grid-template-columns:6.6rem 1fr 4rem;align-items:center;gap:6px;padding:1px 0}
+.irow span:first-child{font-size:11.5px;color:var(--ink)}
+.irow input[type=range]{width:100%;accent-color:var(--front)}
+.ival{font:11px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--muted);text-align:right}
 .gkabar code{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#7fd6b0}
 /* Reading mode: the same fold the app's editor uses, from the same function — one gamaka is
    ten pairs of numbers, so a line of eight ornamented swaras runs to four hundred characters
@@ -183,6 +197,7 @@ kbd{background:#2a2e3e;border:1px solid var(--line);border-radius:3px;padding:1p
   <label class="hint" id="voiceBox" title="Melody voice. Takes effect where the piece stands — a gesture is judged against a timbre, and waiting for the next play to hear it is waiting too long. The sampled ones (marked) are fetched when picked; until they arrive, and offline, they play as the synth.">&#127925;
     <select id="voice"></select>
   </label>
+  <button id="instr" hidden title="Open the instrument: the string, its body and its room">&#9881;</button>
   <span class="mix">
     <label title="Melody">mel<input type="range" id="vMel" min="0" max="1" step="0.05" value="1"></label>
     <label title="Tala — off to begin with: the strum is what buries a syllable">tala<input type="range" id="vTala" min="0" max="1" step="0.05" value="0"></label>
@@ -225,6 +240,20 @@ kbd{background:#2a2e3e;border:1px solid var(--line);border-radius:3px;padding:1p
   · <kbd>a</kbd>/<kbd>b</kbd> mark at the frontier
 </div>
 
+<!-- The instrument, on this page too. The panel is the app's, in Preact; this is the same
+     controls in plain DOM over the same shared spec, because the two pages have always drawn
+     their own chrome and share everything underneath. What it writes is the same key the app
+     writes, so a string tuned in either window is tuned in both. -->
+<div id="instrBox" hidden>
+  <div class="ihead"><b>Instrument &middot; plucked string</b>
+    <span id="ipresets"></span>
+    <button id="ihear" title="Play a note with these settings">&#9834;</button>
+    <button id="ireset" title="Back to the built-in setting">Reset</button>
+    <button id="iclose" title="Close">&#10005;</button>
+  </div>
+  <div id="irows"></div>
+</div>
+
 <div id="wrap"><div id="inner">
   <div id="talaBack"></div>
   <div id="tala"></div>
@@ -262,7 +291,8 @@ import { parse } from './core/parser.js';
 import { buildRollModel, gridPitches } from './core/roll-model.js';
 import { readingBlocks, walkTokens } from './core/gamaka-inline.js';
 import { encodeShareToken, readSharedSource } from './core/share.js';
-import { MELODY_VOICES } from './audio/voices.js';
+import { MELODY_VOICES, STRING_PARAMS, STRING_DEFAULTS, STRING_PRESETS,
+         fromSlider, toSlider, isTunable } from './audio/voices.js';
 import { EDO } from './core/shruti.js';
 import { buildSequence } from './core/midi/sequence.js';
 import { scheduleEvents, totalSeconds } from './audio/schedule.js';
@@ -967,6 +997,96 @@ let timbre='pluck';                 // melody voice; part of what is loaded, so 
 //
 // Read on every load, not once: the panel may be open in another tab, and the settings are
 // the browser's rather than either page's.
+// ---------- the instrument panel ----------
+// The same twelve controls the app has, over the same shared spec — and writing the same key,
+// so a string tuned in either window is tuned in both. Only the drawing is this page's; the
+// numbers, their ranges and how a slider travels across them are decided once, elsewhere.
+let instr={};
+function loadInstr(){
+  try{ instr=JSON.parse(localStorage.getItem('ragamroll.instrument'))||{}; }catch(e){ instr={}; }
+}
+function saveInstr(){
+  try{ localStorage.setItem('ragamroll.instrument',JSON.stringify(instr)); }catch(e){}
+}
+const shownVal=(p,x)=>{
+  if(p.key==='detune') return Math.round(Math.log2(x)*1200)+'\u00a2';
+  if(p.unit==='Hz') return Math.round(x)+' Hz';
+  if(p.unit==='s') return (x<1?x.toFixed(2):x.toFixed(1))+' s';
+  if(p.unit==='\u00d7') return x.toFixed(1)+'\u00d7';
+  if(p.unit==='dB') return (x>0?'+':'')+Math.round(x)+' dB';
+  return String(Math.round(x*100)/100);
+};
+// A note on RELEASE, not on every pixel of a drag — and never over a piece that is playing,
+// which is already the sound being judged.
+function hearInstr(){
+  if(playing) return;
+  const p=ensurePlayer();
+  if(p.previewNote) p.previewNote({freq:midiOf(saMidiOf()), durSec:1.6});
+}
+const midiOf=(m)=>440*Math.pow(2,(m-69)/12);
+function setInstr(key,value,{audition=false}={}){
+  instr[key]=value;
+  saveInstr();
+  const p=ensurePlayer();
+  if(p.setVoiceParam) p.setVoiceParam(key,value);
+  if(audition) hearInstr();
+}
+function drawInstr(){
+  const now={...STRING_DEFAULTS,...instr};
+  const rows=$('irows');
+  rows.innerHTML='';
+  for(const p of STRING_PARAMS){
+    const row=document.createElement('label');
+    row.className='irow'; row.title=p.help||'';
+    const name=document.createElement('span'); name.textContent=p.label;
+    const inp=document.createElement('input');
+    inp.type='range'; inp.min='0'; inp.max='1'; inp.step='0.002';
+    inp.value=String(toSlider(p,now[p.key]));
+    const val=document.createElement('span'); val.className='ival'; val.textContent=shownVal(p,now[p.key]);
+    inp.oninput=()=>{
+      let v=fromSlider(p,parseFloat(inp.value));
+      if(p.step) v=Math.round(v/p.step)*p.step;
+      val.textContent=shownVal(p,v);
+      setInstr(p.key,v);
+    };
+    inp.onchange=hearInstr;
+    row.appendChild(name); row.appendChild(inp); row.appendChild(val);
+    rows.appendChild(row);
+  }
+  const ps=$('ipresets');
+  ps.innerHTML='';
+  for(const preset of STRING_PRESETS){
+    const b=document.createElement('button');
+    b.textContent=preset.name;
+    b.title=preset.values?'Load this setting — every value, including the ones without a slider'
+                         :'Back to the built-in setting';
+    b.onclick=()=>{
+      // A preset is a WHOLE instrument, the values with no slider included.
+      const next=preset.values?{...STRING_DEFAULTS,...preset.values}:{...STRING_DEFAULTS};
+      instr={};
+      for(const [k,v] of Object.entries(next)) setInstr(k,v);
+      drawInstr(); hearInstr();
+    };
+    ps.appendChild(b);
+  }
+}
+$('instr').onclick=()=>{ loadInstr(); drawInstr(); $('instrBox').hidden=!$('instrBox').hidden; };
+$('iclose').onclick=()=>{ $('instrBox').hidden=true; };
+$('ihear').onclick=()=>{ const p=ensurePlayer(); if(p.previewNote) p.previewNote({freq:midiOf(saMidiOf()), durSec:1.6}); };
+$('ireset').onclick=()=>{
+  instr={}; saveInstr();
+  const p=ensurePlayer();
+  if(p.resetVoiceParams) p.resetVoiceParams();
+  drawInstr(); hearInstr();
+};
+// Offered only for the voice that has parts: a settings button beside a preset opens on an
+// apology.
+function syncInstrBtn(){
+  const on=isTunable(timbre);
+  $('instr').hidden=!on;
+  if(!on) $('instrBox').hidden=true;
+}
+
 function applyInstrument(p){
   if(!p||!p.setVoiceParam) return;
   let o={};
@@ -1135,6 +1255,7 @@ $('voice').onchange=async e=>{
   savePrefs();
   ensurePlayer().setTimbre(timbre);
   applyInstrument(player);
+  syncInstrBtn();
   if(!playing&&!paused) return;
   const was=playing, at=headAt;
   if(playing){ playing=false; cancelAnimationFrame(raf); player.pause(); }
@@ -1245,6 +1366,7 @@ function applyPrefs(){
   if(Number.isFinite(o.sync)) syncMs=o.sync;
   if(typeof o.voice==='string') timbre=o.voice;
   $('voice').value=timbre;
+  loadInstr(); syncInstrBtn();
   reading=!!o.reading; gkaOn=!!o.gka;
   applyLooks();
   for(const [id,key] of [['vMel','mel'],['vTala','tala'],['vDrone','drone'],['vMaster','master']])

@@ -1,6 +1,6 @@
 import { html } from '../vendor/htm-preact.js';
 import { useState, useEffect } from '../vendor/hooks.module.js';
-import { STRING_PARAMS, STRING_DEFAULTS, fromSlider, toSlider } from '../audio/voices.js';
+import { STRING_PARAMS, STRING_DEFAULTS, STRING_PRESETS, fromSlider, toSlider } from '../audio/voices.js';
 
 /**
  * The instrument, opened up.
@@ -32,6 +32,15 @@ export function InstrumentDialog({ values, onSet, onReset, onAudition, playing, 
   // everybody gets. The WHOLE object, not the handful that differ from today's defaults:
   // what is wanted in the repo is an instrument, not a patch against one — and a patch
   // against a default that later moves is a setting that quietly changes underneath you.
+  // A named setting, applied whole: every value, including the ones with no slider. Half an
+  // instrument laid over another is neither, and the ones without sliders — where the body
+  // resonates, how big the room is — are a good part of what tells two of these apart.
+  const preset = (p) => {
+    const next = p.values ? { ...STRING_DEFAULTS, ...p.values } : { ...STRING_DEFAULTS };
+    setV(next);
+    for (const [k, val] of Object.entries(next)) onSet(k, val);
+    if (!playing) onAudition();
+  };
   const save = () => {
     const body = JSON.stringify({ ...STRING_DEFAULTS, ...v }, null, 2) + '\n';
     const a = document.createElement('a');
@@ -66,6 +75,11 @@ export function InstrumentDialog({ values, onSet, onReset, onAudition, playing, 
         <button title="Close" onClick=${onClose}>✕</button>
       </div>
       <div class="dialog-body instr-body">
+        <div class="instr-presets">
+          ${STRING_PRESETS.map((p) => html`<button key=${p.name} onClick=${() => preset(p)}
+            title=${p.values ? 'Load this setting — every value, including the ones without a slider'
+              : 'Back to the built-in setting'}>${p.name}</button>`)}
+        </div>
         <p class="instr-hint">${playing
           ? 'The piece is playing: every change is in the next note, and the ones that shape a ringing string are in the note under it now.'
           : 'Each change plays a note so you can hear it. Better still, start a phrase and turn these while it repeats — that is the only way an instrument is really judged.'}</p>

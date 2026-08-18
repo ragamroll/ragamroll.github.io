@@ -238,6 +238,15 @@ function makeString(kind, over = {}) {
       else if (key === 'damping') tame.gain.value = -value;
       else if (key === 'roomWet') room.wet.value = value;
       else if (key === 'out') out.volume.value = value;
+      // WHERE the body resonates, not just how much. These are not on the panel — they are
+      // what makes one box a different box rather than a louder one — but a named setting
+      // moves them, and a value that lands in P without reaching the filter is a setting
+      // that appears to be applied and is not. It would have taken until the voice was next
+      // rebuilt to be heard, which is the next press of Play.
+      else if (key === 'bodyHz') value.forEach((hz, i) => { if (bodies[i]) bodies[i].frequency.value = hz; });
+      else if (key === 'bodyQ') value.forEach((q, i) => { if (bodies[i]) bodies[i].Q.value = q; });
+      else if (key === 'tameHz') tame.frequency.value = value;
+      else if (key === 'roomSize') room.roomSize.value = value;
     },
     triggerAttackRelease(freq, dur, time, vel = 0.8) { pluck(freq, time, vel); damp(time + dur); },
     // Everything cancelled and the string stopped dead. The audition needs it: each preview

@@ -54,11 +54,11 @@ export const STRING_PARAMS = [
     help: 'How much of the pick the string can carry, as a multiple of the note.' },
   { key: 'drive', label: 'Drive', min: 0, max: 0.9, step: 0.01, scale: 'curve',
     help: 'Soft clipping, with its loudness taken back out. A little thickens the tone; a lot breaks the note up.' },
-  { key: 'body1', label: 'Low body', min: 0, max: 18, step: 0.5, unit: 'dB',
+  { key: 'body1', label: 'Low body', min: -12, max: 18, step: 0.5, unit: 'dB',
     help: 'The lowest body resonance — the weight of the instrument.' },
-  { key: 'body2', label: 'Body', min: 0, max: 18, step: 0.5, unit: 'dB',
+  { key: 'body2', label: 'Body', min: -12, max: 18, step: 0.5, unit: 'dB',
     help: 'The middle resonance.' },
-  { key: 'body3', label: 'Voice', min: 0, max: 18, step: 0.5, unit: 'dB',
+  { key: 'body3', label: 'Voice', min: -12, max: 18, step: 0.5, unit: 'dB',
     help: 'The upper resonance — where the instrument speaks.' },
   { key: 'damping', label: 'Damping', min: 0, max: 24, step: 1, unit: 'dB',
     help: 'How much of the top the body absorbs. RIGHT IS MORE — it was the other way round, and read as reversed because it was.' },
@@ -78,13 +78,37 @@ export const STRING_PARAMS = [
 // half a decibel a second, and a plucked note that does not decay is what a compressor
 // sounds like, which is exactly what this voice was accused of.
 export const STRING_DEFAULTS = {
-  dampening: 2717.0971011239694, sustain: 6, attackNoise: 1.8, pickMul: 5.364893652938356,
-  detune: 1.0024, drive: 0, body1: 10, body2: 6.5, body3: 14, bodyHz: [105, 200, 430],
-  bodyQ: [0.8, 1, 1.3], tameHz: 1300, damping: 5, roomSize: 0.22, roomWet: 0.08, out: 1,
+  dampening: 4200, sustain: 6, attackNoise: 1, pickMul: 7, detune: 1.0012, drive: 0, body1: -6,
+  body2: 12, body3: 9, bodyHz: [130, 450, 760], bodyQ: [0.7, 0.9, 1.1], tameHz: 1500,
+  damping: 4, roomSize: 0.22, roomWet: 0.1, out: 1,
 };
 
 // Slider position (0..1) <-> value, for the three scales. The panel stores and applies the
 // VALUE; only the travel is bent.
+// NAMED SETTINGS, so a reader can pick a starting point instead of finding one. A preset is
+// a whole instrument — every value, including the ones the panel does not show — because
+// half an instrument applied over another is neither.
+//
+// The names are honest about what they are: a synthesis, not a recording. What is here is a
+// heavier string over a box tuned differently from the plain one, which is a good deal of
+// what tells one plucked instrument from another; whether it passes for the instrument a
+// player would name is a judgement for that player, and the panel is right there.
+export const STRING_PRESETS = [
+  // The built-in setting comes first and carries no values of its own: it IS whatever
+  // STRING_DEFAULTS is, so making a setting the default does not leave a preset quietly
+  // claiming to be something else.
+  { name: 'Veena-ish', values: null },
+  // The plainer string this started as, kept because it is still a good one and because a
+  // default that cannot be got back from is a decision taken away from a reader.
+  { name: 'Plain', values: {
+    dampening: 2717.0971011239694, sustain: 6, attackNoise: 1.8,
+    pickMul: 5.364893652938356, detune: 1.0024, drive: 0, body1: 10, body2: 6.5, body3: 14,
+    bodyHz: [105, 200, 430], bodyQ: [0.8, 1, 1.3], tameHz: 1300, damping: 5,
+    roomSize: 0.22, roomWet: 0.08, out: 1,
+  } },
+];
+
+
 export function fromSlider(p, t) {
   const x = Math.max(0, Math.min(1, t));
   if (p.scale === 'log') return p.min * Math.pow(p.max / p.min, x);
