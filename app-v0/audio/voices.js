@@ -103,7 +103,39 @@ export const STRING_DEFAULTS = {
 //   pickTop    how bright the attack STARTS, as a multiple of the note — the burst sweeps
 //              down from there to about the third harmonic, because a real pluck's noise
 //              dies bright-first.
-export const PLUCKZ_DEFAULTS = { pick: 0.2, pickDecay: 0.08, pickTop: 12, out: 0 };
+//   saHz       what Sa is sounding at, in Hz. NOT a setting — the host tells the voice, and
+//              the register tables are read against it, so the same swara keeps the same
+//              tone whatever Sa the piece is played at. The default is this app's own
+//              default Sa (C4) so a host that never says anything still gets sensible
+//              registers.
+// The register is read RELATIVE TO SA, not in Hz — and that is a departure from the original
+// worth being clear about.
+//
+// There, the tables are chosen by absolute frequency, so the same phrase played higher up
+// genuinely thins out. Its veena also sits low: its page opens on sruthi E with the veena's
+// own quarter-frequency, which puts sa at 164.8Hz. This app's default Sa is C4, an octave
+// above that, and the two together were the whole complaint — measured over the Abhogi
+// varnam, 495 of its 574 notes landed on the five-partial table here where the original put
+// 131, and the thirteen-partial table with the robbed fundamental was never reached at all.
+// The instrument was not wrong; it was being played an octave above where it lives.
+//
+// Keyed to Sa, the same swara gets the same table whatever Sa is set to, which is what this
+// voice is FOR: the imported gamaka shapes were authored against a timbre, and a comparison
+// only means something if the notes are on the tone they were judged on. The ratios below
+// are the original's own thresholds at the sruthi its page opens on, so at that sruthi this
+// makes exactly the choice it makes.
+export const PLUCKZ_REF_SA = 164.8;      // 5233 * 1.0594631^4 / 40 — its veena sa at sruthi E
+export const PLUCKZ_TABLES = [
+  // partials[0] is the FUNDAMENTAL. (These came from Web Audio `real` arrays, whose index 0
+  // is DC; the leading zero is already dropped.)
+  { below: 150 / PLUCKZ_REF_SA, partials: [2, 40, 50, 80, 70, 60, 40, 30, 30, 25, 20, 10, 5] },
+  { below: 280 / PLUCKZ_REF_SA, partials: [10, 20, 18, 20, 6, 13, 10, 10, 2] },
+  { below: Infinity, partials: [13, 20, 11, 5, 5] },
+];
+export const pluckzTable = (freq, saHz) =>
+  PLUCKZ_TABLES.find((t) => freq / (saHz > 0 ? saHz : 261.6255653) < t.below).partials;
+
+export const PLUCKZ_DEFAULTS = { pick: 0.2, pickDecay: 0.08, pickTop: 12, out: 0, saHz: 261.6255653005986 };
 
 // Slider position (0..1) <-> value, for the three scales. The panel stores and applies the
 // VALUE; only the travel is bent.

@@ -709,6 +709,16 @@ function App({ examples }) {
     playerRef.current?.previewNote?.({ freq: midiToFreq(saMidi), durSec: 1.6 });
   }, [saMidi]);
   const shift = saPitch != null ? saPitch - autoSaMidi : 0;
+  // WHAT SA IS SOUNDING, told to the voice. Pluckz reads its register tables against Sa
+  // rather than against absolute frequency — the same swara then keeps the same tone
+  // whatever Sa the piece is played at — so it has to be told where Sa is. Every other
+  // voice ignores the key.
+  //
+  // BELOW saMidi, not above it: this file has paid several times for a hook that reads a
+  // const declared under it, which is a temporal-dead-zone crash before the first render.
+  useEffect(() => {
+    playerRef.current?.setVoiceParam?.('saHz', midiToFreq(saMidi));
+  }, [saMidi, timbre]);
 
   const noteCount = useMemo(() => model.events.filter(e => e.type === 'note' && !e.rest).length, [model]);
   // The roll's time axis is in length-units; this is what one of them is worth in seconds,

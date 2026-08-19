@@ -1,7 +1,7 @@
 import * as Tone from '../../vendor/tone.js';
 import { midiToFreq } from '../schedule.js';
 import { outputDelay, makePlayClock, makeLatencyMeter } from '../backend.js';
-import { SYNTH_VOICES, STRING_PARAMS, STRING_DEFAULTS, PLUCKZ_DEFAULTS } from '../voices.js';
+import { SYNTH_VOICES, STRING_PARAMS, STRING_DEFAULTS, PLUCKZ_DEFAULTS, pluckzTable } from '../voices.js';
 
 // The ONLY module that references Tone.js. Encapsulates all Tone version specifics.
 // v14: Tone.Transport is the global transport. If a future vendored bundle exposes
@@ -326,15 +326,6 @@ function makeString(kind, over = {}) {
 // back. An OSCILLATOR carrying the missing harmonics was tried first and cannot be tuned out
 // of clicking: a periodic burst repeats every fundamental period, and three identical repeats
 // inside one attack is what an ear calls a click. Only aperiodic excitation is free of them.
-const PLUCKZ_TABLES = [
-  // partials[0] is the FUNDAMENTAL. (These came from Web Audio `real` arrays, whose index 0
-  // is DC; the leading zero is already dropped.)
-  { below: 150, partials: [2, 40, 50, 80, 70, 60, 40, 30, 30, 25, 20, 10, 5] },
-  { below: 280, partials: [10, 20, 18, 20, 6, 13, 10, 10, 2] },
-  { below: Infinity, partials: [13, 20, 11, 5, 5] },
-];
-const pluckzTable = (freq) => PLUCKZ_TABLES.find((t) => freq < t.below).partials;
-
 // The pick's noise, once per session from a fixed seed so a strike answers the same way
 // twice, pinked with a one-pole because white noise into a string is brighter than any
 // finger. Its own buffer rather than the plucked string's: a different length, because the
@@ -384,7 +375,7 @@ function makePluckz(over = {}) {
   const strike = (freq, tableFreq, time, dur, vel, ramps) => {
     const level = Math.max(0.05, vel);
     const osc = new Tone.Oscillator({ frequency: Math.max(20, freq), type: 'custom',
-                                      partials: pluckzTable(tableFreq) });
+                                      partials: pluckzTable(tableFreq, P.saHz) });
     const amp = new Tone.Gain(0);
     osc.connect(amp); amp.connect(out); amp.connect(echo);
     amp.gain.setValueAtTime(0.001, time);
@@ -480,14 +471,14 @@ function makePluckz(over = {}) {
 // own literal rather than what was asked for. A name the switch does not know falls to the
 // default and reports the default's tag, which is how the caller — and the guard — find out
 // that they asked for a plucked string and were handed a bowed one.
-function makeMelody(timbre, stringOver) {
+function makeMelody(timbre, stringOver, pluckzOver) {
   switch (timbre) {
     // The second name is what this voice was called for one release. A saved preference may
     // still say it, and it means this string; it is not offered in any menu.
     case 'pluck': case 'veena': return makeString('pluck', stringOver);
     // The buzz-string player's tone. Built from a table rather than from parts, and not
     // tunable from the panel — see PLUCKZ_DEFAULTS for why the numbers are where they are.
-    case 'pluckz': return makePluckz();
+    case 'pluckz': return makePluckz(pluckzOver);
     case 'reed':
     case 'reed-fm': {   // a double reed — nadaswaram, shehnai. `reed-fm` is what the picker
                         // called it for a while, and a link or a saved preference may say so.
@@ -621,6 +612,11 @@ export function createToneBackend() {
   // being rebuilt — which happens on every load(), and would otherwise throw the settings
   // away the moment the piece was played again.
   let stringOver = {};
+  // Pluckz keeps its OWN. A voice is rebuilt on every play, so anything set on it has to
+  // survive the rebuild — and the two voices share the key `out`, so one bucket would hand
+  // whichever was tuned last to whichever is loaded now.
+  let pluckzOver = {};
+  const overFor = (kind) => (kind === 'pluckz' ? pluckzOver : stringOver);
 
   // Resolve once the context's clock has actually advanced, or after `capMs` either way.
   const clockAwake = (ctx, capMs = 250) => new Promise((resolve) => {
@@ -642,7 +638,7 @@ export function createToneBackend() {
       clock.reset();       // a different piece: nothing about the old one carries forward
       total = totalSec;
       ended = false;
-      synth = makeMelody(timbre, stringOver);
+      synth = makeMelody(timbre, stringOver, pluckzOver);
       // The voice's OWN level, not zero. Each one is built at the level it was balanced at
       // against the others, and assigning 0 here undid that for every voice at once — which
       // is why tuning a voice's output gain changed nothing about what it played.
@@ -801,7 +797,7 @@ export function createToneBackend() {
       return { kind: synth._kind, spec: synth._spec || null, values: synth.params() };
     },
     setVoiceParam(key, value) {
-      stringOver[key] = value;                 // remembered across the next load()
+      overFor(timbre)[key] = value;            // remembered across the next load(), per voice
       if (synth && typeof synth.set === 'function') synth.set(key, value);
       if (key === 'out' && synth) synth.volume.value = melodyMuted ? -Infinity : value;
       // And the AUDITION voice, which is a second instrument and would otherwise go on
@@ -810,6 +806,7 @@ export function createToneBackend() {
     },
     resetVoiceParams() {
       stringOver = {};
+      pluckzOver = {};
       for (const v of [synth, preview]) {
         if (v && typeof v.set === 'function')
           for (const [k, d] of Object.entries(STRING_DEFAULTS)) v.set(k, d);
@@ -860,7 +857,7 @@ export function createToneBackend() {
       // voices played the one you had left behind.
       if (!preview || preview._kind !== timbre) {
         if (preview) preview.dispose();
-        preview = makeMelody(timbre, stringOver);
+        preview = makeMelody(timbre, stringOver, pluckzOver);
       }
       const t = Tone.now();
       // From silence, every time: see the voice's own note on silence().

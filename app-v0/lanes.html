@@ -1087,6 +1087,15 @@ function syncInstrBtn(){
   if(!on) $('instrBox').hidden=true;
 }
 
+// The lane editor has no Sa control, but it does know the PIECE's Sa — and Pluckz reads its
+// register tables against Sa, so it has to be told, or the same piece is a different
+// instrument in the two windows. That is the fault v0.69.0's shared panel was fixing, in
+// another place.
+function applySa(p){
+  if(!p||!p.setVoiceParam) return;
+  try{ p.setVoiceParam('saHz', midiOf(saMidiOf())); }catch(e){}
+}
+
 function applyInstrument(p){
   if(!p||!p.setVoiceParam) return;
   // Only into the voice they belong to. These are the plucked string's settings — its panel
@@ -1233,6 +1242,7 @@ async function loadRun(){
   const p=ensurePlayer();
   p.setTimbre(timbre);                 // read at load(), so it has to be said before it
   applyInstrument(p);
+  applySa(p);                          // Pluckz reads its registers against Sa
   p._total=secs;
   p.onended=()=>stopPlay();
   p.load(scheduleEvents(seq),secs,{talaGain:mix.tala});
@@ -1259,6 +1269,7 @@ $('voice').onchange=async e=>{
   savePrefs();
   ensurePlayer().setTimbre(timbre);
   applyInstrument(player);
+  applySa(player);
   syncInstrBtn();
   if(!playing&&!paused) return;
   const was=playing, at=headAt;
