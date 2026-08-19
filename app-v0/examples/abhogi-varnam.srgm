@@ -654,8 +654,8 @@ S2{gka:"S↑"}
 R2{gka:"R↑"}
 G2{gka:"(R↑ G↑)",gcurve:[[0,-4],[0.5,-4],[0.64,0],[1,0]]}
 S2{gka:"S↑"}
-<R4{gka:"R,"}
->R2{gka:"R↑"}
+R4{gka:"R,"}
+R2{gka:"R↑"}
 S2{gka:"S↑"}
 <D2{gka:"D"}
 %@  S2 ,     >S2         S  R   G           S   R2   R   S   <D  M   D 
