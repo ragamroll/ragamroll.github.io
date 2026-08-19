@@ -603,6 +603,31 @@ export function createToneBackend() {
   // time passing — load, play, pause, stop, seek.
   const clock = makePlayClock();
   const meter = makeLatencyMeter();   // steady output delay, for the same reason
+
+  // ---- coming back from an interruption ---------------------------------------------------
+  //
+  // A phone can take the audio away outright: a call, another app, the screen locking. The
+  // context comes back 'suspended' — 'interrupted' on Safari — and nothing resumed it, so the
+  // piece stayed silent while the app went on believing it was playing. Nobody was listening
+  // for it before this.
+  //
+  // Resuming is all that is needed to put the sound back. A suspended context's clock stops
+  // with it, so the transport picks up where it left off rather than somewhere else, and the
+  // playhead re-anchors itself (makePlayClock caps how far it carries a frozen reading).
+  //
+  // A resume can be refused when there is no user gesture behind it; that is not an error
+  // worth reporting, because the next gesture will do it.
+  const wake = () => {
+    const raw = rawCtx();
+    if (!raw || transport().state !== 'started') return;
+    if (raw.state !== 'running') raw.resume().catch(() => { /* a gesture will */ });
+  };
+  const onVisible = () => { if (typeof document === 'undefined' || !document.hidden) wake(); };
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible);
+  {
+    const raw = rawCtx();
+    if (raw && raw.addEventListener) raw.addEventListener('statechange', wake);
+  }
   let total = 0;
   let ended = false;
   const clearFade = () => { if (fadeTimer) { clearTimeout(fadeTimer); fadeTimer = null; } };
@@ -934,6 +959,10 @@ export function createToneBackend() {
       // The preview voice survives load()/stop() on purpose — you audition notes
       // between takes — so only a full dispose releases it.
       if (preview) { preview.dispose(); preview = null; }
+      // A backend that is gone must not leave a handler resuming a context on its behalf.
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisible);
+      const raw = rawCtx();
+      if (raw && raw.removeEventListener) raw.removeEventListener('statechange', wake);
     },
   };
   return b;
