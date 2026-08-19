@@ -26,6 +26,7 @@ import { ScaleDialog } from './components/ScaleDialog.js';
 import { buildSequence } from './core/midi/sequence.js';
 import { writeSMF } from './core/midi/smf.js';
 import { createPlayer } from './audio/player.js';
+import { isTunable } from './audio/voices.js';
 import { scheduleEvents, totalSeconds, midiToFreq } from './audio/schedule.js';
 import { droneFreqs } from './audio/drone.js';
 import { saBaseOf, applyPlaybackPitch } from './core/retune.js';
@@ -672,6 +673,11 @@ function App({ examples }) {
   useEffect(() => {
     const p = playerRef.current;
     if (!p || !p.setVoiceParam) return;
+    // ONLY into the voice these settings belong to. They are the plucked string's — the
+    // panel that writes them exists for it alone — and `out` is a key another voice also
+    // owns, so pushing them at whatever is loaded hands Pluckz the string's Level and calls
+    // it Pluckz's own. A saved instrument is one instrument's.
+    if (!isTunable(timbre)) return;
     for (const [k, val] of Object.entries(instr)) p.setVoiceParam(k, val);
   }, [instr, timbre]);
   const onInstrSet = useCallback((key, value) => {

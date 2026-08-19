@@ -1089,6 +1089,10 @@ function syncInstrBtn(){
 
 function applyInstrument(p){
   if(!p||!p.setVoiceParam) return;
+  // Only into the voice they belong to. These are the plucked string's settings — its panel
+  // is the only thing that writes them — and `out` is a key another voice owns too, so
+  // pushing them at whatever is loaded would hand Pluckz the string's Level.
+  if(!isTunable(timbre)) return;
   let o={};
   try{ o=JSON.parse(localStorage.getItem('ragamroll.instrument'))||{}; }catch(e){}
   for(const [k,v] of Object.entries(o)) p.setVoiceParam(k,v);

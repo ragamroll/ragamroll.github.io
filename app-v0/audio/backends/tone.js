@@ -1,7 +1,7 @@
 import * as Tone from '../../vendor/tone.js';
 import { midiToFreq } from '../schedule.js';
 import { outputDelay, makePlayClock, makeLatencyMeter } from '../backend.js';
-import { SYNTH_VOICES, STRING_PARAMS, STRING_DEFAULTS } from '../voices.js';
+import { SYNTH_VOICES, STRING_PARAMS, STRING_DEFAULTS, PLUCKZ_DEFAULTS } from '../voices.js';
 
 // The ONLY module that references Tone.js. Encapsulates all Tone version specifics.
 // v14: Tone.Transport is the global transport. If a future vendored bundle exposes
@@ -227,6 +227,7 @@ function makeString(kind, over = {}) {
   };
   return {
     _kind: kind,
+    _spec: STRING_PARAMS,          // what a panel may move on this voice
     // The level this voice was BUILT at. A host that mutes and unmutes has to be able to
     // put it back, and the only number it could put back before was 0 — which threw away
     // every voice's own balance the moment it was loaded.
@@ -296,6 +297,182 @@ function makeString(kind, over = {}) {
   };
 }
 
+// ---- Pluckz --------------------------------------------------------------------
+//
+// The tone of the buzz-string notation player, reproduced rather than approximated. It is
+// here for a reason that is not "another instrument": that player's gamaka database — 3242
+// raga-specific ornaments — was authored BY EAR against this timbre. Playing an imported
+// shape on the tone it was judged on is how you tell whether the shape survived the move;
+// on any other voice, a difference could be the ornament or could be the instrument.
+//
+// Three things carry the tone, and nothing else about it is load-bearing.
+//
+// ONE: a fixed harmonic table, chosen by register. Note how weak the fundamental is against
+// the fourth harmonic in the low table — that is a veena's bridge robbing the fundamental,
+// and it is most of what makes this recognisable. It is not a mistake to be corrected.
+//
+// TWO: a plucked envelope that belongs to the STRING, not to the note — 10ms up, and six
+// seconds of exponential decay whatever the note's length. A short note simply stops part of
+// the way down. Scaling the decay to the note is what makes every note end at the same
+// loudness, and that is what stops it sounding plucked.
+//
+// THREE: a 20ms echo at 0.3, PARALLEL with the dry path. It reads as body resonance rather
+// than as a repeat, and taking it out thins the sound audibly. It is tone, not an effect: not
+// a send, not optional.
+//
+// And one addition. Those tables stop at the 13th harmonic — about 1.7kHz on a low sa — so
+// on their own they give a tone with no attack transient at all, which an ear hears as
+// somewhere between a string and a reed. A short burst of band-limited noise puts the attack
+// back. An OSCILLATOR carrying the missing harmonics was tried first and cannot be tuned out
+// of clicking: a periodic burst repeats every fundamental period, and three identical repeats
+// inside one attack is what an ear calls a click. Only aperiodic excitation is free of them.
+const PLUCKZ_TABLES = [
+  // partials[0] is the FUNDAMENTAL. (These came from Web Audio `real` arrays, whose index 0
+  // is DC; the leading zero is already dropped.)
+  { below: 150, partials: [2, 40, 50, 80, 70, 60, 40, 30, 30, 25, 20, 10, 5] },
+  { below: 280, partials: [10, 20, 18, 20, 6, 13, 10, 10, 2] },
+  { below: Infinity, partials: [13, 20, 11, 5, 5] },
+];
+const pluckzTable = (freq) => PLUCKZ_TABLES.find((t) => freq < t.below).partials;
+
+// The pick's noise, once per session from a fixed seed so a strike answers the same way
+// twice, pinked with a one-pole because white noise into a string is brighter than any
+// finger. Its own buffer rather than the plucked string's: a different length, because the
+// sweep below may run for a quarter of a second, and a different seed.
+let PLUCKZ_NOISE = null;
+function pluckzNoise() {
+  if (PLUCKZ_NOISE) return PLUCKZ_NOISE;
+  const ctx = rawCtx();
+  if (!ctx) return null;
+  const n = Math.floor(ctx.sampleRate * 0.3);
+  const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  let seed = 20260818, last = 0;
+  for (let i = 0; i < n; i++) {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    last = 0.85 * last + 0.15 * ((seed / 4294967295) * 2 - 1);
+    d[i] = last * 0.42;
+  }
+  PLUCKZ_NOISE = new Tone.ToneAudioBuffer(buf);
+  return PLUCKZ_NOISE;
+}
+
+function makePluckz(over = {}) {
+  const P = { ...PLUCKZ_DEFAULTS, ...over };
+  const out = new Tone.Volume(P.out).toDestination();
+  // The echo, built once and shared: both the tone and the pick feed it, and both feed the
+  // output directly as well.
+  const echo = new Tone.Delay(0.02), echoGain = new Tone.Gain(0.3);
+  echo.connect(echoGain); echoGain.connect(out);
+
+  // A note owns its oscillator, the way the original owns one per phrase — the harmonic
+  // table depends on the register, and a voice that is reused across notes would have to
+  // rewrite its own waveform between them.
+  let live = [];
+  const forget = (nodes, at) => {
+    live.push(...nodes);
+    // Freed a moment after the sound is over, on the page's own thread. A dispose scheduled
+    // on the audio clock is a teardown racing the render it is tearing down.
+    setTimeout(() => {
+      for (const n of nodes) { try { n.dispose(); } catch (_) { /* already gone */ } }
+      live = live.filter((n) => !nodes.includes(n));
+    }, Math.max(0, (at - (rawCtx() ? rawCtx().currentTime : 0)) * 1000) + 400);
+  };
+
+  // freq is the pitch to sound; tableFreq picks the register (a gamaka chooses ONE table,
+  // from its mean, rather than switching tables inside a gesture).
+  const strike = (freq, tableFreq, time, dur, vel, ramps) => {
+    const level = Math.max(0.05, vel);
+    const osc = new Tone.Oscillator({ frequency: Math.max(20, freq), type: 'custom',
+                                      partials: pluckzTable(tableFreq) });
+    const amp = new Tone.Gain(0);
+    osc.connect(amp); amp.connect(out); amp.connect(echo);
+    amp.gain.setValueAtTime(0.001, time);
+    amp.gain.linearRampToValueAtTime(level, time + 0.01);
+    // SIX SECONDS, always. The note's length decides where this is cut off, not how fast it
+    // falls: that is the difference between a string and an organ stop.
+    amp.gain.exponentialRampToValueAtTime(0.001, time + 6);
+    if (ramps) for (const [hz, at] of ramps) osc.frequency.linearRampToValueAtTime(Math.max(20, hz), at);
+    osc.start(time);
+    // OUT OVER A FEW MILLISECONDS, not cut. The original stops its oscillator while the
+    // envelope is still well above silence, and ends every note with a small click. This is
+    // a deliberate difference from it, and the only one.
+    const end = time + dur;
+    amp.gain.cancelScheduledValues(end);
+    amp.gain.setValueAtTime(Math.max(0.0002, level * Math.pow(0.001 / level, dur / 6)), end);
+    amp.gain.exponentialRampToValueAtTime(0.0001, end + 0.005);
+    osc.stop(end + 0.008);
+    const nodes = [osc, amp];
+
+    if (P.pick > 0) {
+      const buf = pluckzNoise();
+      if (buf) {
+        const src = new Tone.ToneBufferSource({ url: buf, fadeOut: 0.002 });
+        // Kept out of the fundamental: the pick is what happens ABOVE the note.
+        const hp = new Tone.Filter({ type: 'highpass', frequency: 2 * freq, Q: 0.7 });
+        // THE SWEEP, and it is not optional. A real pluck's noise dies bright-first — it
+        // stops being broadband well before it stops being audible — and held at a fixed
+        // width it is heard as a brush laid over the note rather than as an attack. It also
+        // makes `pickTop` mean how bright the attack STARTS, which is the more useful thing
+        // for a number to mean.
+        const start = Math.min(9000, P.pickTop * freq);
+        const settle = Math.min(start, Math.max(120, 3 * freq));
+        const lp = new Tone.Filter({ type: 'lowpass', frequency: start, Q: 0.7 });
+        lp.frequency.setValueAtTime(start, time);
+        lp.frequency.exponentialRampToValueAtTime(settle, time + P.pickDecay);
+        const pamp = new Tone.Gain(0);
+        src.connect(hp); hp.connect(lp); lp.connect(pamp);
+        pamp.connect(out); pamp.connect(echo);      // the echo hears the pick too
+        pamp.gain.setValueAtTime(0.0001, time);
+        // 8ms, not 3: three milliseconds on its own reads as a click.
+        pamp.gain.linearRampToValueAtTime(level * P.pick, time + 0.008);
+        pamp.gain.exponentialRampToValueAtTime(0.0001, time + P.pickDecay);
+        src.start(time);
+        src.stop(time + Math.min(dur, P.pickDecay + 0.05));
+        nodes.push(src, hp, lp, pamp);
+      }
+    }
+    forget(nodes, time + dur);
+  };
+
+  return {
+    _kind: 'pluckz',
+    get _db() { return P.out; },
+    volume: out.volume,
+    params() { return { ...P }; },
+    set(key, value) {
+      if (!(key in P)) return;        // a string's settings are not this instrument's
+      P[key] = value;
+      if (key === 'out') out.volume.value = value;
+    },
+    triggerAttackRelease(freq, dur, time, vel = 0.8) { strike(freq, freq, time, dur, vel, null); },
+    // The gamaka is the easy one here. The points arrive as ABSOLUTE frequencies and an
+    // oscillator's frequency is what they are — no inversion, unlike the plucked string,
+    // whose pitch lives in a comb filter's delay and where delay is 1/f.
+    curve(points, time, dur, vel = 0.8) {
+      const N = points.length;
+      let mean = 0;
+      for (const p of points) mean += p;
+      mean /= N || 1;
+      const ramps = [];
+      for (let k = 1; k < N; k++) ramps.push([points[k], time + (dur * k) / (N - 1)]);
+      strike(points[0], mean, time, dur, vel, ramps);
+    },
+    // Nothing is ringing that a new note should have to play over: each note owns its own
+    // oscillator, so silencing is stopping the ones that are still sounding.
+    silence(time) {
+      for (const n of live.slice()) {
+        try { if (n.stop) n.stop(time); } catch (_) { /* already stopped */ }
+      }
+    },
+    dispose() {
+      for (const n of live.slice()) { try { n.dispose(); } catch (_) { /* already gone */ } }
+      live = [];
+      echoGain.dispose(); echo.dispose(); out.dispose();
+    },
+  };
+}
+
 // Melody voice factory. The srgm melody is monophonic (notes never overlap), so
 // each timbre is a single MONO synth — not a PolySynth.
 //
@@ -308,6 +485,9 @@ function makeMelody(timbre, stringOver) {
     // The second name is what this voice was called for one release. A saved preference may
     // still say it, and it means this string; it is not offered in any menu.
     case 'pluck': case 'veena': return makeString('pluck', stringOver);
+    // The buzz-string player's tone. Built from a table rather than from parts, and not
+    // tunable from the panel — see PLUCKZ_DEFAULTS for why the numbers are where they are.
+    case 'pluckz': return makePluckz();
     case 'reed':
     case 'reed-fm': {   // a double reed — nadaswaram, shehnai. `reed-fm` is what the picker
                         // called it for a while, and a link or a saved preference may say so.
@@ -615,7 +795,10 @@ export function createToneBackend() {
     // asks about one draws no panel.
     voiceParams() {
       if (!synth || typeof synth.params !== 'function') return null;
-      return { kind: synth._kind, spec: STRING_PARAMS, values: synth.params() };
+      // The SPEC IS THE VOICE'S, not this function's idea of one. Handing back the string's
+      // parameter list for whatever happens to be loaded is how a panel comes to draw
+      // Brightness and Sustain over an instrument that has neither.
+      return { kind: synth._kind, spec: synth._spec || null, values: synth.params() };
     },
     setVoiceParam(key, value) {
       stringOver[key] = value;                 // remembered across the next load()

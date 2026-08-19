@@ -22,6 +22,7 @@
 // this app sounds like now, and the default a reader meets.
 export const SYNTH_VOICES = [
   ['pluck', 'Pluck'],
+  ['pluckz', 'Pluckz'],
   ['soft-am', 'Soft'],
   ['bowed-fm', 'Bowed'],
   ['reed', 'Reed'],
@@ -83,6 +84,27 @@ export const STRING_DEFAULTS = {
   damping: 4, roomSize: 0.22, roomWet: 0.1, out: 1,
 };
 
+// PLUCKZ — the tone of the buzz-string notation player, reproduced rather than approximated.
+//
+// It is here for one reason: that player's gamaka database, 3242 raga-specific ornaments,
+// was authored BY EAR against this timbre. An imported shape played on the tone it was
+// judged on can be compared with the original; played on anything else, a difference could
+// be the ornament or could be the instrument, and there is no way to tell which.
+//
+// Only the pick is a number anyone would move — the tone itself is a fixed harmonic table
+// per register, and moving it would make this a different instrument with no claim to
+// reproduce anything. All three settled by ear on real phrases:
+//
+//   pick       how much attack. At 0 no pick is built at all, which gives an exact copy of
+//              the original tone — which has no attack transient whatsoever.
+//   pickDecay  how long it lasts. Keep it under about a quarter of a second: noise audible
+//              for longer is heard as noise rather than as an attack, whatever its colour.
+//              A pick's contact with a string lasts milliseconds.
+//   pickTop    how bright the attack STARTS, as a multiple of the note — the burst sweeps
+//              down from there to about the third harmonic, because a real pluck's noise
+//              dies bright-first.
+export const PLUCKZ_DEFAULTS = { pick: 0.2, pickDecay: 0.08, pickTop: 12, out: 0 };
+
 // Slider position (0..1) <-> value, for the three scales. The panel stores and applies the
 // VALUE; only the travel is bent.
 // NAMED SETTINGS, so a reader can pick a starting point instead of finding one. A preset is
@@ -124,6 +146,13 @@ export function toSlider(p, v) {
 
 // Which voices have an instrument panel. Only the plucked string is built from parts a
 // reader can move; the rest are Tone presets with nothing meaningful to expose.
+//
+// Pluckz is NOT here, and that is a decision rather than an omission. Its numbers were
+// settled by ear against real phrases and it exists to reproduce one particular tone —
+// the one 3242 imported gamaka shapes were authored against — so a panel that let the tone
+// drift would defeat what it is for. The three that anyone would want to move are on the
+// voice (PLUCKZ_DEFAULTS below, reachable through the backend's setVoiceParam), so a reader
+// who wants them is one line from them; they are simply not offered as sliders.
 export const TUNABLE = new Set(['pluck', 'veena']);
 export const isTunable = (name) => TUNABLE.has(name);
 
