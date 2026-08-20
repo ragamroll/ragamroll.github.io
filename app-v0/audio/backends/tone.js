@@ -601,6 +601,12 @@ export function createToneBackend() {
   let droneBuilds = 0;
   let timbre = 'soft-am';   // melody voice preset; applied on the next load()
   let melodyMuted = false;  // remembered so a reload keeps the melody muted
+  // The tala's live level, REMEMBERED for the same reason the mute is. It arrives twice: as
+  // load()'s talaGain when a piece is played, and from the slider while it plays. Only the
+  // first was ever kept, so a rebuilt run came back at the level the piece STARTED at — and
+  // since the tala starts muted, a reader who had turned it up got silence back. That is not
+  // hypothetical: it is what an interrupted piece did on a phone with the tala soloed.
+  let talaVol = null;
   let masterDb = 0;         // canonical master level (dB); fades ramp around it
   let fadeTimer = null;     // pending fadeOutStop teardown; cancelled by a new load/play
   let loaded = null;        // the last load()'s arguments, for rebuilding an interrupted run
@@ -643,8 +649,30 @@ export function createToneBackend() {
     if (tr.state !== 'started') return;
     const at = tr.seconds;                     // where the piece had got to, in its own time
     reviving = true;
+    // SILENCED WHILE IT IS REBUILT, because of what a returning tab does before we get a say.
+    //
+    // A frozen page does not schedule; when it thaws, the browser flushes every timer it held
+    // back, all at once. Each note whose moment has passed is triggered immediately, on top of
+    // the others — a burst of the last second or two of the piece played as a chord. Reported
+    // as "garbled at first, then it settles", and the settling is the backlog running dry.
+    //
+    // That burst is committed to the audio thread before this handler ever runs, so it cannot
+    // be prevented here; it can be not heard. The output is taken down, the run is rebuilt,
+    // and the level comes back — a break in the sound instead of a mess.
+    //
+    // Ramped rather than switched: a gain that jumps to silence clicks, and a click is what
+    // this is trying to spare the reader.
+    const d = destination();
+    try { d.volume.rampTo(-60, 0.01); } catch (_) { d.volume.value = -60; }
+    const unmute = () => {
+      try { d.volume.rampTo(masterDb, 0.05); } catch (_) { d.volume.value = masterDb; }
+    };
     try {
-      b.load(loaded.events, loaded.totalSec, loaded.opts);
+      // WITH THE MIX AS IT STANDS, not as it stood when Play was pressed. Everything the
+      // sliders have done since is live state on the backend, and a rebuild that restores
+      // the load-time arguments quietly undoes all of it.
+      b.load(loaded.events, loaded.totalSec,
+             { ...loaded.opts, talaGain: talaVol != null ? talaVol : loaded.opts.talaGain });
       b.seek(at);
       b.play();
       // THE DRONE TOO, and it is the one that matters most. The melody is a series of short
@@ -660,6 +688,9 @@ export function createToneBackend() {
         b.setDrone(want.freqs, want.vol);
       }
       revivals++;
+      // After the rebuild has had time to schedule its first notes, not before: unmuting
+      // into the tail of the flush would put the burst back.
+      setTimeout(unmute, 120);
     } finally { reviving = false; }
   };
 
@@ -739,7 +770,9 @@ export function createToneBackend() {
     onended: null,
     // opts.talaGain (0..1) is the tala track's initial live volume.
     load(events, totalSec, opts = {}) {
-      const talaGain = opts.talaGain != null ? opts.talaGain : 1;
+      // What the host asked for now, or failing that whatever the slider was last set to.
+      const talaGain = opts.talaGain != null ? opts.talaGain : (talaVol != null ? talaVol : 1);
+      talaVol = talaGain;
       loaded = { events, totalSec, opts };   // kept so an interrupted run can be rebuilt
       clearFade();         // a new load supersedes any pending fade teardown
       b.disposeMelody();   // keep the drone playing across sequence reloads
@@ -931,6 +964,7 @@ export function createToneBackend() {
     // guard can ask what it actually got instead of trusting what it asked for.
     revivals() { return revivals; },
     droneBuilds() { return droneBuilds; },
+    talaLevel() { return talaVol; },       // what the tala is set to, for a guard to check
     // The voices this backend implements — the list the pickers are built from.
     voices() { return SYNTH_VOICES.map(([v]) => v); },
     // Constant tambura-style drone: sustained Sa/Pa voices, independent of the
@@ -1020,6 +1054,7 @@ export function createToneBackend() {
     },
     // Tala track volume (0..1), live — takes effect on a currently playing piece.
     setTalaVolume(vol) {
+      talaVol = vol;                         // so a rebuild comes back at THIS level
       if (tala) tala.volume.value = talaDb(vol);
     },
     // Melody mute (live) — lets the user solo tala + drone to set their levels.
