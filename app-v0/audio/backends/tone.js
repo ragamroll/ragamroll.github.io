@@ -594,6 +594,11 @@ export function createToneBackend() {
   let tala = null;       // tala voice — separate so its volume is live
   let drone = null;      // separate sustained voice; survives load/play/stop
   let droneKey = '';     // freqs signature — lets volume change without re-voicing
+  // What the host last asked the drone to be, so an interrupted one can be built again, and
+  // how many have been built — a guard can hear that a drone is sounding but not that it is
+  // a NEW one, which is the whole question here.
+  let droneWanted = null;
+  let droneBuilds = 0;
   let timbre = 'soft-am';   // melody voice preset; applied on the next load()
   let melodyMuted = false;  // remembered so a reload keeps the melody muted
   let masterDb = 0;         // canonical master level (dB); fades ramp around it
@@ -642,6 +647,18 @@ export function createToneBackend() {
       b.load(loaded.events, loaded.totalSec, loaded.opts);
       b.seek(at);
       b.play();
+      // THE DRONE TOO, and it is the one that matters most. The melody is a series of short
+      // plucks, each built when it is struck; the drone is three oscillators that have been
+      // sounding continuously since Play — straight through the interruption. Nothing else
+      // rebuilds it: the host only calls droneOff/setDrone when playback starts or stops, and
+      // setDrone deliberately does nothing when the frequencies have not changed. So an
+      // interrupted drone went on being whatever the interruption left it as, which is what
+      // "the audio is all garbled and noisy" sounds like when the garbled thing never stops.
+      if (droneWanted) {
+        const want = droneWanted;
+        b.droneOff();
+        b.setDrone(want.freqs, want.vol);
+      }
       revivals++;
     } finally { reviving = false; }
   };
@@ -913,6 +930,7 @@ export function createToneBackend() {
     // sound like a piece playing — so the backend counts, the way voiceKind() exists so a
     // guard can ask what it actually got instead of trusting what it asked for.
     revivals() { return revivals; },
+    droneBuilds() { return droneBuilds; },
     // The voices this backend implements — the list the pickers are built from.
     voices() { return SYNTH_VOICES.map(([v]) => v); },
     // Constant tambura-style drone: sustained Sa/Pa voices, independent of the
@@ -923,8 +941,11 @@ export function createToneBackend() {
       if (!freqs || !freqs.length || vol <= 0) { b.droneOff(); return; }
       const key = freqs.join(',');
       const db = droneDb(vol);
+      droneWanted = { freqs: freqs.slice(), vol };
       if (drone && key === droneKey) { drone.volume.value = db; return; }  // live volume
       b.droneOff();
+      droneWanted = { freqs: freqs.slice(), vol };   // droneOff clears it; this is still wanted
+      droneBuilds++;
       Tone.start();
       drone = new Tone.PolySynth(Tone.Synth).toDestination();
       drone.set({ oscillator: { type: 'sine' },
@@ -1010,6 +1031,7 @@ export function createToneBackend() {
     // sampled sets are gone, and every voice here is made of oscillators and filters.
     setTimbre(name) { timbre = name; },
     droneOff() {
+      droneWanted = null;      // asked for silence: an interruption must not bring it back
       if (!drone) return;
       try { drone.releaseAll ? drone.releaseAll() : drone.triggerRelease(); } catch {}
       drone.dispose();
