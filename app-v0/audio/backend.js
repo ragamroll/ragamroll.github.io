@@ -65,6 +65,32 @@ export function outputDelay(ctx) {
 }
 
 /**
+ * CAN THIS PAGE MAKE THE SOUND AT ALL?
+ *
+ * The plucked string is a comb filter and the tala's strum is a PluckSynth, and Tone builds
+ * both on an AudioWorklet. A browser only provides AudioWorklet in a SECURE CONTEXT — https,
+ * or localhost. Served over plain http from a machine on the network, which is how anyone
+ * would try this app out on a phone, those voices cannot be created and simply make no sound.
+ * The drone is oscillators and needs no worklet, so it plays perfectly.
+ *
+ * The result is an app that appears to work — the playhead runs, the roll scrolls, the drone
+ * sounds — and has no melody, with the explanation sitting in a console nobody is looking at
+ * on a phone. It cost an evening of chasing a fault that was not in the app.
+ *
+ * So the app asks, and says so on the page.
+ */
+export function audioSupport() {
+  if (typeof globalThis.AudioWorkletNode === 'function') return { ok: true, why: '' };
+  const secure = globalThis.isSecureContext !== false;
+  return {
+    ok: false,
+    why: secure
+      ? 'This browser has no AudioWorklet, which the plucked voices are built on. The drone will play and the melody will not.'
+      : 'The melody needs https. Served over plain http (other than localhost) a browser withholds AudioWorklet, which the plucked string and the tala strum are built on — so you get the drone and nothing else.',
+  };
+}
+
+/**
  * A PLAYHEAD CLOCK: the transport's own reading, carried forward with wall time between
  * its updates.
  *

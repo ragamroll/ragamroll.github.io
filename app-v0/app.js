@@ -27,6 +27,7 @@ import { buildSequence } from './core/midi/sequence.js';
 import { writeSMF } from './core/midi/smf.js';
 import { createPlayer } from './audio/player.js';
 import { isTunable } from './audio/voices.js';
+import { audioSupport } from './audio/backend.js';
 import { scheduleEvents, totalSeconds, midiToFreq } from './audio/schedule.js';
 import { droneFreqs } from './audio/drone.js';
 import { saBaseOf, applyPlaybackPitch } from './core/retune.js';
@@ -63,6 +64,10 @@ const LS_GMOVE = 'ragamroll.gamakaOnMove';
 // it is how this instrument sounds to this pair of ears, the same class of thing as the
 // mixer levels, and no notation should carry it.
 const LS_INSTR = 'ragamroll.instrument';
+// Asked once: whether this page is allowed to build the voices at all. It cannot change
+// while the page is open, and a reader who cannot hear the melody should be told why on the
+// page rather than in a console they have no way to open on a phone.
+const AUDIO = audioSupport();
 const LS_GKA = 'ragamroll.showSource';       // the provenance strip, on or off
 const LS_READ = 'ragamroll.reading';         // the notation folded to its swaras
 const DEFAULT_NAME = 'ragamroll';
@@ -1077,6 +1082,7 @@ function App({ examples }) {
   }, [playState, stacked, rollFirst, editorPct, drawerH, laneData, lanesSide, lanesOrder]);
 
   return html`
+    ${!AUDIO.ok && html`<div class="audio-warning" role="status">⚠ ${AUDIO.why}</div>`}
     <${Toolbar} docName=${docName} blank=${noteCount === 0} duration=${duration} />
     ${instrOpen && html`<${InstrumentDialog} values=${instr} onSet=${onInstrSet}
                                         onReset=${onInstrReset} onAudition=${onInstrAudition}

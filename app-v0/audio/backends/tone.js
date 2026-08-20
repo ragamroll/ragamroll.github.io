@@ -598,6 +598,7 @@ export function createToneBackend() {
   let melodyMuted = false;  // remembered so a reload keeps the melody muted
   let masterDb = 0;         // canonical master level (dB); fades ramp around it
   let fadeTimer = null;     // pending fadeOutStop teardown; cancelled by a new load/play
+  let loaded = null;        // the last load()'s arguments, for rebuilding an interrupted run
   // What position() hands the DRAWING: the transport's reading, smoothed between its
   // steps (see makePlayClock). Reset wherever the position moves by something other than
   // time passing — load, play, pause, stop, seek.
@@ -617,10 +618,36 @@ export function createToneBackend() {
   //
   // A resume can be refused when there is no user gesture behind it; that is not an error
   // worth reporting, because the next gesture will do it.
+  // WHAT AN INTERRUPTION ACTUALLY BREAKS, and it is not the context.
+  //
+  // Reported from Android: leave the app and the sound breaks up, and coming back does not
+  // mend it — the roll goes on animating and what comes out is noise. But pressing Stop and
+  // then Play mends it completely. That is the whole diagnosis: Stop and Play do one thing
+  // resuming does not, which is BUILD THE VOICES AGAIN and schedule the piece afresh. The
+  // context survives the interruption; the graph hanging off it does not.
+  //
+  // So a run that was playing when the audio was taken away is rebuilt where it stood: the
+  // same events, reloaded — which disposes the old voices and makes new ones — then seeked
+  // back to where the piece had got to, and started again. What a reader hears is a small
+  // break rather than a broken instrument, and the playhead does not jump.
+  let reviving = false;
+  const revive = () => {
+    if (reviving || !loaded || ended) return;
+    const tr = transport();
+    if (tr.state !== 'started') return;
+    const at = tr.seconds;                     // where the piece had got to, in its own time
+    reviving = true;
+    try {
+      b.load(loaded.events, loaded.totalSec, loaded.opts);
+      b.seek(at);
+      b.play();
+    } finally { reviving = false; }
+  };
   const wake = () => {
     const raw = rawCtx();
     if (!raw || transport().state !== 'started') return;
-    if (raw.state !== 'running') raw.resume().catch(() => { /* a gesture will */ });
+    if (raw.state === 'running') return;
+    raw.resume().then(revive).catch(() => { /* a gesture will */ });
   };
   const onVisible = () => { if (typeof document === 'undefined' || !document.hidden) wake(); };
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible);
@@ -658,6 +685,7 @@ export function createToneBackend() {
     // opts.talaGain (0..1) is the tala track's initial live volume.
     load(events, totalSec, opts = {}) {
       const talaGain = opts.talaGain != null ? opts.talaGain : 1;
+      loaded = { events, totalSec, opts };   // kept so an interrupted run can be rebuilt
       clearFade();         // a new load supersedes any pending fade teardown
       b.disposeMelody();   // keep the drone playing across sequence reloads
       clock.reset();       // a different piece: nothing about the old one carries forward

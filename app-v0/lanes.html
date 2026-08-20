@@ -293,6 +293,7 @@ import { readingBlocks, walkTokens } from './core/gamaka-inline.js';
 import { encodeShareToken, readSharedSource } from './core/share.js';
 import { MELODY_VOICES, STRING_PARAMS, STRING_DEFAULTS, STRING_PRESETS,
          fromSlider, toSlider, isTunable } from './audio/voices.js';
+import { audioSupport } from './audio/backend.js';
 import { EDO } from './core/shruti.js';
 import { buildSequence } from './core/midi/sequence.js';
 import { scheduleEvents, totalSeconds } from './audio/schedule.js';
@@ -990,6 +991,21 @@ let tempoMult=1;
 // find out from in here — so it is shown, and it can be trimmed.
 let syncMs=parseFloat(localStorage.getItem('lanes.sync'))||0;
 let timbre='pluck';                 // melody voice; part of what is loaded, so part of runKey
+// SAID ON THE PAGE. Over plain http a browser withholds AudioWorklet, which the plucked
+// string and the tala strum are built on, so this page plays a drone and no melody with the
+// reason in a console — which on a phone is nowhere. The app says the same thing its own way.
+{
+  const support = audioSupport();
+  if (!support.ok) {
+    const bar = document.createElement('div');
+    bar.setAttribute('role', 'status');
+    bar.style.cssText = 'background:#4a3c12;color:#ffe9a8;border-bottom:1px solid #6b5a20;'
+      + 'padding:8px 12px;font-size:14px;line-height:1.4';
+    bar.textContent = '\u26a0 ' + support.why;
+    document.body.insertBefore(bar, document.body.firstChild);
+  }
+}
+
 // The instrument's own settings, as the APP's panel left them. The panel lives there — this
 // page has no room for one and no need of its own — but the sound has to be the same sound:
 // a string tuned in one window and heard untuned in the other is two instruments, and the

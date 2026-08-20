@@ -115,6 +115,10 @@
       background:var(--panel); border:1px solid var(--hair); border-radius:6px; min-width:11rem; padding:.25rem;
       display:flex; flex-direction:column; box-shadow:0 -8px 30px rgba(0,0,0,.5);
       max-height:min(70vh, 30rem); overflow-y:auto; overscroll-behavior:contain; }
+    /* Said on the page, not in the console: over plain http a browser withholds AudioWorklet
+       and the plucked voices make no sound at all. */
+    .audio-warning { background:#fff3cd; color:#5c4400; border-bottom:1px solid #e0c97f;
+      padding:8px 12px; font-size:14px; line-height:1.4; }
     .openmenu-item { display:block; width:100%; text-align:left; background:none; border:0; color:var(--ink);
       padding:.35rem .5rem; border-radius:4px; cursor:pointer; font:inherit; }
     .openmenu-item:hover { background:var(--panel2); }
