@@ -631,6 +631,7 @@ export function createToneBackend() {
   // back to where the piece had got to, and started again. What a reader hears is a small
   // break rather than a broken instrument, and the playhead does not jump.
   let reviving = false;
+  let revivals = 0;
   const revive = () => {
     if (reviving || !loaded || ended) return;
     const tr = transport();
@@ -641,7 +642,41 @@ export function createToneBackend() {
       b.load(loaded.events, loaded.totalSec, loaded.opts);
       b.seek(at);
       b.play();
+      revivals++;
     } finally { reviving = false; }
+  };
+
+  // AND IT CANNOT WAIT FOR THE CONTEXT TO ADMIT IT. The first version of this rebuilt only
+  // when the context reported itself something other than 'running', which is what a clean
+  // suspend looks like. Android does not always do that: the app comes back, the context
+  // says 'running', the clock advances, and what comes out is noise — which is precisely
+  // what was reported, twice, and why the first fix did not take.
+  //
+  // So the evidence used is HAVING BEEN AWAY, not the context's own account of itself. A
+  // rebuild is cheap and a stuck instrument is not: away for more than a moment, or an audio
+  // clock that lost time against the wall while we were gone, and the run is rebuilt.
+  //
+  // The threshold keeps an accidental blur from breaking the sound for no reason — a glance
+  // at another window and back does not rebuild anything.
+  let hiddenAt = 0, hiddenClock = 0;
+  const AWAY_ENOUGH = 1;        // seconds away before a return is treated as an interruption
+  const onHide = () => {
+    const raw = rawCtx();
+    hiddenAt = Date.now();
+    hiddenClock = raw ? raw.currentTime : 0;
+  };
+  const onShow = () => {
+    const raw = rawCtx();
+    if (!raw || transport().state !== 'started') return;
+    if (raw.state !== 'running') { raw.resume().then(revive).catch(() => { /* a gesture will */ }); return; }
+    if (!hiddenAt) return;
+    const away = (Date.now() - hiddenAt) / 1000;
+    const clockRan = raw.currentTime - hiddenClock;
+    // Either we were gone long enough that the phone will have taken the audio, or the audio
+    // clock stood still while the wall clock did not — which is an interruption whatever the
+    // context calls itself.
+    if (away > AWAY_ENOUGH || clockRan < away * 0.8) revive();
+    hiddenAt = 0;
   };
   const wake = () => {
     const raw = rawCtx();
@@ -649,7 +684,10 @@ export function createToneBackend() {
     if (raw.state === 'running') return;
     raw.resume().then(revive).catch(() => { /* a gesture will */ });
   };
-  const onVisible = () => { if (typeof document === 'undefined' || !document.hidden) wake(); };
+  const onVisible = () => {
+    if (typeof document === 'undefined') { wake(); return; }
+    if (document.hidden) onHide(); else onShow();
+  };
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible);
   {
     const raw = rawCtx();
@@ -870,6 +908,11 @@ export function createToneBackend() {
     // switch does not know and this reports what you got instead of what you wanted, which
     // is the only way that mistake is visible from outside.
     voiceKind() { return synth && synth._kind ? synth._kind : ''; },
+    // How many times a run has been rebuilt after an interruption. A guard cannot hear the
+    // difference between a piece that carried on and one that was rebuilt mid-flight — both
+    // sound like a piece playing — so the backend counts, the way voiceKind() exists so a
+    // guard can ask what it actually got instead of trusting what it asked for.
+    revivals() { return revivals; },
     // The voices this backend implements — the list the pickers are built from.
     voices() { return SYNTH_VOICES.map(([v]) => v); },
     // Constant tambura-style drone: sustained Sa/Pa voices, independent of the
