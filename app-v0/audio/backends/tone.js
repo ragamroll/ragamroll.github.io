@@ -607,6 +607,10 @@ export function createToneBackend() {
   // since the tala starts muted, a reader who had turned it up got silence back. That is not
   // hypothetical: it is what an interrupted piece did on a phone with the tala soloed.
   let talaVol = null;
+  // The audio time that maps to transport zero. It is what lets this ask the AUDIO CLOCK how
+  // far the piece should have got, rather than asking the transport, which is the thing that
+  // stops when the page is frozen.
+  let runOrigin = null;
   let masterDb = 0;         // canonical master level (dB); fades ramp around it
   let fadeTimer = null;     // pending fadeOutStop teardown; cancelled by a new load/play
   let loaded = null;        // the last load()'s arguments, for rebuilding an interrupted run
@@ -641,13 +645,26 @@ export function createToneBackend() {
   // same events, reloaded — which disposes the old voices and makes new ones — then seeked
   // back to where the piece had got to, and started again. What a reader hears is a small
   // break rather than a broken instrument, and the playhead does not jump.
+  // HOW FAR THE PIECE SHOULD HAVE GOT, asked of the audio clock. The transport is the thing
+  // that stops when the page is frozen; the audio clock is not, so the gap between them IS
+  // the interruption, measured rather than inferred from events that may never arrive.
+  const expectedSeconds = () => {
+    const raw = rawCtx();
+    if (!raw || runOrigin == null) return null;
+    return raw.currentTime - runOrigin;
+  };
+
   let reviving = false;
   let revivals = 0;
   const revive = () => {
     if (reviving || !loaded || ended) return;
     const tr = transport();
     if (tr.state !== 'started') return;
-    const at = tr.seconds;                     // where the piece had got to, in its own time
+    // WHERE REAL TIME HAS TAKEN IT, not where the stalled transport stopped. Seeking back to
+    // the transport's own reading is what makes the missed minute play again at speed; the
+    // audio clock ran throughout, and the piece with it, so this is where the reader is.
+    const should = expectedSeconds();
+    const at = Math.max(0, Math.min(loaded.totalSec, should == null ? tr.seconds : should));
     reviving = true;
     // SILENCED WHILE IT IS REBUILT, because of what a returning tab does before we get a say.
     //
@@ -708,23 +725,95 @@ export function createToneBackend() {
   // at another window and back does not rebuild anything.
   let hiddenAt = 0, hiddenClock = 0;
   const AWAY_ENOUGH = 1;        // seconds away before a return is treated as an interruption
+
+  // STOP THE MUSIC WHEN NOBODY CAN SCHEDULE IT.
+  //
+  // Everything above this — the rebuild, the drift, the hush — exists because a piece goes on
+  // running while the page that schedules it is frozen. It cannot schedule, so the notes
+  // arrive late in a heap; the voices are left mid-flight in a graph the phone has stopped;
+  // and waking up means replaying whatever was missed. None of that is reachable if the piece
+  // is not running.
+  //
+  // So it pauses when the page goes away and picks up when it comes back. The cost is stated
+  // plainly: this is not a background player, and it cannot become one by accident. A piece
+  // that plays on while you read something else needs its notes committed to the audio clock
+  // up front and a Media Session so the phone treats this as a media app — real work, not a
+  // side effect of leaving the transport running.
+  //
+  // The rebuild stays as a BACKSTOP, because this pause depends on being told the page went
+  // away and a phone is not obliged to tell us. Told, we pause; not told, the audio clock
+  // still shows the gap when we get back.
+  let pausedByHide = false;
+  let retryArmed = false;
+  let droneBeforeHide = null;   // the drone is not the transport's, so pausing does not stop it
+  const resumeAfterHide = () => {
+    if (!pausedByHide) return;
+    pausedByHide = false;
+    const want = droneBeforeHide;
+    Promise.resolve(b.play()).then(() => {
+      if (want) { droneBeforeHide = null; b.setDrone(want.freqs, want.vol); }
+    }).catch(() => {
+      // Refused for want of a gesture. Stay paused and take the next touch as the gesture,
+      // rather than leaving a reader with a transport that says it is playing and is not.
+      pausedByHide = true;
+      if (retryArmed || typeof document === 'undefined') return;
+      retryArmed = true;
+      const once = () => {
+        document.removeEventListener('pointerdown', once);
+        document.removeEventListener('keydown', once);
+        retryArmed = false;
+        resumeAfterHide();
+      };
+      document.addEventListener('pointerdown', once, { once: true });
+      document.addEventListener('keydown', once, { once: true });
+    });
+  };
+
   const onHide = () => {
     const raw = rawCtx();
     hiddenAt = Date.now();
     hiddenClock = raw ? raw.currentTime : 0;
+    if (transport().state !== 'started') return;
+    b.pause();
+    pausedByHide = true;
+    // A PAUSED TRANSPORT IS NOT SILENCE. It stops notes being STARTED; it does not stop the
+    // one that is ringing, and it has no authority at all over the drone, which is
+    // independent of the transport by contract and would go on sounding into a page nobody
+    // is looking at. Measured: 0.19 of level half a second after the pause.
+    droneBeforeHide = droneWanted;
+    b.droneOff();
+    // AND THAT IS ENOUGH FOR SILENCE, without touching a single voice. A paused transport
+    // does not stop a sustaining note and has no authority over the drone — soft-am was
+    // still sounding at 0.12 half a second after the pause — but with the transport stopped
+    // and the drone gone, idleSuspend() finds nothing playing and suspends the context. A
+    // suspended context renders nothing at all, which is a stronger silence than any volume.
+    //
+    // An earlier version took the master down as well. It could not: the ramp was scheduled
+    // on a clock that had just stopped, so the level never moved, and the analyser that was
+    // meant to prove the silence had frozen on its last buffer — the same trap as the
+    // "residual noise" that turned out to be a stopped context earlier the same day.
   };
   const onShow = () => {
     const raw = rawCtx();
-    if (!raw || transport().state !== 'started') return;
+    if (!raw) return;
+    // The ordinary way back: we stopped it on the way out, so start it again. Nothing drifted
+    // and nothing needs rebuilding, because nothing was running to go wrong.
+    if (pausedByHide) { resumeAfterHide(); return; }
+    if (transport().state !== 'started') return;
     if (raw.state !== 'running') { raw.resume().then(revive).catch(() => { /* a gesture will */ }); return; }
-    if (!hiddenAt) return;
-    const away = (Date.now() - hiddenAt) / 1000;
-    const clockRan = raw.currentTime - hiddenClock;
-    // Either we were gone long enough that the phone will have taken the audio, or the audio
-    // clock stood still while the wall clock did not — which is an interruption whatever the
-    // context calls itself.
-    if (away > AWAY_ENOUGH || clockRan < away * 0.8) revive();
+    // NOT CONDITIONAL ON HAVING SEEN THE HIDE. It was, and that is why a frozen page came
+    // back racing on a phone: Android freezes a page before the hidden event is handled, or
+    // without delivering it, so `hiddenAt` stayed zero and this returned without doing
+    // anything at all. Where the piece OUGHT to be is knowable without any of that.
+    const should = expectedSeconds();
+    const behind = should == null ? 0 : should - transport().seconds;
+    const away = hiddenAt ? (Date.now() - hiddenAt) / 1000 : 0;
+    const clockRan = hiddenAt ? raw.currentTime - hiddenClock : 0;
     hiddenAt = 0;
+    // A transport half a second behind the audio clock has missed that much of the piece and
+    // is about to replay it: Tone hands a woken clock every tick it slept through, in a
+    // burst, which is the racing roll and the garble that clears.
+    if (behind > 0.5 || away > AWAY_ENOUGH || (hiddenClock && clockRan < away * 0.8)) revive();
   };
   const wake = () => {
     const raw = rawCtx();
@@ -877,8 +966,10 @@ export function createToneBackend() {
       // The runway is the output delay itself, floored at 60ms: whatever the device
       // needs to get sound out is what it needs to get the FIRST sound out.
       transport().start('+' + Math.max(0.06, outputDelay(rawCtx())).toFixed(3));
+      // Where transport zero sits on the audio clock, for expectedSeconds() below.
+      { const raw = rawCtx(); runOrigin = raw ? raw.currentTime - transport().seconds : null; }
     },
-    pause() { transport().pause(); clock.reset(); },
+    pause() { pausedByHide = false; transport().pause(); clock.reset(); },
     // Move the play position without playing. The point is a run that starts somewhere
     // other than the top: scheduled callbacks before `sec` simply never fire, and the
     // ones after it keep the times they were given. Only meaningful between load() and
@@ -894,6 +985,7 @@ export function createToneBackend() {
     },
     stop() {
       ended = false;
+      pausedByHide = false;      // a stopped piece is not one waiting to be resumed
       clock.reset();
       const tr = transport();
       tr.stop();
@@ -965,6 +1057,9 @@ export function createToneBackend() {
     revivals() { return revivals; },
     droneBuilds() { return droneBuilds; },
     talaLevel() { return talaVol; },       // what the tala is set to, for a guard to check
+    // Whether the backend stopped the music because the page went away, as against a reader
+    // having pressed pause. A guard cannot tell those apart by listening.
+    haltedByHide() { return pausedByHide; },
     // The voices this backend implements — the list the pickers are built from.
     voices() { return SYNTH_VOICES.map(([v]) => v); },
     // Constant tambura-style drone: sustained Sa/Pa voices, independent of the
