@@ -1,4 +1,4 @@
-const CACHE = 'ragamroll-79e2b49';
+const CACHE = 'ragamroll-d84fee8';
 
 // SERVED FROM A LOCAL SERVER: stand down entirely.
 //
@@ -23,7 +23,7 @@ const ASSETS = [
   './components/Footer.js', './components/OpenMenu.js', './components/ScaleDialog.js', './components/TalaDialog.js',
   './components/RagaDialog.js',
   './audio/schedule.js', './audio/drone.js', './audio/backend.js', './audio/backends/tone.js', './audio/backends/webaudio.js', './audio/player.js',
-  './core/parser.js', './core/gamaka-inline.js', './core/gamaka-curve.js', './core/tuning.js', './core/raga-base.js', './core/raga-db.json', './core/reference.js',
+  './core/app-update.js', './core/parser.js', './core/gamaka-inline.js', './core/gamaka-curve.js', './core/tuning.js', './core/raga-base.js', './core/raga-db.json', './core/reference.js',
   './core/shruti.js', './core/melakarta.js', './core/tala-preview.js', './core/raga-shruti.js', './core/share.js', './core/share-legacy.js',
   './core/raga-ext.js', './core/raga-preview.js', './core/retune.js',
   './core/detect.js', './core/detect-raga-helper.js', './core/note-edit.js', './core/raga-seed.js', './core/raga-switchboard.js',
@@ -51,6 +51,12 @@ self.addEventListener('install', (e) => {
     await precacheExamples(c);
     await self.skipWaiting();
   })());
+});
+// A page asking to be moved along. This worker already calls skipWaiting() on install, so
+// nothing normally waits — but a future one that drops that would sit in 'waiting' until
+// every tab closed, and the footer's Update button is the thing that would move it.
+self.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 self.addEventListener('activate', (e) => {
   // On a dev host this also CLEARS whatever an earlier visit left behind, so the fix

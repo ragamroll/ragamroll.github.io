@@ -11,24 +11,42 @@ import { MELODY_VOICES, isTunable } from '../audio/voices.js';
 // to read. Local state rather than the app's, because it belongs to the BROWSER, not the
 // piece; it listens for fullscreenchange so leaving by Escape is reflected here too.
 // webkit-prefixed fallbacks for older iOS Safari, where the unprefixed call is missing.
+// Fullscreen, asked of BOTH things that can be true. An element can be fullscreen
+// (document.fullscreenElement), or the whole window can be — which is what an installed app
+// looks like, and which leaves fullscreenElement null.
+const isFull = () => !!(document.fullscreenElement || document.webkitFullscreenElement
+  || (window.matchMedia && window.matchMedia('(display-mode: fullscreen)').matches));
+
 function FullscreenButton() {
   const [on, setOn] = useState(false);
   useEffect(() => {
-    const sync = () => setOn(!!(document.fullscreenElement || document.webkitFullscreenElement));
+    const sync = () => setOn(isFull());
     document.addEventListener('fullscreenchange', sync);
     document.addEventListener('webkitfullscreenchange', sync);
+    // AND THE DISPLAY MODE, which is the one that answers on an installed app. A PWA can be
+    // showing fullscreen without document.fullscreenElement being set — the window is
+    // fullscreen, not an element — and the button then read as "not fullscreen", offered to
+    // enter it again, and left a reader with no way back out. Reported from a phone.
+    const mq = window.matchMedia ? window.matchMedia('(display-mode: fullscreen)') : null;
+    if (mq && mq.addEventListener) mq.addEventListener('change', sync);
     sync();
     return () => {
       document.removeEventListener('fullscreenchange', sync);
       document.removeEventListener('webkitfullscreenchange', sync);
+      if (mq && mq.removeEventListener) mq.removeEventListener('change', sync);
     };
   }, []);
   const toggle = useCallback(() => {
     const d = document, el = d.documentElement;
-    if (!d.fullscreenElement && !d.webkitFullscreenElement) {
-      (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el);
+    if (isFull()) {
+      // Both spellings, and a promise that may reject — exitFullscreen rejects when the
+      // document is not the one that asked, and an unhandled rejection here would be a
+      // button that appears to do nothing.
+      const exit = (d.exitFullscreen || d.webkitExitFullscreen);
+      if (exit) { try { Promise.resolve(exit.call(d)).catch(() => {}); } catch (_) { /* older engine */ } }
     } else {
-      (d.exitFullscreen || d.webkitExitFullscreen || (() => {})).call(d);
+      const enter = (el.requestFullscreen || el.webkitRequestFullscreen);
+      if (enter) { try { Promise.resolve(enter.call(el)).catch(() => {}); } catch (_) { /* refused */ } }
     }
   }, []);
   return html`<button class="fs-btn" onClick=${toggle} aria-pressed=${on}
