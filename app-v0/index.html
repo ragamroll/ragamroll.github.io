@@ -593,15 +593,29 @@
     // The height the app is allowed to be, in pixels, from the viewport that is actually
     // visible — and re-asked whenever that changes: entering or leaving fullscreen, the
     // address bar sliding away, the keyboard arriving, a rotation.
+    // WRITTEN ONLY WHEN IT CHANGES, and never more than once a frame. Setting a custom
+    // property on the root invalidates style and layout for everything that reads it, which
+    // is the whole app — and on a phone visualViewport fires as the address bar slides and
+    // as the page rubber-bands, so the first version of this did that layout on every one of
+    // them. It starved the note scheduler, and a fresh play crackled from its first second.
+    // Desktop never showed it: there, those events barely fire.
+    //
+    // The SCROLL listener is gone entirely. Scrolling does not change the height; it was
+    // belt-and-braces, and it was the one firing constantly.
     const vv = window.visualViewport;
-    const fit = () => {
-      const h = (vv && vv.height) || window.innerHeight;
-      document.documentElement.style.setProperty('--app-h', Math.round(h) + 'px');
+    let applied = -1, queued = false;
+    const write = () => {
+      queued = false;
+      const h = Math.round((vv && vv.height) || window.innerHeight);
+      if (h === applied) return;          // nothing to invalidate
+      applied = h;
+      document.documentElement.style.setProperty('--app-h', h + 'px');
     };
-    fit();
+    const fit = () => { if (queued) return; queued = true; requestAnimationFrame(write); };
+    write();
     addEventListener('resize', fit);
     addEventListener('orientationchange', fit);
-    if (vv) { vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit); }
+    if (vv) vv.addEventListener('resize', fit);
     // Entering fullscreen can leave the page scrolled down, which is how the head bar went
     // missing. The size is re-taken a beat later as well: the window is not always its final
     // size at the moment the event fires.
