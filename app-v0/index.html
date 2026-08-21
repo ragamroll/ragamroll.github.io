@@ -46,7 +46,16 @@
     * { box-sizing: border-box; }
     html, body { height:100%; }
     body { margin: 0; font-family: var(--sans); background:var(--bg); color:var(--ink); }
-    #app { height:100vh; height:100dvh; display:flex; flex-direction:column; overflow:hidden; }
+    /* SIZED FROM THE VISIBLE VIEWPORT, with the unit as the fallback.
+       In fullscreen on a phone, dvh reported more than what was actually visible: the app
+       came out taller than the screen, so the head bar — which holds the button that LEAVES
+       fullscreen — sat off the top with a scroll needed to reach it. Android's own "drag from
+       the top" only shows the status bar; it does not exit, and the thing that does was the
+       thing pushed out of reach. --app-h is set from visualViewport.height, which is the one
+       measurement that means what it says. */
+    html, body { overflow:hidden; overscroll-behavior:none; }
+    #app { height:100vh; height:100dvh; height:var(--app-h, 100dvh);
+      display:flex; flex-direction:column; overflow:hidden; }
     /* ONE ROW, always. The head holds a name, two links, a readout and fullscreen —
        nothing that needs a second line, and the readout wrapping to full width pushed
        the fullscreen button onto a row of its own. It shrinks and ellipses instead, so
@@ -580,5 +589,25 @@
   <!-- The worker is registered by core/app-update.js, which the footer uses to watch for a
        newer build and offer the reload that enters it. Registering here as well would race
        it for the same registration. -->
+  <script type="module">
+    // The height the app is allowed to be, in pixels, from the viewport that is actually
+    // visible — and re-asked whenever that changes: entering or leaving fullscreen, the
+    // address bar sliding away, the keyboard arriving, a rotation.
+    const vv = window.visualViewport;
+    const fit = () => {
+      const h = (vv && vv.height) || window.innerHeight;
+      document.documentElement.style.setProperty('--app-h', Math.round(h) + 'px');
+    };
+    fit();
+    addEventListener('resize', fit);
+    addEventListener('orientationchange', fit);
+    if (vv) { vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit); }
+    // Entering fullscreen can leave the page scrolled down, which is how the head bar went
+    // missing. The size is re-taken a beat later as well: the window is not always its final
+    // size at the moment the event fires.
+    for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) {
+      addEventListener(ev, () => { fit(); scrollTo(0, 0); setTimeout(() => { fit(); scrollTo(0, 0); }, 250); });
+    }
+  </script>
 </body>
 </html>
