@@ -185,11 +185,36 @@ export function makePlayClock(now = () => performance.now(), smoothing = ORIGIN_
  */
 export const LATENCY_JUMP = 0.03;   // seconds of disagreement taken as a real change
 
-export function makeLatencyMeter(smoothing = 0.05, jump = LATENCY_JUMP) {
-  let v = null;
+export function makeLatencyMeter(smoothing = 0.05, jump = LATENCY_JUMP, everyMs = 250) {
+  let v = null;         // what is reported
+  let last = null;      // the previous raw reading, for confirming a jump
+  let at = 0;           // when it was last actually measured
   return (ctx) => {
+    // ASKED FOUR TIMES A SECOND, not sixty. The playhead reads this every frame, and the
+    // answer is a property of the device — it changes when headphones are plugged in, not
+    // between frames. Measuring it at frame rate only sampled the noise in the measurement,
+    // which then had to be filtered back out. Committing a whole piece to the audio clock
+    // made that noise worse, because getOutputTimestamp answers from an audio thread that is
+    // now busier.
+    const t = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    if (v != null && t - at < everyMs) return v;
+    at = t;
     const d = outputDelay(ctx);
-    v = (v == null || Math.abs(d - v) > jump) ? d : v + smoothing * (d - v);
+    const prev = last;
+    last = d;
+    if (v == null) { v = d; return v; }
+    if (Math.abs(d - v) > jump) {
+      // A JUMP HAS TO BE CONFIRMED by the reading before it. Taking every large disagreement
+      // at once was right while the only large ones were the warm-up and a change of device.
+      // Committing a whole piece to the audio clock at Play made the readings themselves
+      // noisier — the audio thread is busier, and getOutputTimestamp answers from it — so
+      // single wild readings started being taken as real: measured, the meter ranged 47ms to
+      // 130ms within one run where it had held to a couple of milliseconds. Two readings that
+      // agree with each other and disagree with the average are a change; one is noise.
+      if (prev != null && Math.abs(d - prev) < jump / 3) { v = d; return v; }
+      return v;         // unconfirmed: keep what we had, and wait to be told twice
+    }
+    v = v + smoothing * (d - v);
     return v;
   };
 }
