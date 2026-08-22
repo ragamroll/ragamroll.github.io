@@ -65,6 +65,9 @@ export function PerfDialog({ perf, version, onReset, onClose }) {
           ${row('live sources', `${d.liveSources} now, ${d.mostSources} at most`,
                 'climbing over a session would be a leak')}
           ${row('audio', d.device ? `${d.device.sampleRate}Hz · base ${d.device.baseLatencyMs}ms · out ${d.device.outputLatencyMs}ms` : '—')}
+          ${row('start', d.device && d.device.runwayMs != null
+                ? `${d.device.runwayMs}ms ahead · latency ${d.device.latencyMeasured ? 'measured' : 'NOT reported by this device'}`
+                : '—', 'how much warning the first note of a run got')}
           ${row('screen', d.device ? `${d.device.viewport} @${d.device.dpr}x · ${d.device.cores || '?'} cores${d.device.installed ? ' · installed' : ''}` : '—')}
         </table>
         <p class="instr-hint perf-hist">frame gaps, ms: ${d.histogram.map(([e, n]) => `${e}:${n}`).join('  ')}</p>

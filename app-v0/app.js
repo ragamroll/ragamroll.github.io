@@ -313,7 +313,13 @@ function App({ examples }) {
     // anything to look at — so the run in flight has to count, or the report opens on zero.
     const st = playStartRef.current;
     perfRef.current.playing(st ? performance.now() - st.at : 0);
-    perfRef.current.setDevice(deviceFacts(p && p.audioDevice ? p.audioDevice() : null));
+    // The RUNWAY too: how far ahead of now the last run started its first note, and whether
+    // that came from a real reading or from the blind floor. A device that reports no output
+    // latency takes a different path through play(), and there is no way to tell from here
+    // which path a phone took.
+    const rw = p && p.startRunway ? p.startRunway() : null;
+    perfRef.current.setDevice(deviceFacts(p && p.audioDevice ? p.audioDevice() : null,
+      rw ? { runwayMs: rw.runway == null ? null : Math.round(rw.runway * 1000), latencyMeasured: rw.measured } : {}));
     setPerfTick((n) => n + 1);
     setPerfOpen(true);
   }, []);
