@@ -256,6 +256,16 @@ function App({ examples }) {
     el.hidden = false;
     el.style.transform = `translateY(${r.yVirt(units)}px)`;
   }, []);
+  // A–B belongs to the piece it was marked on. Length-units mean nothing across pieces: the
+  // range lands wherever those units happen to fall in the new one, so Play quietly starts
+  // part-way in, the roll shades a stretch nobody chose, and 🔁 repeats it. Every way a
+  // different piece arrives bumps docEpoch — New, a file, an example, a share link — so
+  // this clears it once for all of them rather than in four handlers.
+  //
+  // ITS OWN EFFECT, not folded into the grid reset below: that one returns early when the
+  // roll instance does not exist yet, and a piece opened before the pane is ready would
+  // keep its predecessor's range.
+  useEffect(() => { setMarkA(0); setMarkB(0); }, [docEpoch]);
   // A hand-stretched grid is view state and does not survive a different piece. resize()
   // rather than render(), because the scroll window is sized from the grid and a narrower
   // grid leaves the div taller than there is anything to show.
@@ -794,6 +804,10 @@ function App({ examples }) {
     const cname = resolveRagaName(name) || name;
     const drafts = await loadDrafts();
     const picked = chooseSeed(cname, drafts, getRagaExt(cname), getRagas());
+    // Same document, so no docEpoch — but every note in it is about to be replaced, and a
+    // range marked on the blank frame would survive onto notation it was never drawn
+    // against. The only content swap that does not come through newDoc().
+    setMarkA(0); setMarkB(0);
     setText(picked ? picked.srgm : `Raga=${cname},0\nTala=adi,4\nO=5 L=1\n`);
   }, [noteCount]);
   const onPickTala = useCallback((name) => {
