@@ -548,6 +548,24 @@
     .instr-foot { margin-top:.6rem; }
     /* The file input is the button's plumbing, not a control: ⭱ Load clicks it. */
     .instr-file { display:none; }
+    /* The timing report. The summary line is the whole thing — big, monospaced and easy to
+       select on a phone, because retyping it is the fallback that always works. */
+    .perf-box { max-width:min(560px, 94vw); }
+    .perf-body { display:flex; flex-direction:column; gap:.2rem; }
+    .perf-line { font-family:var(--mono); font-size:.86rem; line-height:1.5; margin:.2rem 0 .4rem;
+      padding:.45rem .55rem; background:var(--panel2); border:1px solid var(--hair); border-radius:5px;
+      color:var(--ink); word-break:break-word; user-select:all; cursor:text; }
+    .perf-acts { display:flex; gap:.4rem; align-items:center; margin-bottom:.3rem; }
+    .perf-said { font-size:.8rem; color:var(--teal); }
+    .perf-table { width:100%; border-collapse:collapse; font-size:.82rem; }
+    .perf-table th { text-align:left; font-weight:600; color:var(--muted); padding:.22rem .5rem .22rem 0;
+      white-space:nowrap; vertical-align:top; }
+    .perf-table td { padding:.22rem 0; vertical-align:top; }
+    .perf-table td:first-of-type { font-family:var(--mono); color:var(--ink); white-space:nowrap; padding-right:.6rem; }
+    .perf-note { color:var(--muted); font-size:.76rem; line-height:1.35; }
+    .perf-hist { font-family:var(--mono); font-size:.72rem; margin-top:.5rem; }
+    /* A long press must not select the version text under the finger. */
+    .ver, .ver-btn { user-select:none; -webkit-user-select:none; touch-action:manipulation; }
     .instr-msg { color:var(--ink); }
     .instr-bad { color:var(--terra); }
     .instr-row { display:grid; grid-template-columns:7.5rem 1fr 4.2rem; align-items:center;

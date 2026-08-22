@@ -1,4 +1,4 @@
-const CACHE = 'ragamroll-38cd353';
+const CACHE = 'ragamroll-5502747';
 
 // SERVED FROM A LOCAL SERVER: stand down entirely.
 //
@@ -20,10 +20,10 @@ const ASSETS = [
   './vendor/pitchy.mjs', './vendor/fft.mjs',
   './components/Editor.js', './components/RollPane.js', './components/RollTools.js', './components/EditTools.js', './components/EditorDrawer.js', './components/Toolbar.js',
   './components/Diagnostics.js', './components/Transport.js', './components/ReferenceDialog.js', './components/Splitter.js',
-  './components/Footer.js', './components/OpenMenu.js', './components/ScaleDialog.js', './components/TalaDialog.js',
+  './components/Footer.js', './components/PerfDialog.js', './components/OpenMenu.js', './components/ScaleDialog.js', './components/TalaDialog.js',
   './components/RagaDialog.js',
   './audio/schedule.js', './audio/drone.js', './audio/backend.js', './audio/backends/tone.js', './audio/backends/webaudio.js', './audio/player.js',
-  './core/app-update.js', './core/parser.js', './core/gamaka-inline.js', './core/gamaka-curve.js', './core/tuning.js', './core/raga-base.js', './core/raga-db.json', './core/reference.js',
+  './core/app-update.js', './core/perf.js', './core/parser.js', './core/gamaka-inline.js', './core/gamaka-curve.js', './core/tuning.js', './core/raga-base.js', './core/raga-db.json', './core/reference.js',
   './core/shruti.js', './core/melakarta.js', './core/tala-preview.js', './core/raga-shruti.js', './core/share.js', './core/share-legacy.js',
   './core/raga-ext.js', './core/raga-preview.js', './core/retune.js',
   './core/detect.js', './core/detect-raga-helper.js', './core/note-edit.js', './core/raga-seed.js', './core/raga-switchboard.js',

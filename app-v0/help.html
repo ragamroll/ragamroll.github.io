@@ -227,6 +227,23 @@ G2 G2 P4 P4  D2 P2 &gt;S4 S4</code></pre>
     nothing changes.</li>
   </ul>
 
+  <h2 id="timing">When it stutters: the timing report</h2>
+  <p>Hold the version at the bottom of the screen for a moment and the app tells you what your
+  device actually did while it was playing. It is there because a stutter that only happens on
+  a phone cannot be reproduced on a desktop, and a phone has no console to ask.</p>
+  <ul>
+    <li><b>long tasks</b> — the browser reporting that the main thread was blocked. This is a
+    skip you can <i>see</i>.</li>
+    <li><b>frames</b> — how long each drawn frame took. One frame is about 17ms.</li>
+    <li><b>notes late</b> — notes handed to the instrument after the moment they were meant to
+    sound. This is a crackle you can <i>hear</i>, and it is a different fault from the one
+    above: the numbers tell them apart.</li>
+    <li><b>live sources</b> — sound still ringing. Steady is healthy; climbing over a long
+    session would mean something is not being cleaned up.</li>
+  </ul>
+  <p class="sub">The single line at the top is the whole report — copy it, share it, or read it
+  out. Nothing in it identifies you or your device beyond what any web page can already see.</p>
+
   <h2 id="lanes">The sahitya and the written swaras</h2>
   <p>Notation converted from another system often arrives with that system's own
   <b>written swaras</b> and the <b>sahitya</b> (the lyrics) sitting above the notes, as

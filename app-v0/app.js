@@ -36,6 +36,9 @@ import { inlineLegacyCurves } from './core/share-legacy.js';
 import { Transport, BPM_MIN, BPM_MAX } from './components/Transport.js';
 import { Splitter } from './components/Splitter.js';
 import { Footer } from './components/Footer.js';
+import { PerfDialog } from './components/PerfDialog.js';
+import { VERSION } from './version.js';
+import { createPerf, watchLongTasks, deviceFacts } from './core/perf.js';
 
 // Example pieces are data-driven: the list comes from examples/index.json
 // (regenerated from the folder by tools/gen-examples.sh), so adding a piece
@@ -295,6 +298,23 @@ function App({ examples }) {
   const [curveSnap, setCurveSnap] = useState(true);
   // A–B: play a stretch instead of the whole piece. In LENGTH-UNITS, like everything on
   // the roll; the audio side takes seconds, and 30/tempo is where the two meet.
+  // WHAT THIS DEVICE DID. A recorder, not a feature: the roll skipping and the sound
+  // crackling on a phone cannot be reproduced anywhere else, and there is no console there
+  // to ask. Long-press the version to read it back. Costs one subtraction in a loop that
+  // already runs, and a browser-side observer.
+  const perfRef = useRef(null);
+  if (!perfRef.current) perfRef.current = createPerf();
+  const [perfOpen, setPerfOpen] = useState(false);
+  const [, setPerfTick] = useState(0);          // the panel reads live numbers; this re-renders it
+  useEffect(() => watchLongTasks(perfRef.current), []);
+  const onPerf = useCallback(() => {
+    const p = playerRef.current;
+    perfRef.current.setDevice(deviceFacts(p && p.audioDevice ? p.audioDevice() : null));
+    setPerfTick((n) => n + 1);
+    setPerfOpen(true);
+  }, []);
+  const onPerfReset = useCallback(() => { perfRef.current.reset(); setPerfTick((n) => n + 1); }, []);
+
   // Repeat until Stop. What it repeats is whatever Play loads — the A-B segment when one is
   // marked, the piece otherwise — so nothing here has to know which, and neither does the
   // backend. Remembered, like the other transport toggles: someone drilling a phrase does
@@ -893,6 +913,7 @@ function App({ examples }) {
     // instead of from memory. Skipped for a run that was paused and resumed, where wall
     // time includes however long the pause was and the comparison would be nonsense.
     const st = playStartRef.current; playStartRef.current = null;
+    if (st) { perfRef.current.played(performance.now() - st.at); frameAtRef.current = 0; }
     if (st && st.expect > 0 && !st.resumed) {
       const took = (performance.now() - st.at) / 1000;
       console.log(`[ragamroll] played ${took.toFixed(2)}s · expected ${st.expect.toFixed(2)}s`
@@ -926,7 +947,18 @@ function App({ examples }) {
 
   stopRef.current = onStop;   // let onOpen/onExample (defined earlier) stop playback on a content swap
 
+  const frameAtRef = useRef(0);
   const loop = useCallback(() => {
+    // Before the work, so the gap measured is between frames rather than inside one.
+    const now = performance.now();
+    if (frameAtRef.current) perfRef.current.frame(now - frameAtRef.current);
+    frameAtRef.current = now;
+    const p = playerRef.current;
+    if (p && p.audioStats) {
+      const a = p.audioStats();
+      perfRef.current.sources(a.liveSources);
+      if (a.minMargin != null) perfRef.current.noteMargin(a.minMargin);
+    }
     const pos = applyScroll();
     // A looping run has no end to notice: position wraps at the seam and the piece goes
     // round again. Read from a REF, not from the closure — this callback re-arms itself, so
@@ -1199,7 +1231,9 @@ function App({ examples }) {
                 onOpenScale=${onOpenScale} scaleActive=${!!scale}
                 timbre=${timbre} onTimbre=${onTimbre}
                 onOpenInstrument=${() => setInstrOpen(true)} />
-    <${Footer} />
+    <${Footer} onPerf=${onPerf} />
+    ${perfOpen && html`<${PerfDialog} perf=${perfRef.current} version=${VERSION}
+                                      onReset=${onPerfReset} onClose=${() => setPerfOpen(false)} />`}
   `;
 }
 

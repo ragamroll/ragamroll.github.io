@@ -283,6 +283,9 @@ function makeString(kind, over = {}) {
     // that cannot see it would pass with the second string still running.
     get _pair() { return paired; },
     get _strikes() { return strikes; },
+    // One-shot pick sources still in flight. Each is disposed in its own onended, so this
+    // returns to near zero between notes; a number that climbs across a session is a leak.
+    get _live() { return strings.reduce((n, st) => n + st.sources.length, 0); },
     volume: out.volume,
     // What this voice is set to, and what a panel may move. The values live in P; the ones
     // that are properties of a node are pushed there as they change, and the rest are read
@@ -656,6 +659,12 @@ export function createToneBackend() {
   // rebuilds an interrupted run by calling load() again, and anything carried in the
   // arguments would be whatever was true when Play was pressed. This is what is true now.
   let looping = false;
+  // HOW EARLY each scheduled note reached the voice. Tone hands a callback its audio time a
+  // lookahead ahead of the clock; the margin is what is left of that lookahead when the work
+  // actually starts. At or below zero the note was built after the moment it was for, and
+  // that is a crackle with a cause rather than a guess — the one measurement that tells a
+  // starved audio thread apart from a stuttering animation.
+  const audio = { notes: 0, late: 0, minMargin: Infinity };
   let loopHooked = false;   // the transport is a singleton; its 'loop' handler is attached once
   let timbre = 'soft-am';   // melody voice preset; applied on the next load()
   let melodyMuted = false;  // remembered so a reload keeps the melody muted
@@ -1008,6 +1017,11 @@ export function createToneBackend() {
         // e.freq: experimental 53-EDO retune; falls back to 12-TET midi.
         const freq = e.freq != null ? e.freq : midiToFreq(e.midi);
         tr.schedule((time) => {
+          // Two subtractions and a compare, before anything else in the callback, so what is
+          // recorded is when the work STARTED rather than how long it took.
+          { const raw = rawCtx();
+            if (raw) { const m = time - raw.currentTime;
+              audio.notes++; if (m <= 0) audio.late++; if (m < audio.minMargin) audio.minMargin = m; } }
           // Inline gamaka: ramp the (mono) melody voice's frequency through the
           // sampled curve instead of a fixed pitch. Linear ramps (strictly
           // increasing times) — robust across browsers; same voice = same timbre.
@@ -1201,6 +1215,19 @@ export function createToneBackend() {
     // Whether the plucked voice is running its course as a pair or as a single string; null
     // for a voice that has no such thing to say.
     voicePair() { return synth && synth._pair !== undefined ? synth._pair : null; },
+    // What the audio layer has seen this run, for the diagnostic. Read-only and cumulative;
+    // the host decides when it means anything.
+    // The three numbers a device reports about its own output path. Handed out rather than
+    // the context itself: the host has no business reaching into the audio graph.
+    audioDevice() {
+      const c = rawCtx();
+      return c ? { sampleRate: c.sampleRate, baseLatency: c.baseLatency, outputLatency: c.outputLatency } : null;
+    },
+    audioStats() {
+      return { notes: audio.notes, late: audio.late,
+               minMargin: audio.minMargin === Infinity ? null : audio.minMargin,
+               liveSources: synth && synth._live !== undefined ? synth._live : 0 };
+    },
     voiceStrikes() { return synth && synth._strikes !== undefined ? synth._strikes : null; },
     // How many times a run has been rebuilt after an interruption. A guard cannot hear the
     // difference between a piece that carried on and one that was rebuilt mid-flight — both
