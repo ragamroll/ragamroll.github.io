@@ -1,6 +1,6 @@
 import * as Tone from '../../vendor/tone.js';
 import { midiToFreq } from '../schedule.js';
-import { outputDelay, makePlayClock, makeLatencyMeter } from '../backend.js';
+import { outputDelay, outputMeasured, startRunway, makePlayClock, makeLatencyMeter } from '../backend.js';
 import { SYNTH_VOICES, STRING_PARAMS, STRING_DEFAULTS, PLUCKZ_DEFAULTS, pluckzTable } from '../voices.js';
 
 // The ONLY module that references Tone.js. Encapsulates all Tone version specifics.
@@ -651,6 +651,7 @@ export function createToneBackend() {
   // a NEW one, which is the whole question here.
   let droneWanted = null;
   let droneBuilds = 0;
+  let lastRunway = null;    // the head start the last play() gave the first note, in seconds
   let timbre = 'soft-am';   // melody voice preset; applied on the next load()
   let melodyMuted = false;  // remembered so a reload keeps the melody muted
   // The tala's live level, REMEMBERED for the same reason the mute is. It arrives twice: as
@@ -907,6 +908,49 @@ export function createToneBackend() {
     };
     tick();
   });
+  // AND THEN WAIT FOR THE OUTPUT ITSELF.
+  //
+  // clockAwake above answers "is the graph being rendered". This answers the different and
+  // more useful question: "has any of it reached the device". Until it has, the latency
+  // figures are what the browser assumed before audio flowed — on Android outputLatency is
+  // commonly 0 there — and the runway below falls back to a floor that was measured on a
+  // desktop, on a device whose real output path is several times longer.
+  //
+  // Returns whether it got a real reading. A device that never gives one is not thereby
+  // fast; it is unknown, and the caller treats it as slow.
+  // It waits a little longer than the first `true`, and reports the LARGEST delay it saw.
+  // The first reading is not the right one: at the instant frames begin flowing the buffer
+  // chain has not filled, so getOutputTimestamp reports contextTime running only just behind
+  // currentTime — and on this machine baseLatency and outputLatency have both been seen to
+  // read 0 at that moment too, on some runs and not others. Taking that first answer gave a
+  // 0.06 runway on a device whose settled delay was 0.157.
+  // Capped at the blind floor itself: a device that has said nothing by then is not going
+  // to, and every millisecond spent here is a millisecond of silence after Play.
+  const OUTPUT_SETTLE_MS = 90, OUTPUT_CAP_MS = 250;
+  const outputAwake = (ctx, capMs = OUTPUT_CAP_MS) => new Promise((resolve) => {
+    const t0 = Date.now();
+    const done = (measured, delay) => resolve({ measured, delay, waited: (Date.now() - t0) / 1000 });
+    if (!ctx) { done(false, 0); return; }
+    let flowing = 0, seen = 0;
+    const tick = () => {
+      const ok = outputMeasured(ctx);
+      if (ok) {
+        if (!flowing) flowing = Date.now();
+        seen = Math.max(seen, outputDelay(ctx));
+        // Early out on a WARM context: what has been watched already covers what the device
+        // says its path costs, so there are two independent figures agreeing and nothing to
+        // be learned by watching longer. Only a cold one has to be sat through — which is
+        // the one where the readings start too low.
+        const c = ctx.rawContext || ctx;
+        const arith = (c.baseLatency || 0) + (c.outputLatency || 0);
+        if (arith > 0 && seen >= arith - 0.02) { done(true, seen); return; }
+        if (Date.now() - flowing >= OUTPUT_SETTLE_MS) { done(true, seen); return; }
+      }
+      if (Date.now() - t0 > capMs) { done(ok, seen); return; }
+      setTimeout(tick, 10);
+    };
+    tick();
+  });
   const b = {
     onended: null,
     // opts.talaGain (0..1) is the tala track's initial live volume.
@@ -1006,6 +1050,9 @@ export function createToneBackend() {
       // a context that never advances is simply started anyway rather than hanging on a
       // promise that will not settle.
       await clockAwake(rawCtx());
+      // Rendering has begun; now wait for it to actually be coming out, so the reading the
+      // runway is built on is a measurement rather than an assumption.
+      const heard = await outputAwake(rawCtx());
       // STARTED IN THE FUTURE, by the time it takes a buffer to reach the speaker.
       //
       // A piece that opens on a note puts that note's attack at transport time 0, and
@@ -1017,7 +1064,9 @@ export function createToneBackend() {
       //
       // The runway is the output delay itself, floored at 60ms: whatever the device
       // needs to get sound out is what it needs to get the FIRST sound out.
-      transport().start('+' + Math.max(0.06, outputDelay(rawCtx())).toFixed(3));
+      const runway = startRunway(rawCtx(), heard.measured, heard.delay, heard.waited);
+      lastRunway = runway;
+      transport().start('+' + runway.toFixed(3));
       // Where transport zero sits on the audio clock, for expectedSeconds() below.
       { const raw = rawCtx(); runOrigin = raw ? raw.currentTime - transport().seconds : null; }
     },
@@ -1101,6 +1150,11 @@ export function createToneBackend() {
     // Which voice is loaded, by the name of the case that BUILT it. Ask for a voice the
     // switch does not know and this reports what you got instead of what you wanted, which
     // is the only way that mistake is visible from outside.
+    // What the last play() actually did about the device's output delay: the head start it
+    // gave the first note, and whether that came from a real reading or from the blind
+    // floor. The whole fault this guards against is invisible on a desktop, so a phone has
+    // to be able to say what it chose.
+    startRunway() { return { runway: lastRunway, measured: outputMeasured(rawCtx()), delay: outputDelay(rawCtx()) }; },
     voiceKind() { return synth && synth._kind ? synth._kind : ''; },
     // Whether the plucked voice is running its course as a pair or as a single string; null
     // for a voice that has no such thing to say.

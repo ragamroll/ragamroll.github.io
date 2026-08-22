@@ -65,6 +65,77 @@ export function outputDelay(ctx) {
 }
 
 /**
+ * DOES THIS CONTEXT ACTUALLY KNOW ITS OWN LATENCY YET?
+ *
+ * outputDelay() always returns a number, and a number is not the same as a measurement.
+ * Before any audio has flowed, `getOutputTimestamp().contextTime` is still 0 and
+ * `outputLatency` is commonly 0 too — Android Chrome reports it that way — so the number
+ * comes out at a floor chosen on a desktop, on a device whose real output path is several
+ * times longer.
+ *
+ * That matters at exactly one moment: starting a piece whose first note is at time 0. The
+ * caller can wait for this to be true and then ask outputDelay for a figure that means
+ * something, instead of starting the transport on a guess.
+ */
+export function outputMeasured(ctx) {
+  const c = nativeContext(ctx);
+  if (!c) return false;
+  try {
+    const ts = c.getOutputTimestamp && c.getOutputTimestamp();
+    if (ts && ts.contextTime > 0) return true;      // frames have reached the output
+  } catch (_) { /* not implemented, or not running */ }
+  return (c.outputLatency || 0) > 0;                // or the device says what its path costs
+}
+
+// The head start the first note of a run is given, when the device has told us what its
+// output path costs. Sixty milliseconds is what a desktop needs, measured.
+export const RUNWAY_MIN = 0.06;
+// And when it has NOT told us. A phone's output path runs to a couple of hundred
+// milliseconds. Over-waiting costs a moment of quiet before the piece starts; under-waiting
+// costs the first note of every run its attack, which is the fault this exists for.
+export const RUNWAY_BLIND = 0.25;
+
+/**
+ * HOW FAR AHEAD OF NOW TO START A PIECE whose first note is at time 0.
+ *
+ * The largest of three, because every way this is wrong is a way of being too SMALL:
+ *
+ * - the floor, which depends on whether the device answered at all;
+ * - outputDelay's reading, which is the honest current measurement;
+ * - and base + output latency, the arithmetic.
+ *
+ * The last one is not redundant. At start-up `getOutputTimestamp` can report contextTime
+ * running only just behind currentTime — the buffer chain has not filled yet — so the
+ * MEASUREMENT briefly reads far lower than the delay the device will actually have. Taking
+ * a reading then, and taking it as final, produced a 0.06 runway on a machine whose real
+ * delay was 0.157: the exact under-read this is meant to prevent, caught by
+ * tools/start-runway.mjs before it shipped.
+ *
+ * `measured` says whether the caller established that frames are reaching the device
+ * (outputMeasured). A device that never says is not thereby fast — it is unknown, and
+ * unknown is treated as slow. `observed` is the largest delay the caller watched go by
+ * while it waited, which is the only one of the four that cannot be read too early: at the
+ * instant frames begin flowing, baseLatency and outputLatency have BOTH been seen to read 0
+ * on this machine, on some runs and not others.
+ */
+export function startRunway(ctx, measured, observed = 0, waited = 0) {
+  const c = nativeContext(ctx);
+  const arith = c ? Math.min(0.5, (c.baseLatency || 0) + (c.outputLatency || 0)) : 0;
+  const seen = Math.min(0.5, observed > 0 ? observed : 0);
+  // The blind floor is "give a silent device a quarter second before the first note". Time
+  // the caller ALREADY spent waiting for that device to speak is part of that quarter
+  // second, not extra to it — otherwise a phone waits to be told nothing and then waits
+  // again before it hears anything, and Play feels broken in a new way.
+  //
+  // In practice this term comes out at the minimum, because the caller waits the same
+  // quarter second it would otherwise add. That is not dead code: it is what keeps the head
+  // start whole if the waiting is ever shortened, and it fails loudly rather than silently
+  // if the two numbers drift apart.
+  const floor = measured ? RUNWAY_MIN : Math.max(RUNWAY_MIN, RUNWAY_BLIND - Math.max(0, waited));
+  return Math.max(floor, outputDelay(ctx), arith, seen);
+}
+
+/**
  * CAN THIS PAGE MAKE THE SOUND AT ALL?
  *
  * The plucked string is a comb filter and the tala's strum is a PluckSynth, and Tone builds
