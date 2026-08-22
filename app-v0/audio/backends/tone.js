@@ -131,7 +131,7 @@ function makeString(kind, over = {}) {
   // sounds like that. Very little: measured, a wet of .14 held a plucked note at 73% of its
   // attack a second in, which is not a pluck any more — a room that sustains will smear a
   // fast phrase into one chord.
-  const room = new Tone.JCReverb({ roomSize: P.roomSize, wet: P.roomWet });
+  let room = new Tone.JCReverb({ roomSize: P.roomSize, wet: P.roomWet });
   room.connect(out);
 
   // THE BODY, and it does NOT follow the note. A box resonates where it resonates
@@ -343,6 +343,32 @@ function makeString(kind, over = {}) {
       silenceAt(Tone.now());
       out.disconnect();
       parked = true;
+      // AND THROW THE ROOM AWAY. Unhooking the voice is what makes it free, and it is also
+      // what preserves it: a subgraph that is not rendered does not decay, so the reverb sits
+      // holding the tail of the piece that just stopped and dumps it the moment the output is
+      // reconnected. Measured: a rebuilt voice opened in silence, a reused one opened with a
+      // burst at 0.10 lasting ~100ms before the first note — which is a crackle at the start
+      // of every Stop-then-Play, and it was introduced by the reuse itself.
+      //
+      // Rebuilt here rather than on unpark because THIS is the side with no deadline. Stop is
+      // a press with nothing waiting on it; Play is the one that must not block.
+      const old = room;
+      room = new Tone.JCReverb({ roomSize: P.roomSize, wet: P.roomWet });
+      room.connect(out);
+      tame.disconnect(old);
+      tame.connect(room);
+      old.dispose();
+      // The strings' delay lines hold audio in flight too — silencing sets the feedback to
+      // zero, but whatever was already circulating freezes there with the graph and plays out
+      // on reconnect. Rebuilt for the same reason and on the same side: nothing waits on Stop.
+      for (const st of strings) {
+        const oc = st.comb;
+        st.comb = new Tone.LowpassCombFilter({ dampening: P.dampening, resonance: 0 });
+        st.comb.connect(st.panner);
+        st.pick.disconnect(oc);
+        st.pick.connect(st.comb);
+        oc.dispose();
+      }
     },
     unpark() {
       if (!parked) return;
