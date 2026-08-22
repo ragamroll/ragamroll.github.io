@@ -171,9 +171,15 @@ function makeString(kind, over = {}) {
   drive.connect(makeup); makeup.connect(bodies[0]);
   const bodyIn = drive;
 
-  // TWO STRINGS, a few cents apart and panned apart. Plucked instruments string their
-  // courses in pairs, and the slow beating between them is most of what "full" means for a
-  // plucked note: one string is one string however it is filtered.
+  // TWO STRINGS, a few cents apart and panned apart — WHEN they are apart. Plucked
+  // instruments string their courses in pairs, and the slow beating between them is most of
+  // what "full" means for a plucked note: one string is one string however it is filtered.
+  //
+  // But at detune 1 the pair is not a pair. Both strings take the same seeded pick buffer
+  // through the same filters at the same delay, so they are sample-identical, and two
+  // identical signals panned ∓0.3 sum straight back to the centre: no width, no beating,
+  // nothing the ear can tell from one string — for two Karplus-Strong loops in the graph and
+  // two scheduled sources on every note. So the second one is taken out.
   const strings = [-0.3, 0.3].map((pan, i) => {
     const p = new Tone.Panner(pan);
     p.connect(bodyIn);
@@ -190,18 +196,58 @@ function makeString(kind, over = {}) {
     return { comb, pick, pickGain, panner: p, i, sources: [] };
   });
 
+  // Under this the pair is one string. Well below the panel's own 0.0002 step (0.35 cents),
+  // so it can only ever catch a detune of exactly 1 arriving as 1.0000000001 from a file —
+  // never a setting anyone chose. At 1.00001 the pair would beat once every 200 seconds.
+  const PAIR_MIN = 1.00001;
+  // How many strings have been struck, ever. The per-note cost of the pair is a source
+  // built, started and disposed per string plus a delay-line write per gamaka point, and
+  // this is the only place a guard can see that halve — the collapse is silent by design,
+  // so there is nothing in the sound that says whether the work was done.
+  let strikes = 0;
+  // Panning is EQUAL-POWER, so the two strings at ∓0.3 put cos+sin = 1.375139 into each
+  // channel while one at centre puts 0.707107 — collapsing the pair without this would make
+  // the instrument 5.78 dB quieter. Applied at the pick rather than the output so what
+  // reaches `drive` is unchanged too: the clipping is a nonlinearity, and it would otherwise
+  // hear a different string.
+  const SOLO_MAKEUP = 1.9447398;
+  let paired = null;                     // null = never applied; syncPair() decides
+  const SOLO = strings.slice(0, 1);
+  // The strings that are STRUCK. Not the same as every string built: silence() and dispose()
+  // must still reach the one that was unhooked, or a source scheduled before the pair
+  // collapsed outlives the note it belonged to.
+  const live = () => (paired ? strings : SOLO);
+  function syncPair() {
+    const want = P.detune >= PAIR_MIN;
+    if (want === paired) return;
+    paired = want;
+    strings[0].panner.pan.value = want ? -0.3 : 0;      // alone, it belongs in the middle
+    const s2 = strings[1];
+    if (want) { s2.panner.connect(bodyIn); return; }
+    // Stopped BEFORE it is unhooked. A comb filter keeps its delay line, so a string left
+    // ringing comes back the moment it is reconnected — a note from minutes ago, arriving
+    // under a different one.
+    s2.comb.resonance.cancelScheduledValues(0);
+    s2.comb.resonance.value = 0;
+    for (const src of s2.sources.slice()) { try { src.stop(); } catch { /* already done */ } }
+    s2.panner.disconnect(bodyIn);
+  }
+  syncPair();
+
   // Short, because the melody is monophonic and these voices ring: at T333 the next note is
   // a quarter of a second away, and a string still sounding into it is a chord nobody wrote.
   const REST = 0.15;
   const pluck = (freq, time, vel) => {
-    for (const st of strings) {
+    const gain = Math.max(0.05, vel) * 0.7 * (paired ? 1 : SOLO_MAKEUP);
+    for (const st of live()) {
+      strikes++;
       const f = Math.max(20, freq) * (st.i ? P.detune : 1), d = 1 / f;
       st.comb.delayTime.cancelScheduledValues(time);
       st.comb.delayTime.setValueAtTime(d, time);
       st.comb.resonance.cancelScheduledValues(time);
       st.comb.resonance.setValueAtTime(gainFor(f), time);
       st.pick.frequency.setValueAtTime(Math.min(7000, f * P.pickMul), time);
-      st.pickGain.gain.setValueAtTime(Math.max(0.05, vel) * 0.7, time);
+      st.pickGain.gain.setValueAtTime(gain, time);
       const buf = pickBuffer();
       if (buf) {
         // One-shot, from the START of the buffer every time. A source that is played from
@@ -219,7 +265,7 @@ function makeString(kind, over = {}) {
   // way — a pumping artefact of feeding a delay line a moving gain — before it died. Two
   // scheduled values instead: the hand stops the string, then lets go of it.
   const damp = (time) => {
-    for (const st of strings) {
+    for (const st of live()) {
       st.comb.resonance.cancelScheduledValues(time);
       st.comb.resonance.setValueAtTime(0.55, time);
       st.comb.resonance.setValueAtTime(0, time + REST);
@@ -232,6 +278,11 @@ function makeString(kind, over = {}) {
     // put it back, and the only number it could put back before was 0 — which threw away
     // every voice's own balance the moment it was loaded.
     get _db() { return P.out; },
+    // ONE STRING OR TWO, for guards. The collapse is meant to be inaudible — that is the
+    // whole point of it — so there is nothing in the sound to assert against, and a check
+    // that cannot see it would pass with the second string still running.
+    get _pair() { return paired; },
+    get _strikes() { return strikes; },
     volume: out.volume,
     // What this voice is set to, and what a panel may move. The values live in P; the ones
     // that are properties of a node are pushed there as they change, and the rest are read
@@ -240,7 +291,8 @@ function makeString(kind, over = {}) {
     set(key, value) {
       if (!(key in P)) return;
       P[key] = value;
-      if (key === 'dampening') for (const st of strings) st.comb.dampening = value;
+      if (key === 'detune') syncPair();          // it decides whether there is a second string at all
+      else if (key === 'dampening') for (const st of strings) st.comb.dampening = value;
       else if (key === 'drive') setDrive(value);
       else if (key === 'body1') bodies[0].gain.value = value;
       else if (key === 'body2') bodies[1].gain.value = value;
@@ -278,7 +330,7 @@ function makeString(kind, over = {}) {
     curve(points, time, dur, vel = 0.8) {
       pluck(points[0], time, vel);
       const N = points.length;
-      for (const st of strings) {
+      for (const st of live()) {
         for (let k = 1; k < N; k++) {
           st.comb.delayTime.linearRampToValueAtTime(
             1 / (Math.max(20, points[k]) * (st.i ? P.detune : 1)), time + (dur * k) / (N - 1));
@@ -1050,6 +1102,10 @@ export function createToneBackend() {
     // switch does not know and this reports what you got instead of what you wanted, which
     // is the only way that mistake is visible from outside.
     voiceKind() { return synth && synth._kind ? synth._kind : ''; },
+    // Whether the plucked voice is running its course as a pair or as a single string; null
+    // for a voice that has no such thing to say.
+    voicePair() { return synth && synth._pair !== undefined ? synth._pair : null; },
+    voiceStrikes() { return synth && synth._strikes !== undefined ? synth._strikes : null; },
     // How many times a run has been rebuilt after an interruption. A guard cannot hear the
     // difference between a piece that carried on and one that was rebuilt mid-flight — both
     // sound like a piece playing — so the backend counts, the way voiceKind() exists so a
