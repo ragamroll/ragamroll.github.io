@@ -244,9 +244,14 @@ export function createRollEdit(canvas, opts) {
     if (onAbChip(x, y)) { abChipPress = e.pointerId; own(e.pointerId); return; }
 
     // The MARGIN, left of the grid, when painting is not armed: A–B lives there. Same
-    // shape pitchy uses — grabbing a tab moves that end, pressing anywhere else sweeps a
+    // shape pitchy uses — grabbing a tab moves that end, pressing anywhere else marks a
     // new range, and the two ends may not cross. Without the tabs there is no way to
     // nudge one end: every press would throw both markers away and start over.
+    //
+    // A PRESS is already a range: A where it landed, B at the end of the piece — so
+    // "play from here" needs one tap, and a drag only refines the far end. It used to
+    // preview a zero-length range and commit it as a CLEAR, which is why nothing but a
+    // drag could mark anything. Clearing has its own affordance, the A–B chip above.
     if (!paintArmed() && allow('range') && x < geometry().plot.x) {
       onGrabStart();
       const gg = geometry(), t = abTime(y);
@@ -254,9 +259,12 @@ export function createRollEdit(canvas, opts) {
       const near = (mm) => m.b > m.a && Math.abs(y - gg.Y(mm)) <= AB_TAB_H;
       ab = near(m.a) ? { end: 'a', pid: e.pointerId }
         : near(m.b) ? { end: 'b', pid: e.pointerId }
-        : { end: 'sweep', from: t, pid: e.pointerId };
+        : { end: 'sweep', from: t, pid: e.pointerId, y0: y, moved: false };
       ab.y = y;
-      if (ab.end === 'sweep') emit({ kind: 'range', phase: 'preview', a: t, b: t });
+      // yRange[1] is the whole piece in roll mode, which is the only mode this runs in.
+      // Pressed at or past the end there is nothing to mark, and the zero-length range
+      // that leaves is committed as a clear by onUp.
+      if (ab.end === 'sweep') emit({ kind: 'range', phase: 'preview', a: t, b: Math.max(t, gg.yRange[1]) });
       own(e.pointerId); redraw();
       return;
     }
@@ -329,7 +337,14 @@ export function createRollEdit(canvas, opts) {
       // The ends may not meet, let alone cross: a zero-length range plays nothing, and
       // an end dragged onto the other would be indistinguishable from clearing.
       const gap = snapDur(0) || 1;
-      if (ab.end === 'sweep') emit({ kind: 'range', phase: 'preview', a: Math.min(ab.from, t), b: Math.max(ab.from, t) });
+      if (ab.end === 'sweep') {
+        // A finger is never still. Until the press leaves the slop it is still a press,
+        // and A–B stays where pointerdown put it: without this, the wobble of a tap
+        // collapses the range onto its own start and onUp reads that as a clear.
+        if (!ab.moved && Math.abs(y - ab.y0) > SLOP_PX) ab.moved = true;
+        if (!ab.moved) return;
+        emit({ kind: 'range', phase: 'preview', a: Math.min(ab.from, t), b: Math.max(ab.from, t) });
+      }
       else if (ab.end === 'a') emit({ kind: 'range', phase: 'preview', a: Math.min(t, m.b - gap), b: m.b });
       else emit({ kind: 'range', phase: 'preview', a: m.a, b: Math.max(t, m.a + gap) });
       return;
@@ -406,9 +421,11 @@ export function createRollEdit(canvas, opts) {
     if (ab && e.pointerId === ab.pid) {
       const g = ab; ab = null; stopEdge(); release(); redraw();
       const m = marks();
-      // A SWEEP that never moved is a press, not a range: cleared rather than left as a
-      // zero-length segment that would play nothing. A tab drag is never a clear —
-      // dragging an end is how a range is adjusted, not how it is thrown away.
+      // A sweep that ended where it began — dragged back to its own start, or pressed at
+      // or past the end of the piece — leaves nothing to play, so it is cleared rather
+      // than left as a zero-length segment. A plain press is NOT that case: pointerdown
+      // already previewed A-to-the-end. A tab drag is never a clear either — dragging an
+      // end is how a range is adjusted, not how it is thrown away.
       justGrabbed = true;
       const dead = g.end === 'sweep' && !(m.b > m.a);
       emit({ kind: 'range', phase: 'commit', a: dead ? 0 : m.a, b: dead ? 0 : m.b });
@@ -509,6 +526,7 @@ export function createRollEdit(canvas, opts) {
   function edgeStep() {
     edgeRaf = 0;
     if (!ab || !edgeDy || !scrollBy) return;
+    if (ab.end === 'sweep' && !ab.moved) return;      // a press near the edge is still a press
     scrollBy(edgeDy);
     // The pointer has not moved — the GRID has — so the time under it is a new time, and
     // the range has to be re-emitted from the same y or the sweep stops at the old edge.
