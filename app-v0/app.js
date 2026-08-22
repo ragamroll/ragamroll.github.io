@@ -309,11 +309,19 @@ function App({ examples }) {
   useEffect(() => watchLongTasks(perfRef.current), []);
   const onPerf = useCallback(() => {
     const p = playerRef.current;
+    // Most of the time this is opened WHILE something is playing — that is when there is
+    // anything to look at — so the run in flight has to count, or the report opens on zero.
+    const st = playStartRef.current;
+    perfRef.current.playing(st ? performance.now() - st.at : 0);
     perfRef.current.setDevice(deviceFacts(p && p.audioDevice ? p.audioDevice() : null));
     setPerfTick((n) => n + 1);
     setPerfOpen(true);
   }, []);
-  const onPerfReset = useCallback(() => { perfRef.current.reset(); setPerfTick((n) => n + 1); }, []);
+  const onPerfReset = useCallback(() => {
+    perfRef.current.reset();
+    playerRef.current?.resetAudioStats?.();   // the note counters live down there
+    setPerfTick((n) => n + 1);
+  }, []);
 
   // Repeat until Stop. What it repeats is whatever Play loads — the A-B segment when one is
   // marked, the piece otherwise — so nothing here has to know which, and neither does the
@@ -957,7 +965,7 @@ function App({ examples }) {
     if (p && p.audioStats) {
       const a = p.audioStats();
       perfRef.current.sources(a.liveSources);
-      if (a.minMargin != null) perfRef.current.noteMargin(a.minMargin);
+      perfRef.current.audio(a);       // a SNAPSHOT of the backend's own per-note counters
     }
     const pos = applyScroll();
     // A looping run has no end to notice: position wraps at the seam and the piece goes

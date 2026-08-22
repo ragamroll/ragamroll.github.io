@@ -30,7 +30,7 @@ export function createPerf() {
   let longCount = 0, longMax = 0, longMs = 0;
   let notes = 0, late = 0, minMargin = Infinity;
   let sourcesNow = 0, sourcesMax = 0;
-  let playMs = 0, plays = 0;
+  let playMs = 0, plays = 0, inFlight = 0;
   let device = null;
 
   // Percentile off the histogram: the bucket the nth sample falls in, reported as its upper
@@ -66,14 +66,21 @@ export function createPerf() {
       longCount++; longMs += ms;
       if (ms > longMax) longMax = ms;
     },
-    // How far AHEAD of its audio time a scheduled note was handed to the voice. It should be
-    // roughly the lookahead; at or below zero the note was built after the moment it was for,
-    // which is a crackle with a cause rather than a guess.
-    noteMargin(sec) {
-      if (typeof sec !== 'number' || !isFinite(sec)) return;
-      notes++;
-      if (sec <= 0) late++;
-      if (sec < minMargin) minMargin = sec;
+    // THE AUDIO LAYER'S OWN COUNTERS, taken whole rather than re-derived.
+    //
+    // This used to take one margin at a time and count them here, and the host fed it the
+    // backend's RUNNING MINIMUM once per animation frame — so `notes` counted frames, and one
+    // late note anywhere made every frame after it "late" too. The first report off a real
+    // phone read 833 of 833 notes late against 850 frames, which is how it was found: a
+    // hundred percent of anything is a measurement to distrust before it is a finding.
+    //
+    // The backend already counts correctly, per note, inside the callback. So it hands over a
+    // snapshot and this stores it. A snapshot REPLACES; it never accumulates.
+    audio(s) {
+      if (!s) return;
+      if (typeof s.notes === 'number') notes = s.notes;
+      if (typeof s.late === 'number') late = s.late;
+      minMargin = typeof s.minMargin === 'number' && isFinite(s.minMargin) ? s.minMargin : Infinity;
     },
     // Live one-shot sources in the voice. Climbing across a session is a leak; steady is not.
     sources(n) {
@@ -81,7 +88,10 @@ export function createPerf() {
       sourcesNow = n;
       if (n > sourcesMax) sourcesMax = n;
     },
-    played(ms) { if (ms > 0) { playMs += ms; plays++; } },
+    played(ms) { if (ms > 0) { playMs += ms; plays++; } inFlight = 0; },
+    // A run still going. The first report off a phone read "0s/0 runs" beside 850 frames and
+    // 833 notes, because the panel is most useful DURING a run and nothing counted until Stop.
+    playing(ms) { inFlight = ms > 0 ? ms : 0; },
     setDevice(d) { device = d; },
 
     // ONE LINE, and it has to survive being retyped by hand off a phone screen. Fixed order,
@@ -89,7 +99,7 @@ export function createPerf() {
     summary() {
       const f = (x, d = 0) => (Number.isFinite(x) ? x.toFixed(d) : '-');
       return [
-        `${f(playMs / 1000)}s/${plays}`,
+        `${f((playMs + inFlight) / 1000)}s/${plays + (inFlight > 0 ? 1 : 0)}`,
         `lt ${longCount}/${f(longMax)}ms`,
         `fr ${f(pct(0.5))}/${f(pct(0.95))}/${f(frameMax)}`,
         `late ${late}/${notes}`,
@@ -100,7 +110,8 @@ export function createPerf() {
 
     detail() {
       return {
-        playSeconds: +(playMs / 1000).toFixed(1), plays,
+        playSeconds: +((playMs + inFlight) / 1000).toFixed(1), plays,
+        playingNow: inFlight > 0,
         longTasks: longCount, longestMs: Math.round(longMax), blockedMs: Math.round(longMs),
         frames, framesP50: pct(0.5), framesP95: pct(0.95), frameMaxMs: Math.round(frameMax),
         overOneFrame: bins.slice(bucket(17)).reduce((a, x) => a + x, 0),
@@ -116,9 +127,11 @@ export function createPerf() {
       bins = new Array(EDGES.length + 1).fill(0);
       frames = 0; frameMax = 0;
       longCount = 0; longMax = 0; longMs = 0;
+      // The note counters live on the backend; the host clears those alongside this. Zeroed
+      // here too so the panel does not show stale numbers for the instant in between.
       notes = 0; late = 0; minMargin = Infinity;
       sourcesMax = sourcesNow;
-      playMs = 0; plays = 0;
+      playMs = 0; plays = 0; inFlight = 0;
     },
   };
 }

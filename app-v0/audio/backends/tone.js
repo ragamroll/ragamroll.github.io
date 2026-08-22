@@ -1223,6 +1223,7 @@ export function createToneBackend() {
       const c = rawCtx();
       return c ? { sampleRate: c.sampleRate, baseLatency: c.baseLatency, outputLatency: c.outputLatency } : null;
     },
+    resetAudioStats() { audio.notes = 0; audio.late = 0; audio.minMargin = Infinity; },
     audioStats() {
       return { notes: audio.notes, late: audio.late,
                minMargin: audio.minMargin === Infinity ? null : audio.minMargin,

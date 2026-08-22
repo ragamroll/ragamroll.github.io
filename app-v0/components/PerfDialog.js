@@ -52,7 +52,8 @@ export function PerfDialog({ perf, version, onReset, onClose }) {
         back here. The line above is the whole report; everything below it is the same numbers
         spelled out.</p>
         <table class="perf-table">
-          ${row('played', `${d.playSeconds}s over ${d.plays} run${d.plays === 1 ? '' : 's'}`)}
+          ${row('played', `${d.playSeconds}s over ${d.plays + (d.playingNow ? 1 : 0)} run${d.plays + (d.playingNow ? 1 : 0) === 1 ? '' : 's'}`,
+                d.playingNow ? 'still playing — these numbers are from the run under way' : '')}
           ${row('long tasks', `${d.longTasks}, worst ${d.longestMs}ms, ${d.blockedMs}ms total`,
                 'the main thread blocked — this is a skip you can see')}
           ${row('frames', `p50 ${d.framesP50}ms · p95 ${d.framesP95}ms · worst ${d.frameMaxMs}ms`,
