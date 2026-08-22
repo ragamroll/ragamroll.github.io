@@ -652,6 +652,11 @@ export function createToneBackend() {
   let droneWanted = null;
   let droneBuilds = 0;
   let lastRunway = null;    // the head start the last play() gave the first note, in seconds
+  // REPEAT UNTIL STOPPED. Backend state rather than a load() argument on purpose: revive()
+  // rebuilds an interrupted run by calling load() again, and anything carried in the
+  // arguments would be whatever was true when Play was pressed. This is what is true now.
+  let looping = false;
+  let loopHooked = false;   // the transport is a singleton; its 'loop' handler is attached once
   let timbre = 'soft-am';   // melody voice preset; applied on the next load()
   let melodyMuted = false;  // remembered so a reload keeps the melody muted
   // The tala's live level, REMEMBERED for the same reason the mute is. It arrives twice: as
@@ -951,6 +956,25 @@ export function createToneBackend() {
     };
     tick();
   });
+  // The loop is the WHOLE of what was loaded, which is already the right thing for both
+  // cases: scheduleEvents shifts an A-B segment to start at 0 and totalSeconds is that
+  // segment's length, so the transport repeating 0..total repeats the segment when there is
+  // one and the piece when there is not. No second code path, and nothing here knows what a
+  // marker is — which is the same division of labour the range itself uses.
+  const applyLoop = () => {
+    const tr = transport();
+    tr.loopStart = 0;
+    tr.loopEnd = Math.max(0, total);
+    tr.loop = looping && total > 0;
+    // THE SEAM MOVES THE POSITION WITHOUT TIME PASSING, which is exactly the case the play
+    // clock refuses on its own: it is monotonic by design, so that a scheduler reading a
+    // stale transport value cannot drag the playhead backwards. A loop point is a genuine
+    // jump back, and without telling the clock so, position() held at 1 for every pass
+    // after the first — the transport went round perfectly and the playhead sat at the end
+    // watching it. Same reason seek() resets it.
+    if (!loopHooked) { loopHooked = true; tr.on('loop', () => clock.reset()); }
+  };
+
   const b = {
     onended: null,
     // opts.talaGain (0..1) is the tala track's initial live volume.
@@ -976,6 +1000,7 @@ export function createToneBackend() {
       const tr = transport();
       tr.cancel();
       tr.position = 0;
+      applyLoop();
       for (const e of events) {
         const isTala = e.track === 'tala';
         const dest = isTala ? tala : synth;
@@ -1000,6 +1025,19 @@ export function createToneBackend() {
       }
       if (totalSec > 0) {
         tr.schedule(() => {
+          // LOOPING: a BACKSTOP, and measured to be one. The transport wraps before its
+          // position reaches loopEnd, so with the loop on this callback is simply never
+          // reached — removing this line changes nothing any test can see, which is how it
+          // is known. It stays because the cost of being wrong is asymmetric: if a Tone
+          // version ever does deliver the event at the seam, the piece would stop dead
+          // after one pass, and a scheduled event firing again when the position revisits
+          // it is precisely the mechanism described below. This is the only path that would
+          // catch it.
+          //
+          // The real exit from a loop is the toggle: setLoop(false) leaves the transport to
+          // run past loopEnd, and then this fires normally — so a repeat ends at the end of
+          // the pass it is in rather than under the finger that stopped it.
+          if (looping) return;
           // NOTHING IS DONE TO THE TRANSPORT HERE. This callback only notices the end;
           // stopping is the page thread's job, a tick later.
           //
@@ -1155,6 +1193,10 @@ export function createToneBackend() {
     // floor. The whole fault this guards against is invisible on a desktop, so a phone has
     // to be able to say what it chose.
     startRunway() { return { runway: lastRunway, measured: outputMeasured(rawCtx()), delay: outputDelay(rawCtx()) }; },
+    // Repeat what is loaded until Stop. Live: turning it on mid-run makes the pass it is in
+    // the first of many, and turning it off lets that pass finish.
+    setLoop(on) { looping = !!on; applyLoop(); },
+    looping() { return looping; },
     voiceKind() { return synth && synth._kind ? synth._kind : ''; },
     // Whether the plucked voice is running its course as a pair or as a single string; null
     // for a voice that has no such thing to say.

@@ -22,7 +22,7 @@ export const BPM_MIN = 20, BPM_MAX = 600;
 const MULT_MIN = 0.25, MULT_MAX = 4, MULT_STEP = 0.25;
 const clampBpm = (v) => Math.max(BPM_MIN, Math.min(BPM_MAX, v));
 
-export function Transport({ state, canPlay, onPlay, onPause, onStop,
+export function Transport({ state, canPlay, onPlay, onPause, onStop, looping, onToggleLoop, hasSeg,
   talaVol, onTalaVol, talaMuted, onToggleTala, melodyMuted, onToggleMelody,
   droneVol, onDroneVol, droneMuted, onToggleDrone, masterVol, onMasterVol,
   onSave, onExportMidi, onShare, shared, onLanes, compositionTempo, tempoOverride, onTempo, onResetTempo,
@@ -80,6 +80,16 @@ export function Transport({ state, canPlay, onPlay, onPause, onStop,
               title=${state === 'playing' ? 'Pause' : state === 'paused' ? 'Resume' : 'Play'}
               disabled=${state !== 'playing' && !canPlay}>${state === 'playing' ? '⏸' : '▶'}</button>
       <button title="Stop"  onClick=${onStop}  disabled=${state === 'stopped'}>⏹</button>
+      <!-- What it will repeat is in the title, not left to be inferred: the same toggle
+           means the segment or the whole piece depending on whether a range is marked, and
+           a control whose scope you have to work out is a control you press twice. Live —
+           turning it on mid-run makes the pass you are in the first of many, and turning it
+           off lets that pass finish rather than cutting the note you are inside. -->
+      <button class=${'loop-btn' + (looping ? ' on' : '')} aria-pressed=${!!looping}
+              onClick=${onToggleLoop}
+              title=${looping
+                ? `Repeating the ${hasSeg ? 'A–B segment' : 'piece'} until you stop — click to play it once`
+                : `Play once — click to repeat the ${hasSeg ? 'A–B segment' : 'piece'} until you stop`}>🔁</button>
 
       <span class=${'vol' + (droneMuted ? ' muted' : '')}>
         <button class="vol-toggle" aria-pressed=${!droneMuted} onClick=${onToggleDrone}

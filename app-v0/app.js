@@ -70,6 +70,7 @@ const LS_INSTR = 'ragamroll.instrument';
 const AUDIO = audioSupport();
 const LS_GKA = 'ragamroll.showSource';       // the provenance strip, on or off
 const LS_READ = 'ragamroll.reading';         // the notation folded to its swaras
+const LS_LOOP = 'ragamroll.loop';            // repeat what is played until Stop
 const DEFAULT_NAME = 'ragamroll';
 
 // Derive a document base-name (no extension) from an opened file / example name.
@@ -284,6 +285,20 @@ function App({ examples }) {
   const [curveSnap, setCurveSnap] = useState(true);
   // A–B: play a stretch instead of the whole piece. In LENGTH-UNITS, like everything on
   // the roll; the audio side takes seconds, and 30/tempo is where the two meet.
+  // Repeat until Stop. What it repeats is whatever Play loads — the A-B segment when one is
+  // marked, the piece otherwise — so nothing here has to know which, and neither does the
+  // backend. Remembered, like the other transport toggles: someone drilling a phrase does
+  // not want to arm it again every session.
+  const [looping, setLooping] = useState(() => { try { return localStorage.getItem(LS_LOOP) === '1'; } catch { return false; } });
+  const loopingRef = useRef(looping);
+  loopingRef.current = looping;
+  const onToggleLoop = useCallback(() => setLooping((v) => !v), []);
+  useEffect(() => { try { localStorage.setItem(LS_LOOP, looping ? '1' : '0'); } catch { /* private mode */ } }, [looping]);
+  // Live, so the toggle means something while a piece is running. The backend keeps it as
+  // its own state rather than as a load() argument, so an interrupted run that rebuilds
+  // itself comes back still looping.
+  useEffect(() => { playerRef.current?.setLoop?.(looping); }, [looping]);
+
   const [markA, setMarkA] = useState(0);
   const [markB, setMarkB] = useState(0);            // 0,0 = no segment: play it all
   const hasSeg = markB > markA;
@@ -899,7 +914,11 @@ function App({ examples }) {
 
   const loop = useCallback(() => {
     const pos = applyScroll();
-    if (pos >= 1) { onStop(); return; }
+    // A looping run has no end to notice: position wraps at the seam and the piece goes
+    // round again. Read from a REF, not from the closure — this callback re-arms itself, so
+    // a run started before the toggle was pressed would otherwise keep the old answer for
+    // as long as it lasted, and stop at the first seam.
+    if (pos >= 1 && !loopingRef.current) { onStop(); return; }
     rafRef.current = requestAnimationFrame(loop);
   }, [applyScroll, onStop]);
 
@@ -911,6 +930,10 @@ function App({ examples }) {
         if (totalSeconds(seq) <= 0) return;
         applyPlaybackPitch(seq, effModel, scale, saBase, shift);   // scale override + Sa transpose (audio only)
         player.onended = () => onStop();
+        // Told before the load, which then sizes the loop to what it actually scheduled. The
+        // effect above only fires when the toggle MOVES; a player built since then would
+        // otherwise start a run not knowing.
+        player.setLoop?.(looping);
         // Tala keeps its own live-adjustable track volume — schedule every event
         // (even at 0) so raising the slider mid-playback brings the tala in.
         // A segment is expressed by scheduling only that stretch, shifted to start at 0 —
@@ -939,7 +962,7 @@ function App({ examples }) {
       console.error('playback failed', e);
       onStop();
     }
-  }, [effModel, playState, loop, onStop, talaLevel, scale, saBase, shift, hasSeg, markA, markB]);
+  }, [effModel, playState, loop, onStop, talaLevel, scale, saBase, shift, hasSeg, markA, markB, looping]);
 
   // Same reason as stopRef, and the same trap: onRewind is declared ABOVE onPlay and has
   // to reach it, so the assignment goes HERE — below onPlay — not up beside stopRef.
@@ -1147,6 +1170,7 @@ function App({ examples }) {
       blank=${noteCount === 0} onRaga=${onPickRaga} onTala=${onPickTala} />`}
     <${Transport} state=${playState} canPlay=${noteCount > 0}
                   onPlay=${onPlay} onPause=${onPause} onStop=${onStop} onRewind=${onRewind}
+                  looping=${looping} onToggleLoop=${onToggleLoop} hasSeg=${hasSeg}
                   compositionTempo=${compositionTempo} tempoOverride=${tempoOverride} onTempo=${onTempo} onResetTempo=${onResetTempo}
                   saPitch=${saPitch} autoSaMidi=${autoSaMidi} onSetSa=${onSetSa}
                   masterVol=${masterVol} onMasterVol=${onMasterVol}

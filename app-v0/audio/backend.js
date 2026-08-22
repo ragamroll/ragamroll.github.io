@@ -21,6 +21,7 @@
  * @property {(sec?: number) => void} fadeOutStop      // ramp master down, then stop + droneOff, restoring the level
  * @property {(vol: number) => void} setTalaVolume    // tala track volume 0..1; live on a playing piece
  * @property {(muted: boolean) => void} setMelodyMuted // mute/unmute the melody track; live (solo tala+drone)
+ * @property {((on: boolean) => void)} [setLoop]  // OPTIONAL. Repeat what is loaded until stop(), rather than ending. What is loaded is already the right span — scheduleEvents shifts an A–B segment to start at 0 — so this needs no notion of a segment. Live: on mid-run makes the current pass the first of many; off lets that pass finish and then ends normally, firing onended. A backend without it plays once, and a host must call it optionally
  * @property {(name: string) => void} setTimbre       // melody voice preset ('bowed-fm'|'soft-am'|'reed'); applies on next load()
  * @property {(ev: {midi?: number, freq?: number, durSec: number, gamaka?: Float32Array}) => void} previewNote  // sound ONE note immediately, for auditioning while editing. A ScheduledEvent minus its timing. MUST NOT touch the transport: position(), the play/pause state and any scheduled events are unaffected, so a note can be auditioned mid-playback or with nothing loaded at all
  * @property {(freqs: number[], vol?: number) => void} setDrone  // constant drone at these freqs, vol 0..1; vol<=0 / empty = off. Same freqs + new vol changes loudness without re-voicing. Independent of the transport
