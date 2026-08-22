@@ -79,9 +79,9 @@ export const STRING_PARAMS = [
 // half a decibel a second, and a plucked note that does not decay is what a compressor
 // sounds like, which is exactly what this voice was accused of.
 export const STRING_DEFAULTS = {
-  dampening: 4200, sustain: 6, attackNoise: 1, pickMul: 7, detune: 1.0012, drive: 0, body1: -6,
+  dampening: 4200, sustain: 6, attackNoise: 1, pickMul: 7, detune: 1, drive: 0, body1: -6,
   body2: 12, body3: 9, bodyHz: [130, 450, 760], bodyQ: [0.7, 0.9, 1.1], tameHz: 1500,
-  damping: 4, roomSize: 0.22, roomWet: 0.1, out: 1,
+  damping: 4, roomSize: 0.22, roomWet: 0.05, out: 1,
 };
 
 // PLUCKZ — the tone of the buzz-string notation player, reproduced rather than approximated.
@@ -161,6 +161,56 @@ export const STRING_PRESETS = [
     roomSize: 0.22, roomWet: 0.08, out: 1,
   } },
 ];
+
+
+// Reading an instrument back IN — the other half of the panel's ⭳ Save.
+//
+// Stricter than JSON.parse on purpose, and it refuses WHOLE rather than taking the part it
+// understands: a key this build does not have is either a typo or a parameter from another
+// build, and half an instrument laid over another is neither — the same reason a preset is
+// applied entire. What it does NOT refuse is an old file that is missing settings added
+// since: those come from the built-ins and the reader is told which, because a file that
+// still loads and says what it lacked is worth more than one that is rejected.
+//
+// A value no slider can reach is held at the end of its travel. The panel would otherwise
+// show a number the reader can look at and never get back to once anything is moved.
+const PARAM_BY_KEY = new Map(STRING_PARAMS.map((p) => [p.key, p]));
+const isNum = (x) => typeof x === 'number' && Number.isFinite(x);
+
+export function readInstrument(text) {
+  let raw;
+  try { raw = JSON.parse(text); }
+  catch { return { ok: false, error: 'That file is not JSON. The panel writes the kind it reads with ⭳ Save.' }; }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+    return { ok: false, error: 'That JSON is not a settings object.' };
+
+  const unknown = Object.keys(raw).filter((k) => !(k in STRING_DEFAULTS));
+  if (unknown.length)
+    return { ok: false, error: `${unknown.join(', ')} ${unknown.length > 1 ? 'are not settings' : 'is not a setting'} this build has, so nothing was changed.` };
+
+  const values = { ...STRING_DEFAULTS };
+  const notes = [];
+  for (const [k, val] of Object.entries(raw)) {
+    const def = STRING_DEFAULTS[k];
+    if (Array.isArray(def)) {
+      if (!Array.isArray(val) || val.length !== def.length || !val.every(isNum))
+        return { ok: false, error: `${k} should be ${def.length} numbers, so nothing was changed.` };
+      values[k] = val.slice();
+      continue;
+    }
+    if (!isNum(val)) return { ok: false, error: `${k} should be a number, so nothing was changed.` };
+    const p = PARAM_BY_KEY.get(k);
+    const held = p ? Math.max(p.min, Math.min(p.max, val)) : val;
+    if (held !== val) notes.push(`${p.label} was ${val}, past what this build's slider reaches — held at ${held}`);
+    values[k] = held;
+  }
+
+  const missing = Object.keys(STRING_DEFAULTS).filter((k) => !(k in raw));
+  if (missing.length)
+    notes.push(`${missing.join(', ')} ${missing.length > 1 ? 'were' : 'was'} not in the file and ${missing.length > 1 ? 'are' : 'is'} at the built-in value`);
+
+  return { ok: true, values, notes };
+}
 
 
 export function fromSlider(p, t) {

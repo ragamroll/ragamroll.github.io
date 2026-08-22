@@ -546,6 +546,10 @@
     .instr-presets button { font-size:.8rem; padding:.15rem .5rem; }
     .instr-hint { margin:.1rem 0 .5rem; color:var(--muted); font-size:.82rem; line-height:1.45; }
     .instr-foot { margin-top:.6rem; }
+    /* The file input is the button's plumbing, not a control: ⭱ Load clicks it. */
+    .instr-file { display:none; }
+    .instr-msg { color:var(--ink); }
+    .instr-bad { color:var(--terra); }
     .instr-row { display:grid; grid-template-columns:7.5rem 1fr 4.2rem; align-items:center;
       gap:.5rem; padding:.12rem 0; cursor:pointer; }
     .instr-row:hover { background:var(--panel2); border-radius:4px; }

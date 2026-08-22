@@ -214,6 +214,12 @@ G2 G2 P4 P4  D2 P2 &gt;S4 S4</code></pre>
     one everybody gets, drop that file in the repo and run
     <code>node tools/apply-instrument.mjs pluck-settings.json --apply</code>, which folds it
     into the built-in instrument rather than leaving anyone to hand-edit a number.</li>
+    <li><b>⭱ Load</b> reads one back. Settings are remembered per browser, so a file is how
+    an instrument survives another machine, another browser, or cleared storage. It is applied
+    whole and takes effect at once — including the settings with no slider. A file written by
+    an older build still loads: anything it does not carry stays at the built-in value and the
+    panel says which. A file with a setting this build has never had is refused entire, and
+    nothing changes.</li>
   </ul>
 
   <h2 id="lanes">The sahitya and the written swaras</h2>
