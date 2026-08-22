@@ -13,12 +13,32 @@
 // still running old code — harmless for modules already imported, which is nearly all of
 // them here, and the reason this offers a reload rather than pretending the swap is
 // complete.
-const NONE = { ready: false, checking: false };
+import { VERSION } from '../version.js';
 
-export function watchForUpdates(onState) {
+const NONE = { ready: false, checking: false, latest: null, offline: false };
+
+// WHAT THE SERVER ACTUALLY HAS, read past every cache between here and it.
+//
+// The worker's own answer is not enough. GitHub Pages serves with a ten-minute max-age and
+// the worker's update check goes through that shared cache, so for those minutes it fetches
+// sw.js, is handed the OLD bytes, sees no change and reports — correctly, and uselessly —
+// that there is nothing new. "Up to date" then means three different things: current, not
+// served here yet, and could not ask. A reader watching a published fix fail to arrive, over
+// and over, has no way to tell which.
+async function serverVersion() {
+  // `fresh` so the worker steps aside (see sw.js), a timestamp so no cache between here and
+  // the origin can answer, and no-store so this one is not kept either.
+  const res = await fetch(`./version.js?fresh=${Date.now()}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('http ' + res.status);
+  const m = (await res.text()).match(/VERSION\s*=\s*'([^']*)'/);
+  if (!m) throw new Error('no version in it');
+  return m[1];
+}
+
+export function watchForUpdates(onState, running = VERSION) {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
     onState({ ...NONE, supported: false });
-    return { check: () => {}, apply: () => {} };
+    return { check: () => {}, apply: () => {}, status: () => ({ kind: 'current', text: '' }) };
   }
   let state = { ...NONE, supported: true };
   const set = (patch) => { state = { ...state, ...patch }; onState(state); };
@@ -53,10 +73,24 @@ export function watchForUpdates(onState) {
   function check() {
     if (!reg || checking) return;
     checking = true;
-    set({ checking: true });
-    Promise.resolve(reg.update())
-      .catch(() => { /* offline: nothing to report, and nothing wrong */ })
-      .finally(() => { checking = false; set({ checking: false }); });
+    set({ checking: true, offline: false, latest: null });
+    // Both, and neither waits on the other. The worker is what can actually deliver a new
+    // build; the version read is what can tell a reader WHY it has not.
+    Promise.all([
+      Promise.resolve(reg.update()).catch(() => { /* offline, or nothing new */ }),
+      serverVersion().then((v) => set({ latest: v, offline: false }))
+        .catch(() => set({ offline: true })),
+    ]).finally(() => { checking = false; set({ checking: false }); });
+  }
+  // What the caller should SAY, decided here rather than in the markup: the three cases are
+  // about what was learned, and the footer's job is only to show it.
+  function status() {
+    if (state.checking) return { kind: 'checking', text: 'checking…' };
+    if (state.ready) return { kind: 'ready', text: 'Update ready — reload' };
+    if (state.offline) return { kind: 'offline', text: 'could not check — no connection' };
+    if (state.latest && state.latest !== running)
+      return { kind: 'waiting', text: `${state.latest} is out — this device is still being served ${running}` };
+    return { kind: 'current', text: 'up to date' };
   }
 
   // The new worker is already active (skipWaiting), so entering it is a reload. `waiting` is
@@ -67,5 +101,5 @@ export function watchForUpdates(onState) {
     location.reload();
   }
 
-  return { check, apply };
+  return { check, apply, status };
 }

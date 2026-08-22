@@ -1,4 +1,4 @@
-const CACHE = 'ragamroll-e8be491';
+const CACHE = 'ragamroll-442c200';
 
 // SERVED FROM A LOCAL SERVER: stand down entirely.
 //
@@ -72,6 +72,14 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   if (DEV) return;                                   // the network is the answer here
   if (e.request.method !== 'GET') return;
+  // A PAGE ASKING FOR THE TRUTH. `?fresh=` is never served from the cache and never added to
+  // it: the update check reads version.js this way to find out what the server actually has,
+  // past both this worker and the HTTP cache. Without the second half it would also put a
+  // uniquely-named copy in the cache on every check, for ever.
+  if (new URL(e.request.url).searchParams.has('fresh')) {
+    e.respondWith(fetch(e.request).catch(() => Response.error()));
+    return;
+  }
   e.respondWith((async () => {
     // PAGES are network-first, everything else cache-first. Cache-first on
     // navigations meant a published change was invisible until the worker

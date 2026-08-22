@@ -548,6 +548,10 @@
     .instr-foot { margin-top:.6rem; }
     /* The file input is the button's plumbing, not a control: ⭱ Load clicks it. */
     .instr-file { display:none; }
+    /* A newer build exists but this device is still being handed the old one — a wait, not a
+       fault, and not the same thing as being current. */
+    .upd-waiting { color:var(--amber); }
+    .upd-offline { color:var(--muted); }
     /* The timing report. The summary line is the whole thing — big, monospaced and easy to
        select on a phone, because retyping it is the fallback that always works. */
     .perf-box { max-width:min(560px, 94vw); }

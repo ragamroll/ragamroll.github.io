@@ -45,6 +45,9 @@ export function Footer({ onPerf }) {
   const holdProps = { onPointerDown: down, onPointerUp: up, onPointerLeave: up, onPointerCancel: up,
                       onContextMenu: (e) => { if (onPerf) e.preventDefault(); } };
 
+  // What to SAY about the last check comes from the update module, which is the only place
+  // that knows the difference between "current", "not served here yet" and "could not ask".
+  const said = ctl && asked && !upd.checking && !upd.ready ? ctl.status() : null;
   const label = upd.checking ? 'checking…' : VERSION;
   return html`<footer class="footer">
     <span class="copyright">© 2010 ragamroll</span>
@@ -56,7 +59,7 @@ export function Footer({ onPerf }) {
         : html`<span class="ver" ...${holdProps}>${VERSION}</span>`}
       ${upd.ready
         ? html`<button class="upd" onClick=${() => ctl && ctl.apply()}>Update ready — reload</button>`
-        : (asked && !upd.checking ? html`<span class="upd-none">up to date</span>` : '')}
+        : (said ? html`<span class=${'upd-none upd-' + said.kind}>${said.text}</span>` : '')}
     </span>
   </footer>`;
 }
