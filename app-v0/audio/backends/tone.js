@@ -710,6 +710,9 @@ export function createToneBackend() {
   // a NEW one, which is the whole question here.
   let droneWanted = null;
   let droneBuilds = 0;
+  // Drones let go of but still releasing. The context must not be suspended under them.
+  let droneFading = 0;
+  const DRONE_RELEASE_MS = 1600;   // the voice's own release (1.4s) plus a little
   let lastRunway = null;    // the head start the last play() gave the first note, in seconds
   // REPEAT UNTIL STOPPED. Backend state rather than a load() argument on purpose: revive()
   // rebuilds an interrupted run by calling load() again, and anything carried in the
@@ -737,6 +740,7 @@ export function createToneBackend() {
   let runOrigin = null;
   let masterDb = 0;         // canonical master level (dB); fades ramp around it
   let fadeTimer = null;     // pending fadeOutStop teardown; cancelled by a new load/play
+  let fadeRestore = null;   // and putting the master level back, once nothing is ringing
   let loaded = null;        // the last load()'s arguments, for rebuilding an interrupted run
   // What position() hands the DRAWING: the transport's reading, smoothed between its
   // steps (see makePlayClock). Reset wherever the position moves by something other than
@@ -956,7 +960,17 @@ export function createToneBackend() {
   }
   let total = 0;
   let ended = false;
-  const clearFade = () => { if (fadeTimer) { clearTimeout(fadeTimer); fadeTimer = null; } };
+  // AND PUT THE LEVEL BACK. A pending fadeOutStop has already ramped the master towards -60;
+  // cancelling only the timer leaves it there, so a Play landing inside the fade — which is
+  // precisely the stop-rewind-play gesture — would run the whole piece into a muted output.
+  const clearFade = () => {
+    if (!fadeTimer && !fadeRestore) return;
+    clearTimeout(fadeTimer); fadeTimer = null;
+    clearTimeout(fadeRestore); fadeRestore = null;
+    const v = destination().volume;
+    v.cancelScheduledValues(Tone.now());
+    v.value = masterDb;
+  };
   // What the loaded voice asked to be played at, or 0 for one that never said.
   const voiceDb = () => (synth && typeof synth._db === 'number' ? synth._db : 0);
   // Whatever a reader has moved in the instrument panel, kept here so it survives the voice
@@ -1225,6 +1239,10 @@ export function createToneBackend() {
     // Tone.start() and setDrone() calls Tone.start(), both of which resume it.
     idleSuspend() {
       const raw = rawCtx();
+      // NOT WHILE ANYTHING IS RAMPING DOWN. Suspending the context stops the audio thread
+      // where it stands, so a release still in flight is cut off at whatever level it had
+      // reached — the very click droneOff's release exists to avoid.
+      if (droneFading > 0) return;
       if (raw && raw.state === 'running' && transport().state !== 'started' && !drone) {
         raw.suspend().catch(() => {});
       }
@@ -1397,7 +1415,12 @@ export function createToneBackend() {
       clearFade();
       fadeTimer = setTimeout(() => {
         fadeTimer = null;
-        b.stop(); b.droneOff(); v.value = masterDb;
+        b.stop(); b.droneOff();
+        // THE LEVEL GOES BACK LAST. The drone releases over more than a second, and it is
+        // releasing under a faded master — put the master back at once and that tail pops
+        // straight back into the room, which is a worse noise than the one being avoided.
+        // Anything that wants to play before then calls clearFade, which restores it.
+        fadeRestore = setTimeout(() => { fadeRestore = null; v.value = masterDb; }, DRONE_RELEASE_MS);
       }, sec * 1000 + 40);
     },
     // Tala track volume (0..1), live — takes effect on a currently playing piece.
@@ -1413,14 +1436,25 @@ export function createToneBackend() {
     // Melody voice, by name; applies on the next load(). Nothing to fetch any more — the
     // sampled sets are gone, and every voice here is made of oscillators and filters.
     setTimbre(name) { timbre = name; },
+    // RELEASED, then let go of — not disposed on top of its own release.
+    //
+    // This asked for a 1.4-second release and destroyed the synth on the very next line, which
+    // cuts the ramp off wherever it had got to. A gain that stops part-way down is a step, and
+    // a step is a click: the drone is three sine oscillators at a steady level, so there is
+    // always something there to be cut. Same for the context — suspending it while the release
+    // is still running truncates it just as surely as disposing does.
     droneOff() {
       droneWanted = null;      // asked for silence: an interruption must not bring it back
       if (!drone) return;
-      try { drone.releaseAll ? drone.releaseAll() : drone.triggerRelease(); } catch {}
-      drone.dispose();
-      drone = null;
-      droneKey = '';
-      b.idleSuspend();           // if playback is also stopped, go fully idle
+      const d = drone;
+      drone = null; droneKey = '';        // it is no longer THE drone, so a new one may be built
+      try { d.releaseAll ? d.releaseAll() : d.triggerRelease(); } catch { /* already gone */ }
+      droneFading++;
+      setTimeout(() => {
+        try { d.dispose(); } catch { /* already gone */ }
+        droneFading--;
+        b.idleSuspend();       // only once nothing is ramping: see the guard in idleSuspend
+      }, DRONE_RELEASE_MS);
     },
     // Silence the melody and take it out of the graph, keeping the nodes. What `stop` and
     // `load` want: nothing sounds, nothing is rendered, and the next Play does not pay to

@@ -927,7 +927,12 @@ function App({ examples }) {
       console.log(`[ragamroll] played ${took.toFixed(2)}s · expected ${st.expect.toFixed(2)}s`
         + ` at T=${st.tempo} · ratio ${(took / st.expect).toFixed(2)}`);
     }
-    playerRef.current.stop();
+    // FADED, not cut. Stopping outright drops whatever is ringing to zero in one sample —
+    // measured at a step from 0.155 to 0.062 with the strings mid-decay, which is a click.
+    // fadeOutStop ramps the master down over 120ms and then stops; a Play arriving inside
+    // that window cancels the teardown and restores the level (see clearFade).
+    const pl = playerRef.current;
+    if (pl.fadeOutStop) pl.fadeOutStop(); else pl.stop();
     setPlayState('stopped');
     playheadRef.current = null;
     rollApiRef.current?.setPlayhead(null).render();
