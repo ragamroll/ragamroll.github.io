@@ -260,6 +260,18 @@ function makeString(kind, over = {}) {
       }
     }
   };
+  // Everything cancelled and the string stopped dead. A function rather than only a method,
+  // because parking needs it too and a voice half-silenced is a voice that comes back ringing.
+  const silenceAt = (time) => {
+    for (const st of strings) {
+      st.comb.resonance.cancelScheduledValues(time);
+      st.comb.delayTime.cancelScheduledValues(time);
+      st.comb.resonance.setValueAtTime(0, time);
+      for (const src of st.sources.slice()) { try { src.stop(time); } catch { /* already done */ } }
+    }
+  };
+  let parked = false;
+
   // Damped in STEPS, not by a ramp. Ramping the feedback of a comb filter down does not
   // fade it: measured, linearRampTo(0) made the string SWELL to five times its level on the
   // way — a pumping artefact of feeding a delay line a moving gain — before it died. Two
@@ -319,13 +331,23 @@ function makeString(kind, over = {}) {
     // was cut off mid-ring by an event belonging to a note that had already finished —
     // measured at half the level of a clean strike, which is what "it doesn't sound newly
     // triggered" was.
-    silence(time) {
-      for (const st of strings) {
-        st.comb.resonance.cancelScheduledValues(time);
-        st.comb.delayTime.cancelScheduledValues(time);
-        st.comb.resonance.setValueAtTime(0, time);
-        for (const src of st.sources.slice()) { try { src.stop(time); } catch { /* already done */ } }
-      }
+    silence(time) { silenceAt(time); },
+    // PARKED, not thrown away. Building this voice is the largest single main-thread block in
+    // the app — measured at ~600ms on a phone-class CPU, nearly all of it Tone's OnePoleFilter
+    // constructing a fresh IIRFilterNode for every frequency it is given — and it was being
+    // rebuilt on every press of Play. Unhooking the output is what makes an idle voice free:
+    // a node that does not reach the destination is not rendered, the same reason the second
+    // string is unhooked when the pair collapses.
+    park() {
+      if (parked) return;
+      silenceAt(Tone.now());
+      out.disconnect();
+      parked = true;
+    },
+    unpark() {
+      if (!parked) return;
+      out.toDestination();
+      parked = false;
     },
     // The gamaka, as a slide along the string. The points arrive in Hz; the delay line
     // wants seconds per period, so each one is inverted as it is written — and both strings
@@ -342,6 +364,7 @@ function makeString(kind, over = {}) {
       damp(time + dur);
     },
     dispose() {
+      parked = false;
       for (const st of strings) {
         for (const src of st.sources.slice()) { try { src.dispose(); } catch { /* already done */ } }
         st.pickGain.dispose(); st.pick.dispose(); st.comb.dispose(); st.panner.dispose();
@@ -607,6 +630,7 @@ function makeTala(timbre) {
       // — half of every strum, silently, for as long as this voice has existed.
       // Two voices, taken in turn, so both notes of a strum sound.
       const out = new Tone.Volume(0).toDestination();
+      let parked = false;
       const voices = [new Tone.PluckSynth(), new Tone.PluckSynth()];
       for (const v of voices) { v.set({ attackNoise: 0.6, dampening: 2200, resonance: 0.9 }); v.connect(out); }
       // The LAST TIME each string was struck, and the invariant that goes with it: a string
@@ -636,7 +660,12 @@ function makeTala(timbre) {
           }
           voices[i].triggerAttackRelease(...a);
         },
-        dispose() { for (const v of voices) v.dispose(); out.dispose(); },
+        // Same reason as the string voice: two PluckSynths are two comb filters, and Tone
+        // builds each one's dampening out of a fresh IIRFilterNode. Rebuilt on every press of
+        // Play, that is main-thread time spent making an instrument that already existed.
+        park() { if (parked) return; out.disconnect(); parked = true; },
+        unpark() { if (!parked) return; out.toDestination(); parked = false; },
+        dispose() { parked = false; for (const v of voices) v.dispose(); out.dispose(); },
       };
     }
   }
@@ -647,6 +676,7 @@ export function createToneBackend() {
   let preview = null;    // audition voice — see previewNote; never the melody voice
 
   let tala = null;       // tala voice — separate so its volume is live
+  let talaKind = null;   // what the cached tala was built as
   let drone = null;      // separate sustained voice; survives load/play/stop
   let droneKey = '';     // freqs signature — lets volume change without re-voicing
   // What the host last asked the drone to be, so an interrupted one can be built again, and
@@ -667,6 +697,7 @@ export function createToneBackend() {
   const audio = { notes: 0, late: 0, minMargin: Infinity };
   let loopHooked = false;   // the transport is a singleton; its 'loop' handler is attached once
   let timbre = 'soft-am';   // melody voice preset; applied on the next load()
+  let synthTimbre = null;   // what the cached voice was BUILT as, so a change rebuilds it
   let melodyMuted = false;  // remembered so a reload keeps the melody muted
   // The tala's live level, REMEMBERED for the same reason the mute is. It arrives twice: as
   // load()'s talaGain when a piece is played, and from the slider while it plays. Only the
@@ -993,18 +1024,34 @@ export function createToneBackend() {
       talaVol = talaGain;
       loaded = { events, totalSec, opts };   // kept so an interrupted run can be rebuilt
       clearFade();         // a new load supersedes any pending fade teardown
-      b.disposeMelody();   // keep the drone playing across sequence reloads
+      b.parkMelody();      // keep the drone playing across sequence reloads
       clock.reset();       // a different piece: nothing about the old one carries forward
       total = totalSec;
       ended = false;
-      synth = makeMelody(timbre, stringOver, pluckzOver);
+      // REUSED when it is the same instrument. Every setting the panel moves is pushed into
+      // the live voice by setVoiceParam, so a cached one is already current — the only thing
+      // that makes it wrong is being a different instrument altogether.
+      if (synth && synthTimbre === timbre && synth.unpark) synth.unpark();
+      else {
+        if (synth) synth.dispose();
+        synth = makeMelody(timbre, stringOver, pluckzOver);
+        synthTimbre = timbre;
+      }
       // The voice's OWN level, not zero. Each one is built at the level it was balanced at
       // against the others, and assigning 0 here undid that for every voice at once — which
       // is why tuning a voice's output gain changed nothing about what it played.
       synth.volume.value = melodyMuted ? -Infinity : voiceDb();   // melody mute (hear tala/drone alone)
       // Composition tala (no talaVoice) uses the fixed 'veena' accent-strum voice;
       // the tala browser passes opts.talaVoice from its picker to audition voices.
-      tala = makeTala(opts.talaVoice || 'veena');
+      // Cached the same way, and keyed by the NAME asked for: the tala browser auditions
+      // different voices through this, and a cached one under a new name is the wrong drum.
+      const talaName = opts.talaVoice || 'veena';
+      if (tala && talaKind === talaName && tala.unpark) tala.unpark();
+      else {
+        if (tala) tala.dispose();
+        tala = makeTala(talaName);
+        talaKind = talaName;
+      }
       tala.volume.value = talaDb(talaGain);     // live-adjustable via setTalaVolume
       const tr = transport();
       tr.cancel();
@@ -1144,7 +1191,7 @@ export function createToneBackend() {
       tr.stop();
       tr.position = 0;
       tr.cancel();               // drop the leftover schedule
-      b.disposeMelody();         // free the melody/tala oscillators (rebuilt on next play)
+      b.parkMelody();            // silence it and unhook it; the next Play reuses it
       b.idleSuspend();           // nothing playing + no drone → suspend the audio context
     },
     // Suspend the AudioContext when fully idle (transport stopped AND no drone),
@@ -1349,12 +1396,24 @@ export function createToneBackend() {
       droneKey = '';
       b.idleSuspend();           // if playback is also stopped, go fully idle
     },
+    // Silence the melody and take it out of the graph, keeping the nodes. What `stop` and
+    // `load` want: nothing sounds, nothing is rendered, and the next Play does not pay to
+    // build an instrument it already has. A voice too old to park is disposed as before.
+    parkMelody() {
+      const tr = transport();
+      tr.cancel();
+      tr.stop();
+      if (synth && synth.park) synth.park();
+      else if (synth) { synth.dispose(); synth = null; synthTimbre = null; }
+      if (tala && tala.park) tala.park();
+      else if (tala) { tala.dispose(); tala = null; talaKind = null; }
+    },
     disposeMelody() {
       const tr = transport();
       tr.cancel();
       tr.stop();
-      if (synth) { synth.dispose(); synth = null; }
-      if (tala) { tala.dispose(); tala = null; }
+      if (synth) { synth.dispose(); synth = null; synthTimbre = null; }
+      if (tala) { tala.dispose(); tala = null; talaKind = null; }
     },
     dispose() {
       b.disposeMelody();

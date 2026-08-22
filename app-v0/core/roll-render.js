@@ -25,6 +25,16 @@ import { EDO } from './shruti.js';
 // which hit-tests a press against it.
 export const AB_TAB_H = 14;
 
+// Chip widths, measured once each. The labels are a swara name and an octave mark — a couple
+// of dozen distinct strings for the life of the page — and measureText was being called for
+// every chip on every animation frame. It is not a cheap call: it lays the text out.
+const CHIP_W = new Map();
+function chipW(ctx, label) {
+  let w = CHIP_W.get(label);
+  if (w === undefined) { w = ctx.measureText(label).width; CHIP_W.set(label, w); }
+  return w;
+}
+
 const roundRect = (ctx, x, y, w, h, r) => {
   r = Math.min(r, w / 2, h / 2);
   ctx.beginPath(); ctx.moveTo(x + r, y);
@@ -109,33 +119,55 @@ export function renderRoll(ctx, m, v, hooks = {}) {
   const ragaSet = new Set(m.gridPitches.map((gp) => gp.step));
   {
     const lo = Math.floor(sa), hi = Math.ceil(sb);
+    // TWO PATHS, not one per line. There are only two kinds of line here — a shruti and the
+    // 53-EDO steps between them — and they were costing a beginPath, a stroke and a dash
+    // change EACH. Measured on a real piece: 505 strokes a frame out of 669 for the whole
+    // roll, redrawn on every animation frame while a piece plays, on the same thread the
+    // notes are scheduled from. Same pixels: the lines share a colour and no two overlap.
+    const solid = [], dashed = [];
     for (let step = lo; step <= hi; step++) {
       if (ragaSet.has(step)) continue;                       // drawn below, at full weight
       const mod = ((step % EDO) + EDO) % EDO;
-      const isShruti = shrutiSet.has(mod);
-      const x = X(step);
-      ctx.strokeStyle = C.muted;
-      ctx.lineWidth = 1;
-      ctx.setLineDash(isShruti ? [] : [1, 3]);
-      ctx.globalAlpha = isShruti ? 0.34 : 0.30;
-      ctx.beginPath(); ctx.moveTo(x, p.y); ctx.lineTo(x, p.y + p.h); ctx.stroke();
-      ctx.setLineDash([]);
+      (shrutiSet.has(mod) ? solid : dashed).push(X(step));
     }
+    const column = (xs, dash, alpha) => {
+      if (!xs.length) return;
+      ctx.strokeStyle = C.muted; ctx.lineWidth = 1;
+      ctx.setLineDash(dash); ctx.globalAlpha = alpha;
+      ctx.beginPath();
+      for (const x of xs) { ctx.moveTo(x, p.y); ctx.lineTo(x, p.y + p.h); }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    };
+    column(dashed, [1, 3], 0.30);
+    column(solid, [], 0.34);
     ctx.globalAlpha = 1;
   }
 
   // The raga's own pitch lines, each named by an upright chip: dark for a black key,
   // light for a white one, by the nearest semitone to this Sa.
+  // The lines first, in one path — they are all the same weight and colour. The chips after,
+  // each of which needs its own rotation and so cannot be batched. Nothing overlaps: the
+  // lines live inside the plot and the chips sit above it.
+  {
+    const xs = [];
+    for (const gp of m.gridPitches)
+      if (gp.step >= sa - 1 && gp.step <= sb + 1) xs.push(X(gp.step));
+    if (xs.length) {
+      ctx.strokeStyle = C.muted; ctx.lineWidth = 1.4; ctx.globalAlpha = 0.75;
+      ctx.beginPath();
+      for (const x of xs) { ctx.moveTo(x, p.y); ctx.lineTo(x, p.y + p.h); }
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
   for (const gp of m.gridPitches) {
     if (gp.step < sa - 1 || gp.step > sb + 1) continue;
     const x = X(gp.step);
-    ctx.strokeStyle = C.muted; ctx.lineWidth = 1.4; ctx.globalAlpha = 0.75;
-    ctx.beginPath(); ctx.moveTo(x, p.y); ctx.lineTo(x, p.y + p.h); ctx.stroke();
-    ctx.globalAlpha = 1;
     if (v.labels === false) continue;
     const black = m.isBlack(gp.step);
     ctx.font = 'bold 10px ' + mono;
-    const cw = ctx.measureText(gp.label).width + 8, ch = v.chipH;
+    const cw = chipW(ctx, gp.label) + 8, ch = v.chipH;
     ctx.save(); ctx.translate(x, p.y - 6 - cw / 2); ctx.rotate(-Math.PI / 2);
     ctx.fillStyle = black ? '#20242b' : '#efe6d0'; roundRect(ctx, -cw / 2, -ch / 2, cw, ch, 4); ctx.fill();
     ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = .5; ctx.stroke();
@@ -173,11 +205,31 @@ export function renderRoll(ctx, m, v, hooks = {}) {
     const angOff = T.accents.map((a) => a - 1);
     const angs = angOff.map((o, i) => [o, i + 1 < angOff.length ? angOff[i + 1] : T.measure]);
     const glyphOf = (s, e) => { const k = T.beat > 0 ? Math.round((e - s) / T.beat) : 0; return k === 2 ? 'O' : (k === 1 ? 'U' : 'I'); };
-    const gline = (t, col, w, al) => {
-      if (t < vLo || t > vHi || t < -1e-6 || t > TOTAL + 1e-6) return;
-      const y = Y(t);
-      ctx.strokeStyle = col; ctx.lineWidth = w; ctx.globalAlpha = al;
-      ctx.beginPath(); ctx.moveTo(p.x, y); ctx.lineTo(p.x + p.w, y); ctx.stroke(); ctx.globalAlpha = 1;
+    // ONE PATH PER STYLE, not one per line. These are drawn on every animation frame while a
+    // piece plays, on the same thread the notes are scheduled from, and a dense tala puts an
+    // akshara line on every unit — sixty-odd separate strokes a frame, each preceded by three
+    // context-state writes. Measured on a phone-class CPU, the grid was most of the roll's
+    // per-frame cost: a plain piece at Tala=adi,1 cost 6.5ms a frame against 2.6ms for a
+    // 574-note varnam, which is the tala talking, not the notes.
+    //
+    // Same pixels, same order, same colours — only the batching changes.
+    const glines = (ts, col, w, al) => {
+      let any = false;
+      for (const t of ts) {
+        if (t < vLo || t > vHi || t < -1e-6 || t > TOTAL + 1e-6) continue;
+        if (!any) { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.globalAlpha = al; ctx.beginPath(); any = true; }
+        const y = Y(t);
+        ctx.moveTo(p.x, y); ctx.lineTo(p.x + p.w, y);
+      }
+      if (any) { ctx.stroke(); ctx.globalAlpha = 1; }
+    };
+    // And the labels: the font is set ONCE for a run of them rather than set and restored
+    // around each. Assigning ctx.font re-resolves the font, which is not free.
+    const glabels = (items, col, al, dy) => {
+      if (!items.length) return;
+      ctx.fillStyle = col; ctx.globalAlpha = al; ctx.textAlign = 'right'; ctx.font = 'bold 10px ' + mono;
+      for (const [t, text] of items) ctx.fillText(text, v.pad.l - 4, Y(t) + dy);
+      ctx.globalAlpha = 1; ctx.font = '11px ' + mono;
     };
     const c0 = Math.floor(Math.max(0, vLo) / T.measure) * T.measure;
     for (let c = c0; c < vHi && c < TOTAL; c += T.measure) {
@@ -185,20 +237,33 @@ export function renderRoll(ctx, m, v, hooks = {}) {
         const y0 = Math.max(p.y, Y(c + s)), y1 = Math.min(p.y + p.h, Y(Math.min(c + e, TOTAL)));
         if (y1 > y0) { ctx.fillStyle = 'rgba(70,195,154,.05)'; ctx.fillRect(p.x, y0, p.w, y1 - y0); } });
     }
-    if (T.beat > 0) for (let t = Math.max(0, Math.floor(vLo / T.beat) * T.beat); t <= Math.min(TOTAL, vHi); t += T.beat) gline(t, C.muted, 0.6, .13);
-    for (let c = c0; c < vHi && c < TOTAL; c += T.measure) {
-      angs.forEach(([s, e]) => { const t = c + s; if (t > TOTAL) return; gline(t, C.amber, 1, .3);
-        if (t >= vLo && t <= vHi) { const y = Y(t);
+    if (T.beat > 0) {
+      const beats = [];
+      for (let t = Math.max(0, Math.floor(vLo / T.beat) * T.beat); t <= Math.min(TOTAL, vHi); t += T.beat) beats.push(t);
+      glines(beats, C.muted, 0.6, .13);
+    }
+    {
+      const ts = [], labels = [];
+      for (let c = c0; c < vHi && c < TOTAL; c += T.measure) {
+        angs.forEach(([s, e]) => {
+          const t = c + s; if (t > TOTAL) return;
+          ts.push(t);
           // In the GUTTER, right up against the grid rather than on top of it. Inside
           // the plot these sat over the first pitch rows and made both hard to read.
-          ctx.fillStyle = C.amber; ctx.globalAlpha = .85; ctx.textAlign = 'right'; ctx.font = 'bold 10px ' + mono;
-          ctx.fillText(glyphOf(s, e), v.pad.l - 4, y - 3); ctx.globalAlpha = 1; ctx.font = '11px ' + mono; } });
+          if (t >= vLo && t <= vHi) labels.push([t, glyphOf(s, e)]);
+        });
+      }
+      glines(ts, C.amber, 1, .3);
+      glabels(labels, C.amber, .85, -3);
     }
-    for (let t = Math.max(0, Math.floor(vLo / T.measure) * T.measure); t <= Math.min(TOTAL, vHi); t += T.measure) {
-      gline(t, C.terra, 1.8, .5);
-      if (t < TOTAL - 1e-6) { const y = Y(t);
-        ctx.fillStyle = C.terra; ctx.globalAlpha = .8; ctx.textAlign = 'right'; ctx.font = 'bold 10px ' + mono;
-        ctx.fillText(String(Math.round(t / T.measure) + 1), v.pad.l - 4, y + 11); ctx.globalAlpha = 1; ctx.font = '11px ' + mono; }
+    {
+      const ts = [], labels = [];
+      for (let t = Math.max(0, Math.floor(vLo / T.measure) * T.measure); t <= Math.min(TOTAL, vHi); t += T.measure) {
+        ts.push(t);
+        if (t < TOTAL - 1e-6) labels.push([t, String(Math.round(t / T.measure) + 1)]);
+      }
+      glines(ts, C.terra, 1.8, .5);
+      glabels(labels, C.terra, .8, 11);
     }
   }
 
