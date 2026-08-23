@@ -25,6 +25,11 @@ import { EDO } from './shruti.js';
 // which hit-tests a press against it.
 export const AB_TAB_H = 14;
 
+// How long a struck note stays lit, in length-units. Short enough that two notes are never
+// lit at once at any sane tempo, long enough to be seen at 60fps — about three frames at
+// T120, more when slower, which is what a cue for the eye needs.
+const FLASH_UNITS = 0.6;
+
 // Chip widths, measured once each. The labels are a swara name and an octave mark — a couple
 // of dozen distinct strings for the life of the page — and measureText was being called for
 // every chip on every animation frame. It is not a cheap call: it lays the text out.
@@ -154,7 +159,9 @@ export function renderRoll(ctx, m, v, hooks = {}) {
     for (const gp of m.gridPitches)
       if (gp.step >= sa - 1 && gp.step <= sb + 1) xs.push(X(gp.step));
     if (xs.length) {
-      ctx.strokeStyle = C.muted; ctx.lineWidth = 1.4; ctx.globalAlpha = 0.75;
+      // A shade lighter than it was: this is the line a note SITS on, and it was drawn
+      // heavier than the note itself.
+      ctx.strokeStyle = C.muted; ctx.lineWidth = 1.2; ctx.globalAlpha = 0.6;
       ctx.beginPath();
       for (const x of xs) { ctx.moveTo(x, p.y); ctx.lineTo(x, p.y + p.h); }
       ctx.stroke();
@@ -331,10 +338,41 @@ export function renderRoll(ctx, m, v, hooks = {}) {
     const black = mode === 'roll' && m.isBlack(nn.step);
     ctx.fillStyle = mode === 'draw'
       ? (selNow ? 'rgba(216,161,63,.16)' : 'rgba(216,161,63,.07)')
-      : (black ? 'rgba(32,36,43,.82)' : 'rgba(239,230,208,.85)');
-    ctx.strokeStyle = selNow ? C.amber : C.amberS; ctx.lineWidth = selNow ? 2 : 1.3;
+      : (black ? 'rgba(38,43,52,.9)' : 'rgba(239,230,208,.85)');
+    // THE OUTLINE CARRIES THE NOTE. Its fill cannot: a black-key note is nearly the colour of
+    // a dark background and a white-key one is nearly the colour of a light one, which is the
+    // point of them — dark means a black key. Reported from a phone in dark mode, where the
+    // note strips vanished into the grid, and the numbers said why: the raga pitch line under
+    // a note was 1.4px at 75% while the note's own edge was 1.3px of amber at 55%. The
+    // gridline was both thicker and brighter than the thing sitting on it.
+    ctx.strokeStyle = C.amber;
+    ctx.lineWidth = selNow ? 2.2 : 1.7;
     ctx.setLineDash(mode === 'draw' ? [5, 4] : []);
-    roundRect(ctx, x - w / 2, y0 + 1, w, Math.max(3, y1 - y0 - 2), 5); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
+    roundRect(ctx, x - w / 2, y0 + 1, w, Math.max(3, y1 - y0 - 2), 5);
+    // The FILL at full opacity and the EDGE at its own — set between them, not before both.
+    // Setting it first made every note fill 15% transparent as well, which is less contrast
+    // against the background rather than more: the opposite of what this change is for.
+    ctx.fill();
+    ctx.globalAlpha = selNow ? 1 : 0.85;
+    ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    // STRUCK. The playhead reaching a note lights it, and the light fades over its own short
+    // life. It is there so that a reader setting the A/V trim has a sharp event to match the
+    // sound against: the tala grid is periodic, so aligning to it is right modulo one beat —
+    // 250ms at adi,1 and T120 — and every whole-beat error looks perfect. A note's onset does
+    // not repeat.
+    //
+    // Driven by the DRAWN playhead, deliberately, not by the audio callback. Lit from the
+    // audio side it would always agree with the sound and would say nothing about the trim.
+    if (mode === 'roll' && v.playPos != null && nn.dur > 0) {
+      const age = (v.playPos - starts[i]) / FLASH_UNITS;
+      if (age >= 0 && age < 1 && v.playPos < starts[i] + nn.dur) {
+        ctx.globalAlpha = (1 - age) * 0.55;
+        ctx.fillStyle = C.teal;
+        roundRect(ctx, x - w / 2, y0 + 1, w, Math.max(3, y1 - y0 - 2), 5); ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
     if (nn.curve) drawCurve(ctx, g, nn.curve, starts[i], starts[i] + nn.dur, C.teal, mode === 'draw' ? 3 : 2, v.sample);
     if (mode !== 'draw') { ctx.fillStyle = black ? '#efe6d0' : '#20242b'; ctx.textAlign = 'center'; ctx.fillText(nn.swara, x, y0 + 13); }
     // Resize caps at BOTH ends of the note being edited: the far edge sets how long
