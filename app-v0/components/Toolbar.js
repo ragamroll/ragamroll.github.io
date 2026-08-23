@@ -65,7 +65,13 @@ function FullscreenButton() {
 // controls live at the bottom of the screen with the transport, where a thumb reaches
 // them. That is the gamaka page's shape, and the reason it holds a phone: the roll is
 // the whole middle of the window instead of what is left after the chrome.
-export function Toolbar({ docName, blank, duration }) {
+//
+// AND THE PLAY CONTROLS, which is a change to what that comment says. They are the one group
+// you press while a piece is RUNNING, and on a phone the notation drawer can now be pulled
+// down far enough to push the transport off the bottom of the screen — which is exactly what
+// a reader wants when the roll is the thing being read. Everything that can be sent away is;
+// what cannot go is here.
+export function Toolbar({ docName, blank, duration, play }) {
   return html`<div class="toolbar">
     <span class="app-badge">RagaM-Roll</span>
     <a class="help-link" href="./help.html" target="_blank" rel="noopener"
@@ -77,6 +83,7 @@ export function Toolbar({ docName, blank, duration }) {
          the roll because it does not change as you scroll and costs no grid at any width,
          which is what a phone needs. It follows a tempo override, like the ruler does. -->
     ${duration && html`<span class="head-dur" title="How long the piece takes at this tempo">${duration}</span>`}
+    ${play}
     <${FullscreenButton} />
   </div>`;
 }

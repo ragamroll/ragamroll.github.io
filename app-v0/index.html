@@ -54,7 +54,9 @@
        thing pushed out of reach. --app-h is set from visualViewport.height, which is the one
        measurement that means what it says. */
     html, body { overflow:hidden; overscroll-behavior:none; }
-    #app { height:100vh; height:100dvh; height:var(--app-h, 100dvh);
+    /* Clipped, so the chrome pushed past the bottom by the drawer's grip is GONE rather than
+       making the page scroll. */
+    #app { overflow:hidden; height:100vh; height:100dvh; height:var(--app-h, 100dvh);
       display:flex; flex-direction:column; overflow:hidden; }
     /* ONE ROW, always. The head holds a name, two links, a readout and fullscreen —
        nothing that needs a second line, and the readout wrapping to full width pushed
@@ -548,6 +550,10 @@
     .instr-foot { margin-top:.6rem; }
     /* The file input is the button's plumbing, not a control: ⭱ Load clicks it. */
     .instr-file { display:none; }
+    /* Everything below the roll: the notation drawer, the transport, the controls, the
+       footer. It slides down as one when the grip is pushed past shut. */
+    .below { display:contents; }
+    .below[style] { display:block; flex:0 0 auto; }
     /* The A/V trim: two nudges and a reading that is only there once it means something. */
     .sync { display:inline-flex; align-items:center; gap:.1rem; }
     .sync .sync-nudge { padding:.15rem .35rem; font-size:.8rem; }

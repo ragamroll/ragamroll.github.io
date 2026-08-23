@@ -97,17 +97,7 @@ export function Transport({ state, canPlay, onPlay, onPause, onStop, looping, on
       ${overridden ? html`<button class="tempo-reset" title="Use composition tempo" onClick=${onResetTempo}>↺</button>` : ''}
     </label>
 
-    <span class="transport-play">
-      <button title="Back to the start (of the A–B segment, if set)" onClick=${onRewind} disabled=${!canPlay}>⏮</button>
-      <!-- ONE button, as on the gamaka page. Play and Pause were never both available:
-           whichever one you could press, the other was greyed out beside it, so the pair
-           spent its width saying what you cannot do. It says Resume rather than Play
-           after a pause, because that is the difference the press will make — playback
-           carries on from where it stopped rather than from the top. -->
-      <button class="pri" onClick=${state === 'playing' ? onPause : onPlay}
-              title=${state === 'playing' ? 'Pause' : state === 'paused' ? 'Resume' : 'Play'}
-              disabled=${state !== 'playing' && !canPlay}>${state === 'playing' ? '⏸' : '▶'}</button>
-      <button title="Stop"  onClick=${onStop}  disabled=${state === 'stopped'}>⏹</button>
+      <span class="transport-mix">
       <!-- A/V TRIM, and it is nudged rather than typed. This is a value you can only find by
            ear while a piece runs: a number field makes you leave that loop to guess, type,
            listen and guess again, and nobody knows what a millisecond feels like. Two buttons
@@ -131,12 +121,6 @@ export function Transport({ state, canPlay, onPlay, onPause, onStop, looping, on
            a control whose scope you have to work out is a control you press twice. Live —
            turning it on mid-run makes the pass you are in the first of many, and turning it
            off lets that pass finish rather than cutting the note you are inside. -->
-      <button class=${'loop-btn' + (looping ? ' on' : '')} aria-pressed=${!!looping}
-              onClick=${onToggleLoop}
-              title=${looping
-                ? `Repeating the ${hasSeg ? 'A–B segment' : 'piece'} until you stop — click to play it once`
-                : `Play once — click to repeat the ${hasSeg ? 'A–B segment' : 'piece'} until you stop`}>🔁</button>
-
       <span class=${'vol' + (droneMuted ? ' muted' : '')}>
         <button class="vol-toggle" aria-pressed=${!droneMuted} onClick=${onToggleDrone}
                 title=${droneMuted ? 'Drone off — click to turn on (keeps the set level)'

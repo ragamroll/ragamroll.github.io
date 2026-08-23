@@ -36,6 +36,7 @@ import { inlineLegacyCurves } from './core/share-legacy.js';
 import { Transport, BPM_MIN, BPM_MAX } from './components/Transport.js';
 import { Splitter } from './components/Splitter.js';
 import { Footer } from './components/Footer.js';
+import { PlayBar } from './components/PlayBar.js';
 import { PerfDialog } from './components/PerfDialog.js';
 import { VERSION } from './version.js';
 import { createPerf, watchLongTasks, deviceFacts } from './core/perf.js';
@@ -1097,6 +1098,18 @@ function App({ examples }) {
   // Stacked, the notation is not a pane at all — it is a drawer, and this is how far up
   // it has been pulled. Shut to start with, so the roll opens with the whole window.
   const [drawerH, setDrawerH] = useState(0);
+  // HOW FAR THE GRIP MAY PUSH, and it is the host that knows: exactly the height of what sits
+  // below it. Push by that much and the transport, the controls and the footer are gone; push
+  // further and the roll would carry the grip itself off the bottom, taking the only way back
+  // with it. Measured from the block's own content rather than guessed as a fraction of the
+  // window, because it is the block's height that decides, and it changes with the wrapping.
+  const belowRef = useRef(null);
+  const setDrawer = useCallback((v) => setDrawerH(() => {
+    if (v >= 0) return v;
+    const el = belowRef.current;
+    const room = el ? el.scrollHeight - 6 : 200;      // leave the grip a few pixels of daylight
+    return Math.max(v, -Math.max(0, room));
+  }), []);
 
   // Two panes, two arrangements. Side by side is this page's shape; stacked is the gamaka
   // page's, and a window holding half a screen is portrait-shaped, so putting the two up
@@ -1189,7 +1202,10 @@ function App({ examples }) {
 
   return html`
     ${!AUDIO.ok && html`<div class="audio-warning" role="status">⚠ ${AUDIO.why}</div>`}
-    <${Toolbar} docName=${docName} blank=${noteCount === 0} duration=${duration} />
+    <${Toolbar} docName=${docName} blank=${noteCount === 0} duration=${duration}
+                play=${html`<${PlayBar} state=${playState} canPlay=${noteCount > 0}
+                    onPlay=${onPlay} onPause=${onPause} onStop=${onStop} onRewind=${onRewind}
+                    looping=${looping} onToggleLoop=${onToggleLoop} hasSeg=${hasSeg} />`} />
     ${instrOpen && html`<${InstrumentDialog} values=${instr} onSet=${onInstrSet}
                                         onReset=${onInstrReset} onAudition=${onInstrAudition}
                                         playing=${playState === 'playing'}
@@ -1244,17 +1260,22 @@ function App({ examples }) {
             onSpan=${(d) => setCurveSpan((v) => Math.min(60, Math.max(10, v + d)))} />`} />
       </div>
     </div>
-    ${stacked && html`<${EditorDrawer} h=${drawerH} setH=${setDrawerH}
+    ${stacked && html`<${EditorDrawer} h=${drawerH} setH=${setDrawer}
       text=${text} onText=${setText}
       gkaOn=${gkaOn} onGkaToggle=${() => setGkaOn((v) => !v)} gkaText=${gkaText} hasGka=${hasGka}
       reading=${reading} onReading=${() => setReading((v) => !v)} onPeek=${gkaOn ? onPeek : null}
       durations=${readingMeta.durations} measure=${readingMeta.measure}
       ragas=${ragaNames} talas=${talaNames} raga=${ragaName} tala=${talaName}
       blank=${noteCount === 0} onRaga=${onPickRaga} onTala=${onPickTala} />`}
+    <!-- Pushed off the bottom when the grip goes past shut, and the GRIP IS NOT IN HERE:
+         it stays under the roll where a thumb can find it. The first version slid the drawer
+         down as well, which sent the only way back off the screen with everything else. -->
+    <div class="below" ref=${belowRef} style=${stacked && drawerH < 0
+      ? `position:relative; top:${-drawerH}px; margin-bottom:${drawerH}px` : ''}>
     <${Transport} state=${playState} canPlay=${noteCount > 0}
-                  onPlay=${onPlay} onPause=${onPause} onStop=${onStop} onRewind=${onRewind}
-                  looping=${looping} onToggleLoop=${onToggleLoop} hasSeg=${hasSeg}
                   syncMs=${Math.round(sync * 1000)} onSync=${onSync}
+                  syncMs=${Math.round(sync * 1000)} onSync=${onSync}
+                  onPlay=${onPlay} onPause=${onPause} onStop=${onStop} onRewind=${onRewind}
                   compositionTempo=${compositionTempo} tempoOverride=${tempoOverride} onTempo=${onTempo} onResetTempo=${onResetTempo}
                   saPitch=${saPitch} autoSaMidi=${autoSaMidi} onSetSa=${onSetSa}
                   masterVol=${masterVol} onMasterVol=${onMasterVol}
@@ -1270,6 +1291,7 @@ function App({ examples }) {
                 timbre=${timbre} onTimbre=${onTimbre}
                 onOpenInstrument=${() => setInstrOpen(true)} />
     <${Footer} onPerf=${onPerf} />
+    </div>
     ${perfOpen && html`<${PerfDialog} perf=${perfRef.current} version=${VERSION}
                                       onReset=${onPerfReset} onClose=${() => setPerfOpen(false)} />`}
   `;
