@@ -1227,7 +1227,11 @@ function pausePlay(){
 }
 function stopPlay(){
   playing=false; paused=false; loadedKey=''; cancelAnimationFrame(raf);
-  if(player){ player.droneOff(); player.stop(); }
+  // FADED, not cut — the same reason as the app's Stop: stopping outright drops whatever is
+  // ringing to zero in one sample, which is a click. fadeOutStop ramps the master down and
+  // then stops (and turns the drone off itself), and a Play arriving inside that window
+  // cancels the teardown and restores the level.
+  if(player){ if(player.fadeOutStop) player.fadeOutStop(); else { player.droneOff(); player.stop(); } }
   headAt=startUnits();
   // Left showing where a Play would begin, when that is not the beginning.
   if(mark.a!=null) headTo(mark.a); else $('head').hidden=true;
