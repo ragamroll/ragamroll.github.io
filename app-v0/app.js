@@ -16,7 +16,7 @@ import { createSeamHost } from './core/roll-seam.js';
 import { stepFreq } from './core/shruti.js';
 import { sampleCurve, GAMAKA_SAMPLES } from './core/gamaka-inline.js';
 import { buildRagaSteps } from './core/detect-raga-helper.js';
-import { Toolbar, ControlBar } from './components/Toolbar.js';
+import { Toolbar } from './components/Toolbar.js';
 import { EditorDrawer } from './components/EditorDrawer.js';
 import { Diagnostics } from './components/Diagnostics.js';
 import { RagaDialog } from './components/RagaDialog.js';
@@ -33,10 +33,11 @@ import { droneFreqs } from './audio/drone.js';
 import { saBaseOf, applyPlaybackPitch } from './core/retune.js';
 import { shareUrl, readSharedSource, sourceFromShareInput, parseSharedPayload, mixLevels } from './core/share.js';
 import { inlineLegacyCurves } from './core/share-legacy.js';
-import { Transport, BPM_MIN, BPM_MAX } from './components/Transport.js';
+import { BPM_MIN, BPM_MAX } from './components/Controls.js';
 import { Splitter } from './components/Splitter.js';
 import { Footer } from './components/Footer.js';
-import { PlayBar } from './components/PlayBar.js';
+import { ChromeRow, ChromeBar } from './components/ChromeBar.js';
+import { loadLayout, saveLayout } from './core/chrome-layout.js';
 import { PerfDialog } from './components/PerfDialog.js';
 import { VERSION } from './version.js';
 import { createPerf, watchLongTasks, deviceFacts } from './core/perf.js';
@@ -1103,6 +1104,11 @@ function App({ examples }) {
   // further and the roll would carry the grip itself off the bottom, taking the only way back
   // with it. Measured from the block's own content rather than guessed as a fraction of the
   // window, because it is the block's height that decides, and it changes with the wrapping.
+  // The chrome's arrangement, as data. Row 1 is pinned below the roll; the rest is the panel
+  // the grip can push away, clipped from the bottom, so the last row goes first.
+  const [rows, setRows] = useState(() => loadLayout());
+  useEffect(() => { saveLayout(rows); }, [rows]);
+
   const belowRef = useRef(null);
   const setDrawer = useCallback((v) => setDrawerH(() => {
     if (v >= 0) return v;
@@ -1177,6 +1183,23 @@ function App({ examples }) {
     setEditorPct(rollFirst ? 100 - first : first);
   }, [rollFirst]);
 
+  // ONE BAG for every control the layout can place. They all take the same shape rather than
+  // their own lists of props — a registry whose members have different signatures cannot be
+  // rendered from a loop, and rendering from a loop is what makes the arrangement data.
+  const ctl = {
+    state: playState, canPlay: noteCount > 0,
+    onPlay, onPause, onStop, onRewind, looping, onToggleLoop, hasSeg,
+    syncMs: Math.round(sync * 1000), onSync,
+    talaVol, onTalaVol, talaMuted, onToggleTala, melodyMuted, onToggleMelody,
+    droneVol, onDroneVol, droneMuted, onToggleDrone, masterVol, onMasterVol,
+    onSave, onExportMidi, onShare, shared, onLanes,
+    compositionTempo, tempoOverride, onTempo, onResetTempo,
+    saPitch, autoSaMidi, onSetSa,
+    examples, exampleValue, onNew, onOpen, onExample, onOpenLink,
+    onOpenRagas, onOpenTalas, onOpenScale, scaleActive: !!scale,
+    timbre, onTimbre, onOpenInstrument: () => setInstrOpen(true),
+  };
+
   // Headless-guard surface, mirroring draw's window.__rr and pitchy's window.__pv:
   // what the roll is showing and where its playhead is, without scraping pixels.
   useEffect(() => {
@@ -1202,10 +1225,7 @@ function App({ examples }) {
 
   return html`
     ${!AUDIO.ok && html`<div class="audio-warning" role="status">⚠ ${AUDIO.why}</div>`}
-    <${Toolbar} docName=${docName} blank=${noteCount === 0} duration=${duration}
-                play=${html`<${PlayBar} state=${playState} canPlay=${noteCount > 0}
-                    onPlay=${onPlay} onPause=${onPause} onStop=${onStop} onRewind=${onRewind}
-                    looping=${looping} onToggleLoop=${onToggleLoop} hasSeg=${hasSeg} />`} />
+    <${Toolbar} docName=${docName} blank=${noteCount === 0} duration=${duration} />
     ${instrOpen && html`<${InstrumentDialog} values=${instr} onSet=${onInstrSet}
                                         onReset=${onInstrReset} onAudition=${onInstrAudition}
                                         playing=${playState === 'playing'}
@@ -1260,6 +1280,9 @@ function App({ examples }) {
             onSpan=${(d) => setCurveSpan((v) => Math.min(60, Math.max(10, v + d)))} />`} />
       </div>
     </div>
+    <!-- ROW 1, pinned. Outside the panel below, so pushing the grip all the way down cannot
+         reach it: room to read is worth nothing if the music cannot be stopped. -->
+    <${ChromeRow} ids=${rows[0] || []} p=${ctl} cls="chrome-pinned" />
     ${stacked && html`<${EditorDrawer} h=${drawerH} setH=${setDrawer}
       text=${text} onText=${setText}
       gkaOn=${gkaOn} onGkaToggle=${() => setGkaOn((v) => !v)} gkaText=${gkaText} hasGka=${hasGka}
@@ -1272,24 +1295,7 @@ function App({ examples }) {
          down as well, which sent the only way back off the screen with everything else. -->
     <div class="below" ref=${belowRef} style=${stacked && drawerH < 0
       ? `position:relative; top:${-drawerH}px; margin-bottom:${drawerH}px` : ''}>
-    <${Transport} state=${playState} canPlay=${noteCount > 0}
-                  syncMs=${Math.round(sync * 1000)} onSync=${onSync}
-                  syncMs=${Math.round(sync * 1000)} onSync=${onSync}
-                  onPlay=${onPlay} onPause=${onPause} onStop=${onStop} onRewind=${onRewind}
-                  compositionTempo=${compositionTempo} tempoOverride=${tempoOverride} onTempo=${onTempo} onResetTempo=${onResetTempo}
-                  saPitch=${saPitch} autoSaMidi=${autoSaMidi} onSetSa=${onSetSa}
-                  masterVol=${masterVol} onMasterVol=${onMasterVol}
-                  melodyMuted=${melodyMuted} onToggleMelody=${onToggleMelody}
-                  talaVol=${talaVol} onTalaVol=${onTalaVol} talaMuted=${talaMuted} onToggleTala=${onToggleTala}
-                  droneVol=${droneVol} onDroneVol=${onDroneVol} droneMuted=${droneMuted} onToggleDrone=${onToggleDrone}
-                  onSave=${onSave} onExportMidi=${onExportMidi} onShare=${onShare} shared=${shared}
-                  onLanes=${onLanes} />
-    <${ControlBar} examples=${examples} exampleValue=${exampleValue}
-                onNew=${onNew} onOpen=${onOpen} onExample=${onExample} onOpenLink=${onOpenLink}
-                onOpenRagas=${onOpenRagas} onOpenTalas=${onOpenTalas}
-                onOpenScale=${onOpenScale} scaleActive=${!!scale}
-                timbre=${timbre} onTimbre=${onTimbre}
-                onOpenInstrument=${() => setInstrOpen(true)} />
+    <${ChromeBar} rows=${rows.slice(1)} p=${ctl} />
     <${Footer} onPerf=${onPerf} />
     </div>
     ${perfOpen && html`<${PerfDialog} perf=${perfRef.current} version=${VERSION}

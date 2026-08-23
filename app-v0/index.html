@@ -122,7 +122,9 @@
        with most of the examples unreachable. It opens above its button instead, and its
        own height is capped so a long list of examples scrolls INSIDE it rather than
        running past the top of the window. */
-    .openmenu-pop { position:absolute; bottom:100%; left:0; margin-bottom:.3rem; z-index:900;
+    /* Drops UP or DOWN, whichever has room, and scrolls rather than leaving the window. */
+    .openmenu-pop.down { bottom:auto; top:100%; margin-bottom:0; margin-top:.3rem; }
+    .openmenu-pop { overflow-y:auto; position:absolute; bottom:100%; left:0; margin-bottom:.3rem; z-index:900;
       background:var(--panel); border:1px solid var(--hair); border-radius:6px; min-width:11rem; padding:.25rem;
       display:flex; flex-direction:column; box-shadow:0 -8px 30px rgba(0,0,0,.5);
       max-height:min(70vh, 30rem); overflow-y:auto; overscroll-behavior:contain; }
@@ -550,6 +552,13 @@
     .instr-foot { margin-top:.6rem; }
     /* The file input is the button's plumbing, not a control: ⭱ Load clicks it. */
     .instr-file { display:none; }
+    /* The chrome, drawn a row at a time from the layout. Row 1 is pinned under the roll. */
+    /* Tight on purpose. The pinned row came to 379px of controls in a 395px phone — over by
+       a hair, and a hair is a whole second line. */
+    .chrome-row { display:flex; flex-wrap:wrap; align-items:center; gap:.22rem;
+      padding:.15rem .25rem; }
+    .chrome-row .timbre select { max-width:5.2rem; }
+    .chrome-pinned { border-bottom:1px solid var(--hair2); }
     /* Everything below the roll: the notation drawer, the transport, the controls, the
        footer. It slides down as one when the grip is pushed past shut. */
     .below { display:contents; }

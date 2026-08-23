@@ -1,4 +1,4 @@
-const CACHE = 'ragamroll-a2542b4';
+const CACHE = 'ragamroll-6932f89';
 
 // SERVED FROM A LOCAL SERVER: stand down entirely.
 //
@@ -19,7 +19,7 @@ const ASSETS = [
   './vendor/tone.js',
   './vendor/pitchy.mjs', './vendor/fft.mjs',
   './components/Editor.js', './components/RollPane.js', './components/RollTools.js', './components/EditTools.js', './components/EditorDrawer.js', './components/Toolbar.js',
-  './components/Diagnostics.js', './components/Transport.js', './components/ReferenceDialog.js', './components/Splitter.js',
+  './components/Diagnostics.js', './components/Controls.js', './components/ChromeBar.js', './core/chrome-layout.js', './components/ReferenceDialog.js', './components/Splitter.js',
   './components/Footer.js', './components/PerfDialog.js', './components/OpenMenu.js', './components/ScaleDialog.js', './components/TalaDialog.js',
   './components/RagaDialog.js',
   './audio/schedule.js', './audio/drone.js', './audio/backend.js', './audio/backends/tone.js', './audio/backends/webaudio.js', './audio/player.js',

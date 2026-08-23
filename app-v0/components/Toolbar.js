@@ -66,12 +66,10 @@ function FullscreenButton() {
 // them. That is the gamaka page's shape, and the reason it holds a phone: the roll is
 // the whole middle of the window instead of what is left after the chrome.
 //
-// AND THE PLAY CONTROLS, which is a change to what that comment says. They are the one group
-// you press while a piece is RUNNING, and on a phone the notation drawer can now be pulled
-// down far enough to push the transport off the bottom of the screen — which is exactly what
-// a reader wants when the roll is the thing being read. Everything that can be sent away is;
-// what cannot go is here.
-export function Toolbar({ docName, blank, duration, play }) {
+// THE CONTROLS ARE NOT HERE ANY MORE. They are rows under the roll, drawn from a layout the
+// reader can rearrange — see core/chrome-layout.js. What is left here is what identifies the
+// page rather than operates it.
+export function Toolbar({ docName, blank, duration }) {
   return html`<div class="toolbar">
     <span class="app-badge">RagaM-Roll</span>
     <a class="help-link" href="./help.html" target="_blank" rel="noopener"
@@ -83,27 +81,6 @@ export function Toolbar({ docName, blank, duration, play }) {
          the roll because it does not change as you scroll and costs no grid at any width,
          which is what a phone needs. It follows a tempo override, like the ruler does. -->
     ${duration && html`<span class="head-dur" title="How long the piece takes at this tempo">${duration}</span>`}
-    ${play}
     <${FullscreenButton} />
-  </div>`;
-}
-
-export function ControlBar({ onNew, onOpen, examples, exampleValue, onExample, onOpenLink,
-  onOpenRagas, onOpenTalas, onOpenScale, scaleActive, timbre, onTimbre, onOpenInstrument }) {
-  return html`<div class="controlbar">
-    <${OpenMenu} examples=${examples} exampleValue=${exampleValue} onNew=${onNew} onOpen=${onOpen} onExample=${onExample} onOpenLink=${onOpenLink} />
-    <button onClick=${onOpenRagas}>Ragas</button>
-    <button onClick=${onOpenTalas}>Talas</button>
-    <button class=${'scale-btn' + (scaleActive ? ' active' : '')} onClick=${onOpenScale}
-            title="Experimental: override the scale pitches (53-EDO)">Scale ⚙${scaleActive ? ' •' : ''}</button>
-    <label class="timbre" title="Melody instrument voice (applies on next play)">🎻
-      <select value=${timbre} onChange=${(e) => onTimbre(e.target.value)}>
-        ${MELODY_VOICES.map(([v, label]) => html`<option key=${v} value=${v}>${label}</option>`)}
-      </select>
-    </label>
-    <!-- Only the voice that is built from parts has parts to move. A settings button beside
-         a preset would open on an apology. -->
-    ${isTunable(timbre) && html`<button class="instr-btn" onClick=${onOpenInstrument}
-      title="Open this instrument: the string, its body and its room">⚙</button>`}
   </div>`;
 }
