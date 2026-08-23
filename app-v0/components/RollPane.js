@@ -569,7 +569,11 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
   useEffect(() => {
     const r = roll.current; if (!r) return;
     const wide = (r.size().w || 0) >= RULER_MIN_W;
-    r.setView({ secPerUnit: wide ? secPerUnit : 0 }).resize();
+    // The tempo is ALWAYS told; only the ruler depends on there being room for it. These were
+    // one field, so a narrow pane said "no idea how fast this is" — and the note flash, which
+    // times itself in seconds, fell back to a fixed number of length-units. On a phone that is
+    // every pane, and at a fast tempo the flash lasted two frames.
+    r.setView({ secPerUnit, ruler: wide }).resize();
   }, [secPerUnit, model, paneW]);
 
   return html`<div class="pane roll" style=${style}>

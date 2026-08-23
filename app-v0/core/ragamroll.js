@@ -36,7 +36,7 @@ export function createRagamRoll(el, opts = {}) {
   let model = EMPTY;
   let user = { min: null, max: null, bottom: null };
   let view = { mode: 'roll', sel: -1, selRest: -1, drawSpan: 22, zoom: 1, playPos: null,
-    markerA: 0, markerB: 0, saMidi: null, grabIdx: -1, labels: true };
+    markerA: 0, markerB: 0, saMidi: null, grabIdx: -1, labels: true, ruler: false };
   let bounds = { total: 1, stepMin: -26, stepMax: 66, gridPitches: [] };
   const pad = { l: 40, r: 12, t: PAD_T_MIN, b: 12 };
   // The seconds ruler needs a margin of its own on the right. Reserved HERE rather than in
@@ -129,7 +129,7 @@ export function createRagamRoll(el, opts = {}) {
       // these were passed in by both apps and never arrived.
       paint: view.paint, paintMode: view.paintMode, drawing: view.drawing, abTabs: view.abTabs,
       gamakaMode: view.gamakaMode, handles: view.handles, abChip: view.abChip,
-      secPerUnit: view.secPerUnit,
+      secPerUnit: view.secPerUnit, ruler: view.ruler,
       chipH: LABEL_CHIP_H, sample: sampleCurve };
   };
 
@@ -155,7 +155,11 @@ export function createRagamRoll(el, opts = {}) {
     pitchView: () => (pitchView ? { ...pitchView } : null),
     setView(v) {
       const reBound = v.zoom != null && v.zoom !== view.zoom;
-      if (v.secPerUnit !== undefined) pad.r = v.secPerUnit > 0 ? PAD_R_RULER : 12;
+      // `ruler` decides the seconds ruler; `secPerUnit` is just what a unit is worth in time.
+      // They used to be the same field, so a pane too narrow for the ruler also reported that
+      // it had no idea how fast the piece was — which on a phone is every pane, and which
+      // quietly took the note flash's timing with it.
+      if (v.secPerUnit !== undefined) pad.r = v.ruler && v.secPerUnit > 0 ? PAD_R_RULER : 12;
       view = { ...view, ...v };
       if (reBound) pad.t = labelDepth(bounds.gridPitches);
       return api;

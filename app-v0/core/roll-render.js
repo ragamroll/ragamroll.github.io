@@ -25,10 +25,11 @@ import { EDO } from './shruti.js';
 // which hit-tests a press against it.
 export const AB_TAB_H = 14;
 
-// How long a struck note stays lit, in length-units. Short enough that two notes are never
-// lit at once at any sane tempo, long enough to be seen at 60fps — about three frames at
-// T120, more when slower, which is what a cue for the eye needs.
-const FLASH_UNITS = 0.6;
+// How long a struck note stays lit — a fixed TIME, not a fixed number of length-units. As
+// units it lasted 150ms at T120 and 37ms at T480, so on a fast piece it was two frames and
+// effectively invisible. About an eighth of a second is what the eye needs to catch it.
+const FLASH_SEC = 0.13;
+const FLASH_UNITS_FALLBACK = 0.6;      // when the view has not said what a unit is worth
 
 // Chip widths, measured once each. The labels are a swara name and an octave mark — a couple
 // of dozen distinct strings for the life of the page — and measureText was being called for
@@ -336,9 +337,19 @@ export function renderRoll(ctx, m, v, hooks = {}) {
     const nn = notes[i], y0 = Y(starts[i]), y1 = Y(starts[i] + nn.dur), x = X(nn.step), selNow = i === v.sel;
     const w = mode === 'draw' ? Math.max(30, p.w * 0.14) : colW;
     const black = mode === 'roll' && m.isBlack(nn.step);
+    // STRUCK: how far into its flash this note is, 1 at the instant it is reached and 0 when
+    // the light has gone. Worked out before the fill, because the flash INVERTS the bar rather
+    // than tinting it — a teal wash over a dark note in a dark theme, or over a light note in
+    // a light one, is lost either way, which is what it did. Dark goes bright and bright goes
+    // dark: a reversal cannot be lost against either background, and needs no colour of its own.
+    const flashUnits = v.secPerUnit > 0 ? FLASH_SEC / v.secPerUnit : FLASH_UNITS_FALLBACK;
+    const lit = (mode === 'roll' && v.playPos != null && nn.dur > 0 && flashUnits > 0)
+      ? 1 - (v.playPos - starts[i]) / flashUnits : 0;
+    const strike = (lit > 0 && lit <= 1 && v.playPos < starts[i] + nn.dur) ? lit : 0;
+    const DARK = 'rgba(38,43,52,.9)', LIGHT = 'rgba(239,230,208,.85)';
     ctx.fillStyle = mode === 'draw'
       ? (selNow ? 'rgba(216,161,63,.16)' : 'rgba(216,161,63,.07)')
-      : (black ? 'rgba(38,43,52,.9)' : 'rgba(239,230,208,.85)');
+      : (black ? DARK : LIGHT);
     // THE OUTLINE CARRIES THE NOTE. Its fill cannot: a black-key note is nearly the colour of
     // a dark background and a white-key one is nearly the colour of a light one, which is the
     // point of them — dark means a black key. Reported from a phone in dark mode, where the
@@ -353,28 +364,35 @@ export function renderRoll(ctx, m, v, hooks = {}) {
     // Setting it first made every note fill 15% transparent as well, which is less contrast
     // against the background rather than more: the opposite of what this change is for.
     ctx.fill();
+    if (strike > 0) {                       // the reversal, fading back to the note's own colour
+      ctx.globalAlpha = strike;
+      ctx.fillStyle = black ? LIGHT : DARK;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
     ctx.globalAlpha = selNow ? 1 : 0.85;
     ctx.stroke();
     ctx.setLineDash([]); ctx.globalAlpha = 1;
-    // STRUCK. The playhead reaching a note lights it, and the light fades over its own short
-    // life. It is there so that a reader setting the A/V trim has a sharp event to match the
-    // sound against: the tala grid is periodic, so aligning to it is right modulo one beat —
-    // 250ms at adi,1 and T120 — and every whole-beat error looks perfect. A note's onset does
-    // not repeat.
-    //
-    // Driven by the DRAWN playhead, deliberately, not by the audio callback. Lit from the
-    // audio side it would always agree with the sound and would say nothing about the trim.
-    if (mode === 'roll' && v.playPos != null && nn.dur > 0) {
-      const age = (v.playPos - starts[i]) / FLASH_UNITS;
-      if (age >= 0 && age < 1 && v.playPos < starts[i] + nn.dur) {
-        ctx.globalAlpha = (1 - age) * 0.55;
-        ctx.fillStyle = C.teal;
-        roundRect(ctx, x - w / 2, y0 + 1, w, Math.max(3, y1 - y0 - 2), 5); ctx.fill();
-        ctx.globalAlpha = 1;
-      }
-    }
     if (nn.curve) drawCurve(ctx, g, nn.curve, starts[i], starts[i] + nn.dur, C.teal, mode === 'draw' ? 3 : 2, v.sample);
-    if (mode !== 'draw') { ctx.fillStyle = black ? '#efe6d0' : '#20242b'; ctx.textAlign = 'center'; ctx.fillText(nn.swara, x, y0 + 13); }
+    // WHERE THE LINE MEETS THE CURVE: the pitch actually sounding at this instant, riding the
+    // ornament. One sample and one small circle for the note under the playhead — the melody
+    // is monophonic, so there is never more than one. A ring under it so the dot reads on the
+    // curve's own colour as well as on the bar.
+    if (mode === 'roll' && nn.curve && v.playPos != null && v.sample
+        && v.playPos >= starts[i] && v.playPos < starts[i] + nn.dur && nn.dur > 0) {
+      const dx = X(v.sample(nn.curve, (v.playPos - starts[i]) / nn.dur)), dy = Y(v.playPos);
+      ctx.beginPath(); ctx.arc(dx, dy, 5, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(dx, dy, 3.4, 0, Math.PI * 2);
+      ctx.fillStyle = C.teal; ctx.fill();
+    }
+    // The swara follows the bar it sits on. While the strike has the bar more than half
+    // reversed, the letter reverses with it or it disappears exactly when it is being pointed at.
+    if (mode !== 'draw') {
+      const onDark = strike > 0.5 ? !black : black;
+      ctx.fillStyle = onDark ? '#efe6d0' : '#20242b'; ctx.textAlign = 'center';
+      ctx.fillText(nn.swara, x, y0 + 13);
+    }
     // Resize caps at BOTH ends of the note being edited: the far edge sets how long
     // it lasts, the near edge moves the boundary it shares with whatever came before.
     // Drawn only for the note in hand, so a roll being read is not covered in handles.
@@ -448,7 +466,7 @@ export function renderRoll(ctx, m, v, hooks = {}) {
   // The interval is chosen so the labels stay legible whatever the zoom: seconds while
   // they are far apart, then 5, 10, 30, 60. Ticks are drawn for the interval below the
   // labelled one, which is what makes a ruler readable between its numbers.
-  if (mode === 'roll' && v.secPerUnit > 0) {
+  if (mode === 'roll' && v.ruler && v.secPerUnit > 0) {
     const x = p.x + p.w, secTotal = TOTAL * v.secPerUnit;
     const pxPerSec = v.pxPerUnit / v.secPerUnit;
     // The table runs down to hundredths, because the time axis zooms eightfold and a ruler
