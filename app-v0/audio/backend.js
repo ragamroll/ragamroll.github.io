@@ -15,7 +15,8 @@
  * @property {(sec: number) => void} seek    // move the play position (clamped to 0..totalSec) without playing; events before it do not fire. Call between load() and play(), or while paused
  * @property {() => void} stop             // stop + reset position() to 0
  * @property {() => number} position       // 0..1 fraction of totalSec elapsed
- * @property {() => number} latency        // output latency in seconds (for A/V sync compensation); 0 if unknown
+ * @property {() => number} latency        // output latency in seconds (for A/V sync compensation), INCLUDING the reader's own trim; 0 if unknown
+ * @property {((sec: number) => void)} [setSyncOffset]  // OPTIONAL. The reader's A/V trim, in seconds, folded into latency(). Positive draws the playhead LATER. A device that under-reports its output path — every Bluetooth one — cannot be corrected any other way
  * @property {(vol: number) => void} setMasterVolume  // master output level 0..1 (1 = 0 dB, 0 = silence); scales melody+tala+drone. Live
  * @property {(sec?: number) => void} fadeIn           // ramp master up from silence (click-free start)
  * @property {(sec?: number) => void} fadeOutStop      // ramp master down, then stop + droneOff, restoring the level
@@ -63,6 +64,48 @@ export function outputDelay(ctx) {
   } catch (_) { /* not implemented, or the context is not running */ }
   const base = c.baseLatency || 0, out = c.outputLatency || 0;
   return Math.min(0.5, base + out);
+}
+
+// A/V TRIM, in seconds, and where the reader's own correction lives.
+//
+// The playhead is drawn at the audio clock MINUS the delay the device reports. Where that
+// report is wrong the line and the sound disagree — and over Bluetooth it is reliably wrong,
+// because the codec's own hundred-odd milliseconds are not in any figure the browser
+// publishes. The device cannot be asked, so the reader tells us instead.
+//
+// It belongs HERE rather than in a page, so that latency() carries it and every playhead gets
+// it without knowing: the app's, the lane editor's, and anything added later. The fade on
+// Stop was put in a caller and had to be fixed again a release later when the lane editor
+// turned out not to have it.
+//
+// A property of the machine and its headphones, not of the piece — so one calibration serves
+// every page, and it is remembered per browser.
+export const SYNC_KEY = 'ragamroll.sync';      // shared: the app and the lane editor read it
+export const SYNC_STEP = 0.02;                 // one nudge, in seconds
+export const SYNC_MAX = 0.5;
+
+export function clampSync(sec) {
+  const v = Number(sec);
+  if (!Number.isFinite(v)) return 0;
+  // To the millisecond. Steps of 0.02 accumulate float noise, and this value is written to
+  // storage and shown as a number of milliseconds on two pages — 0.36000000000000004 helps
+  // nobody, and would make the two pages disagree about whether they hold the same trim.
+  return Math.round(Math.max(-SYNC_MAX, Math.min(SYNC_MAX, v)) * 1000) / 1000;
+}
+
+// Read once at start-up, migrating the lane editor's older key so nobody loses a trim they
+// already found by ear.
+export function loadSync() {
+  try {
+    const now = localStorage.getItem(SYNC_KEY);
+    if (now != null) return clampSync(parseFloat(now));
+    const old = parseFloat(localStorage.getItem('lanes.sync'));   // milliseconds, and lanes-only
+    return Number.isFinite(old) ? clampSync(old / 1000) : 0;
+  } catch (_) { return 0; }
+}
+
+export function saveSync(sec) {
+  try { localStorage.setItem(SYNC_KEY, String(clampSync(sec))); } catch (_) { /* private mode */ }
 }
 
 /**

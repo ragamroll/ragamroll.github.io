@@ -1,5 +1,6 @@
 import { html } from '../vendor/htm-preact.js';
 import { midiToName } from '../core/tuning.js';
+import { useRef } from '../vendor/hooks.module.js';
 
 // Action bar above the workspace. Wraps on narrow (portrait) screens so no
 // control is clipped. Sa + tempo sit on the main UI for easy reach; the mix
@@ -23,10 +24,37 @@ const MULT_MIN = 0.25, MULT_MAX = 4, MULT_STEP = 0.25;
 const clampBpm = (v) => Math.max(BPM_MIN, Math.min(BPM_MAX, v));
 
 export function Transport({ state, canPlay, onPlay, onPause, onStop, looping, onToggleLoop, hasSeg,
+  syncMs, onSync,
   talaVol, onTalaVol, talaMuted, onToggleTala, melodyMuted, onToggleMelody,
   droneVol, onDroneVol, droneMuted, onToggleDrone, masterVol, onMasterVol,
   onSave, onExportMidi, onShare, shared, onLanes, compositionTempo, tempoOverride, onTempo, onResetTempo,
   saPitch, autoSaMidi, onSetSa, onRewind}) {
+  // PRESS, THEN HOLD. A first nudge on the press, then repeats while the finger stays down —
+  // starting slowly enough that a single tap is one step, and quickening so that a couple of
+  // hundred milliseconds of trim is a press-and-wait rather than a count.
+  //
+  // THE TIMER LIVES IN A REF, and that is the whole difficulty. The first version kept it in a
+  // closure built by a helper called during render — and every nudge causes a render, so the
+  // handler that ran on pointer-up belonged to a LATER closure and cleared a timer that was
+  // not the running one. Each tap left a repeater going behind it; three taps drove the trim
+  // to its limit in the wrong direction, which is how it was found.
+  const hold = useRef({ t: 0, every: 220 });
+  const stopHold = () => { clearTimeout(hold.current.t); hold.current.t = 0; hold.current.every = 220; };
+  const nudge = (dir) => ({
+    onPointerDown: (e) => {
+      e.preventDefault();
+      stopHold();
+      onSync(dir);
+      const again = () => {
+        onSync(dir);
+        hold.current.every = Math.max(60, hold.current.every * 0.75);
+        hold.current.t = setTimeout(again, hold.current.every);
+      };
+      hold.current.t = setTimeout(again, 420);
+    },
+    onPointerUp: stopHold, onPointerLeave: stopHold, onPointerCancel: stopHold,
+  });
+
   const overridden = tempoOverride != null;
   const eff = overridden ? tempoOverride : compositionTempo;
   // Speed multiplier of the composition tempo. The RATIO is honest and the SLIDER's own
@@ -80,6 +108,24 @@ export function Transport({ state, canPlay, onPlay, onPause, onStop, looping, on
               title=${state === 'playing' ? 'Pause' : state === 'paused' ? 'Resume' : 'Play'}
               disabled=${state !== 'playing' && !canPlay}>${state === 'playing' ? '⏸' : '▶'}</button>
       <button title="Stop"  onClick=${onStop}  disabled=${state === 'stopped'}>⏹</button>
+      <!-- A/V TRIM, and it is nudged rather than typed. This is a value you can only find by
+           ear while a piece runs: a number field makes you leave that loop to guess, type,
+           listen and guess again, and nobody knows what a millisecond feels like. Two buttons
+           converge on it in seconds. Held down they repeat, because a Bluetooth headset is a
+           couple of hundred milliseconds out and that should not be ten taps.
+           The reading appears only once it is non-zero, so it costs no width until it is
+           used and is never invisible state. The label resets it. -->
+      <span class=${'sync' + (syncMs ? ' on' : '')}
+            title=${'Line and sound disagree? Nudge the playhead until they meet. Bluetooth and '
+              + 'external speakers lag by more than they admit to, and no browser reports it. '
+              + 'Remembered for this browser — it belongs to the machine, not the piece.'}>
+        <button class="sync-nudge" aria-label="Playhead earlier"
+                ...${nudge(-1)}>◀</button>
+        <button class="sync-name" onClick=${() => onSync(0)}
+                title=${syncMs ? 'Back to no trim' : 'No trim'}>${syncMs ? `${syncMs > 0 ? '+' : ''}${syncMs} ms` : 'sync'}</button>
+        <button class="sync-nudge" aria-label="Playhead later"
+                ...${nudge(1)}>▶</button>
+      </span>
       <!-- What it will repeat is in the title, not left to be inferred: the same toggle
            means the segment or the whole piece depending on whether a range is marked, and
            a control whose scope you have to work out is a control you press twice. Live —

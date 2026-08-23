@@ -548,6 +548,16 @@
     .instr-foot { margin-top:.6rem; }
     /* The file input is the button's plumbing, not a control: ⭱ Load clicks it. */
     .instr-file { display:none; }
+    /* The A/V trim: two nudges and a reading that is only there once it means something. */
+    .sync { display:inline-flex; align-items:center; gap:.1rem; }
+    .sync .sync-nudge { padding:.15rem .35rem; font-size:.8rem; }
+    /* A FIXED width. The reading grows from "sync" to "-140 ms" as it is nudged, and a row
+       that reflows while a button is held moves that button out from under the finger — which
+       on a phone means the hold silently stops, or lands on its neighbour. */
+    .sync .sync-name { padding:.15rem .4rem; font-size:.78rem; color:var(--muted);
+      background:none; border-color:transparent; font-family:var(--mono);
+      width:4.4rem; text-align:center; }
+    .sync.on .sync-name { color:var(--amber); border-color:var(--amberSoft); }
     /* A newer build exists but this device is still being handed the old one — a wait, not a
        fault, and not the same thing as being current. */
     .upd-waiting { color:var(--amber); }

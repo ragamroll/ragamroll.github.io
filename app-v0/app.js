@@ -39,6 +39,7 @@ import { Footer } from './components/Footer.js';
 import { PerfDialog } from './components/PerfDialog.js';
 import { VERSION } from './version.js';
 import { createPerf, watchLongTasks, deviceFacts } from './core/perf.js';
+import { loadSync, saveSync, clampSync, SYNC_STEP } from './audio/backend.js';
 
 // Example pieces are data-driven: the list comes from examples/index.json
 // (regenerated from the folder by tools/gen-examples.sh), so adding a piece
@@ -342,6 +343,22 @@ function App({ examples }) {
   // its own state rather than as a load() argument, so an interrupted run that rebuilds
   // itself comes back still looping.
   useEffect(() => { playerRef.current?.setLoop?.(looping); }, [looping]);
+
+  // The reader's A/V trim. Nudged by ear while a piece plays; the backend folds it into
+  // latency(), so this state only has to be remembered and pushed.
+  const [sync, setSync] = useState(() => loadSync());
+  // Written only once it MOVES. Saving on mount would put a 0 in storage for every reader who
+  // never touches this, which is a setting where there was none.
+  const syncSaved = useRef(sync);
+  useEffect(() => {
+    playerRef.current?.setSyncOffset?.(sync);
+    if (sync !== syncSaved.current) { syncSaved.current = sync; saveSync(sync); }
+  }, [sync]);
+  // A DIRECTION, not a value: -1 earlier, +1 later, 0 back to none. The caller is a finger on
+  // a button and should not have to know what a step is.
+  const onSync = useCallback((dir) => {
+    setSync((v) => (dir === 0 ? 0 : clampSync(v + dir * SYNC_STEP)));
+  }, []);
 
   const [markA, setMarkA] = useState(0);
   const [markB, setMarkB] = useState(0);            // 0,0 = no segment: play it all
@@ -999,6 +1016,7 @@ function App({ examples }) {
         // effect above only fires when the toggle MOVES; a player built since then would
         // otherwise start a run not knowing.
         player.setLoop?.(looping);
+        player.setSyncOffset?.(sync);   // a player built since the effect above ran
         // Tala keeps its own live-adjustable track volume — schedule every event
         // (even at 0) so raising the slider mid-playback brings the tala in.
         // A segment is expressed by scheduling only that stretch, shifted to start at 0 —
@@ -1027,7 +1045,7 @@ function App({ examples }) {
       console.error('playback failed', e);
       onStop();
     }
-  }, [effModel, playState, loop, onStop, talaLevel, scale, saBase, shift, hasSeg, markA, markB, looping]);
+  }, [effModel, playState, loop, onStop, talaLevel, scale, saBase, shift, hasSeg, markA, markB, looping, sync]);
 
   // Same reason as stopRef, and the same trap: onRewind is declared ABOVE onPlay and has
   // to reach it, so the assignment goes HERE — below onPlay — not up beside stopRef.
@@ -1236,6 +1254,7 @@ function App({ examples }) {
     <${Transport} state=${playState} canPlay=${noteCount > 0}
                   onPlay=${onPlay} onPause=${onPause} onStop=${onStop} onRewind=${onRewind}
                   looping=${looping} onToggleLoop=${onToggleLoop} hasSeg=${hasSeg}
+                  syncMs=${Math.round(sync * 1000)} onSync=${onSync}
                   compositionTempo=${compositionTempo} tempoOverride=${tempoOverride} onTempo=${onTempo} onResetTempo=${onResetTempo}
                   saPitch=${saPitch} autoSaMidi=${autoSaMidi} onSetSa=${onSetSa}
                   masterVol=${masterVol} onMasterVol=${onMasterVol}

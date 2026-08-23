@@ -1,6 +1,6 @@
 import * as Tone from '../../vendor/tone.js';
 import { midiToFreq } from '../schedule.js';
-import { outputDelay, outputMeasured, startRunway, LOOKAHEAD, makePlayClock, makeLatencyMeter } from '../backend.js';
+import { outputDelay, outputMeasured, startRunway, LOOKAHEAD, clampSync, makePlayClock, makeLatencyMeter } from '../backend.js';
 import { SYNTH_VOICES, STRING_PARAMS, STRING_DEFAULTS, PLUCKZ_DEFAULTS, pluckzTable } from '../voices.js';
 
 // The ONLY module that references Tone.js. Encapsulates all Tone version specifics.
@@ -731,6 +731,7 @@ export function createToneBackend() {
   let loopHooked = false;   // the transport is a singleton; its 'loop' handler is attached once
   let timbre = 'soft-am';   // melody voice preset; applied on the next load()
   let synthTimbre = null;   // what the cached voice was BUILT as, so a change rebuilds it
+  let syncOffset = 0;       // the reader's A/V trim, in seconds; see setSyncOffset
   let melodyMuted = false;  // remembered so a reload keeps the melody muted
   // The tala's live level, REMEMBERED for the same reason the mute is. It arrives twice: as
   // load()'s talaGain when a piece is played, and from the slider while it plays. Only the
@@ -1286,7 +1287,13 @@ export function createToneBackend() {
     // Steadied, because the playhead subtracts this every frame — see makeLatencyMeter.
     // The START runway below still asks outputDelay directly: that is one reading at one
     // moment, and it wants the freshest one rather than the calmest.
-    latency() { return meter(rawCtx()); },
+    latency() { return meter(rawCtx()) - syncOffset; },
+    // The reader's own A/V trim. POSITIVE draws the playhead LATER, which is the lane
+    // editor's convention and therefore the one the app has to use too — the same number
+    // meaning opposite things on two pages would be worse than having no control at all.
+    // Subtracted from the measured latency because the host draws at (position - latency).
+    setSyncOffset(sec) { syncOffset = clampSync(sec); },
+    syncOffset() { return syncOffset; },
     // The instrument panel's surface: what the loaded voice can be told, what it is set to
     // now, and a way to move one. A voice with nothing to say returns null, and a host that
     // asks about one draws no panel.
