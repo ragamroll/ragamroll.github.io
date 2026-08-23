@@ -552,6 +552,14 @@
     .instr-foot { margin-top:.6rem; }
     /* The file input is the button's plumbing, not a control: ⭱ Load clicks it. */
     .instr-file { display:none; }
+    /* The layout panel shows the rows it is about to save: a tag for where the row sits and
+       the controls on it, wrapping, so the shape on screen is the shape in the file. */
+    .layout-box { max-width:min(520px, 94vw); }
+    .layout-row { display:flex; align-items:baseline; gap:.4rem; margin:.15rem 0; }
+    .layout-tag { flex:0 0 3.2rem; text-align:right; color:var(--muted); font-size:.78rem; }
+    .layout-ids { display:flex; flex-wrap:wrap; gap:.25rem; }
+    .layout-ids code { background:var(--hair2); border-radius:3px; padding:.05rem .3rem; font-size:.8rem; }
+    .layout-btn.active { border-color:var(--teal); color:var(--teal); }
     /* The chrome, drawn a row at a time from the layout. Row 1 is pinned under the roll. */
     /* Tight on purpose. The pinned row came to 379px of controls in a 395px phone — over by
        a hair, and a hair is a whole second line. */

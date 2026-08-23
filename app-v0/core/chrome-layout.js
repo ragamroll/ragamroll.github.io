@@ -17,7 +17,7 @@ export const CONTROLS = [
   'drone', 'melody', 'tala',
   'master', 'tempo', 'sync',
   'lanes', 'save', 'share', 'midi',
-  'ragas', 'talas', 'scale',
+  'ragas', 'talas', 'scale', 'layout',
 ];
 
 // The built-in arrangement. Row 1 is the pinned one.
@@ -26,7 +26,7 @@ export const DEFAULT_ROWS = [
   ['drone', 'melody', 'tala', 'sa'],
   ['master', 'tempo', 'sync'],
   ['lanes', 'save', 'share', 'midi'],
-  ['ragas', 'talas', 'scale'],
+  ['ragas', 'talas', 'scale', 'layout'],
 ];
 
 export const LAYOUT_KEY = 'ragamroll.layout';
@@ -80,6 +80,19 @@ export function loadLayout() {
 
 export function saveLayout(rows) {
   try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(rows)); } catch (_) { /* private mode */ }
+}
+
+// DOWN TO A FILE, and the shape a reader can actually work in: one row per line. The same
+// object read back by readLayout, so the round trip is closed — and the same one
+// tools/apply-layout.mjs folds into DEFAULT_ROWS above, which is how an arrangement someone
+// arrived at on a phone becomes the one every reader gets.
+//
+// JSON.stringify with an indent would put every id on a line of its own: twenty-one lines of
+// one word each, in which the thing that matters — which controls share a row — is the part
+// you have to reassemble in your head. The rows ARE the content.
+export function layoutFile(rows) {
+  const body = rows.map((row) => '    ' + JSON.stringify(row)).join(',\n');
+  return `{\n  "rows": [\n${body}\n  ]\n}\n`;
 }
 
 export const isDefaultLayout = (rows) => JSON.stringify(rows) === JSON.stringify(DEFAULT_ROWS);

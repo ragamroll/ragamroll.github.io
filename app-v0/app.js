@@ -23,6 +23,7 @@ import { RagaDialog } from './components/RagaDialog.js';
 import { InstrumentDialog } from './components/InstrumentDialog.js';
 import { TalaDialog } from './components/TalaDialog.js';
 import { ScaleDialog } from './components/ScaleDialog.js';
+import { LayoutDialog } from './components/LayoutDialog.js';
 import { buildSequence } from './core/midi/sequence.js';
 import { writeSMF } from './core/midi/smf.js';
 import { createPlayer } from './audio/player.js';
@@ -37,7 +38,7 @@ import { BPM_MIN, BPM_MAX } from './components/Controls.js';
 import { Splitter } from './components/Splitter.js';
 import { Footer } from './components/Footer.js';
 import { ChromeRow, ChromeBar } from './components/ChromeBar.js';
-import { loadLayout, saveLayout } from './core/chrome-layout.js';
+import { loadLayout, saveLayout, isDefaultLayout } from './core/chrome-layout.js';
 import { PerfDialog } from './components/PerfDialog.js';
 import { VERSION } from './version.js';
 import { createPerf, watchLongTasks, deviceFacts } from './core/perf.js';
@@ -1082,10 +1083,11 @@ function App({ examples }) {
   useEffect(() => { playerRef.current.setMelodyMuted(melodyMuted); }, [melodyMuted]);
 
   // --- Dialogs (one open at a time): read-only raga/tala refs + Scale override ---
-  const [dialog, setDialog] = useState(null);   // null | 'ragas' | 'talas' | 'scale'
+  const [dialog, setDialog] = useState(null);   // null | 'ragas' | 'talas' | 'scale' | 'layout'
   const onOpenRagas = useCallback(() => setDialog('ragas'), []);
   const onOpenTalas = useCallback(() => setDialog('talas'), []);
   const onOpenScale = useCallback(() => setDialog('scale'), []);
+  const onOpenLayout = useCallback(() => setDialog('layout'), []);
   const onCloseDialog = useCallback(() => setDialog(null), []);
 
   // --- Draggable pane divider. The workspace is a bounded flex column holding ONE row,
@@ -1197,6 +1199,7 @@ function App({ examples }) {
     saPitch, autoSaMidi, onSetSa,
     examples, exampleValue, onNew, onOpen, onExample, onOpenLink,
     onOpenRagas, onOpenTalas, onOpenScale, scaleActive: !!scale,
+    onOpenLayout, layoutCustom: !isDefaultLayout(rows),
     timbre, onTimbre, onOpenInstrument: () => setInstrOpen(true),
   };
 
@@ -1239,6 +1242,7 @@ function App({ examples }) {
                                          stopMain=${onStop} onClose=${onCloseDialog} />`}
     ${dialog === 'scale' && html`<${ScaleDialog} scale=${scale} onApply=${onApplyScale} onClose=${onCloseDialog}
                                                  ragas=${getRagas()} ragaName=${ragaName} />`}
+    ${dialog === 'layout' && html`<${LayoutDialog} rows=${rows} onSet=${setRows} onClose=${onCloseDialog} />`}
     <${Diagnostics} items=${model.diagnostics} />
     <div class="workspace" ref=${wsRef}>
       <div class=${'cols' + (stacked ? ' stacked' : '')} ref=${colsRef}

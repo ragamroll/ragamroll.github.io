@@ -183,12 +183,19 @@ const Talas = ({ p }) => html`<button onClick=${p.onOpenTalas}>Talas</button>`;
 const Scale = ({ p }) => html`<button class=${'scale-btn' + (p.scaleActive ? ' active' : '')}
   onClick=${p.onOpenScale} title="Experimental: override the scale pitches (53-EDO)">Scale ⚙${p.scaleActive ? ' •' : ''}</button>`;
 
+// The arrangement's own control, which is why it can sit anywhere the rest can. The dot says
+// this browser is no longer showing the built-in rows — otherwise a reader who moved something
+// months ago and forgot has no way to tell their layout from everyone else's.
+const Layout = ({ p }) => html`<button class=${'layout-btn' + (p.layoutCustom ? ' active' : '')}
+  onClick=${p.onOpenLayout}
+  title="Where the controls sit — save this arrangement to a file, or load one back">Layout${p.layoutCustom ? ' •' : ''}</button>`;
+
 export const CONTROL_COMPONENTS = {
   open: Open, rewind: Rewind, play: Play, stop: Stop, loop: Loop, timbre: Timbre, sa: Sa,
   drone: Drone, melody: Melody, tala: Tala,
   master: Master, tempo: Tempo, sync: Sync,
   lanes: Lanes, save: Save, share: Share, midi: Midi,
-  ragas: Ragas, talas: Talas, scale: Scale,
+  ragas: Ragas, talas: Talas, scale: Scale, layout: Layout,
 };
 
 // What each is called when a reader is looking at a list of them rather than at the control.
@@ -197,4 +204,5 @@ export const CONTROL_NAMES = {
   timbre: 'Instrument', sa: 'Sa', drone: 'Drone', melody: 'Melody', tala: 'Tala',
   master: 'Master', tempo: 'Tempo', sync: 'A/V trim', lanes: 'Lanes', save: 'Save',
   share: 'Share', midi: 'Export MIDI', ragas: 'Ragas', talas: 'Talas', scale: 'Scale',
+  layout: 'Layout',
 };
