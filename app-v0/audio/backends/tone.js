@@ -1,6 +1,6 @@
 import * as Tone from '../../vendor/tone.js';
 import { midiToFreq } from '../schedule.js';
-import { outputDelay, outputMeasured, startRunway, makePlayClock, makeLatencyMeter } from '../backend.js';
+import { outputDelay, outputMeasured, startRunway, LOOKAHEAD, makePlayClock, makeLatencyMeter } from '../backend.js';
 import { SYNTH_VOICES, STRING_PARAMS, STRING_DEFAULTS, PLUCKZ_DEFAULTS, pluckzTable } from '../voices.js';
 
 // The ONLY module that references Tone.js. Encapsulates all Tone version specifics.
@@ -340,7 +340,11 @@ function makeString(kind, over = {}) {
     // string is unhooked when the pair collapses.
     park() {
       if (parked) return;
-      silenceAt(Tone.now());
+      // AT THE AUDIO CLOCK'S NOW. Tone.now() is a lookahead in the future, so silencing there
+      // cancels from a quarter second out and leaves everything already committed before it
+      // standing — which with a wide lookahead is several notes that go on sounding after
+      // Stop. Caught by tools/end-of-piece.mjs as runs that made a noise after the button.
+      silenceAt(Tone.getContext().currentTime);
       out.disconnect();
       parked = true;
       // AND THROW THE ROOM AWAY. Unhooking the voice is what makes it free, and it is also
@@ -968,7 +972,7 @@ export function createToneBackend() {
     clearTimeout(fadeTimer); fadeTimer = null;
     clearTimeout(fadeRestore); fadeRestore = null;
     const v = destination().volume;
-    v.cancelScheduledValues(Tone.now());
+    v.cancelScheduledValues(Tone.getContext().currentTime);
     v.value = masterDb;
   };
   // What the loaded voice asked to be played at, or 0 for one that never said.
@@ -1009,9 +1013,13 @@ export function createToneBackend() {
   // currentTime — and on this machine baseLatency and outputLatency have both been seen to
   // read 0 at that moment too, on some runs and not others. Taking that first answer gave a
   // 0.06 runway on a device whose settled delay was 0.157.
-  // Capped at the blind floor itself: a device that has said nothing by then is not going
-  // to, and every millisecond spent here is a millisecond of silence after Play.
-  const OUTPUT_SETTLE_MS = 90, OUTPUT_CAP_MS = 250;
+  // The cap is SHORT, because the runway now does the job the waiting used to. Once the
+  // first note's head start became the scheduler's own cushion — a quarter second — the
+  // audio route already has that long to open, so sitting here as well only adds silence
+  // after Play. Measured: a device that reports nothing took 530ms to its first note with a
+  // 250ms cap and 370ms with this one, and learns exactly as little either way. A device
+  // that DOES report leaves in about 40ms and never reaches the cap at all.
+  const OUTPUT_SETTLE_MS = 90, OUTPUT_CAP_MS = 120;
   const outputAwake = (ctx, capMs = OUTPUT_CAP_MS) => new Promise((resolve) => {
     const t0 = Date.now();
     const done = (measured, delay) => resolve({ measured, delay, waited: (Date.now() - t0) / 1000 });
@@ -1171,6 +1179,10 @@ export function createToneBackend() {
     },
     async play() {
       if (total <= 0) return;
+      // Every run, not once at construction: Tone's context can be replaced underneath a
+      // backend (a revive builds a new one), and a scheduler quietly back at its default
+      // lookahead is the fault this exists to prevent, silently returned.
+      try { const c = Tone.getContext(); if (c.lookAhead !== LOOKAHEAD) c.lookAhead = LOOKAHEAD; } catch (_) {}
       clearFade();                      // don't let a stale teardown stop this run
       ended = false;
       // A resume must not carry the length of the PAUSE into its first frame.
@@ -1209,6 +1221,12 @@ export function createToneBackend() {
       // Where transport zero sits on the audio clock, for expectedSeconds() below.
       { const raw = rawCtx(); runOrigin = raw ? raw.currentTime - transport().seconds : null; }
     },
+    // PAUSE KEEPS TONE'S OWN NOW, and that is deliberate. Handing it the audio clock's time
+    // instead — which is what stop() does, and for good reason — made a resume restart the
+    // piece near its beginning: paused at 5.80s, resumed at 1.47s. Tone works out where a
+    // pause leaves the position from its own clock, and a time from underneath it is not a
+    // time it can place. The cost is that a pause lands a lookahead late; the cost of the
+    // other way is losing your place.
     pause() { pausedByHide = false; transport().pause(); clock.reset(); },
     // Move the play position without playing. The point is a run that starts somewhere
     // other than the top: scheduled callbacks before `sec` simply never fire, and the
@@ -1228,7 +1246,13 @@ export function createToneBackend() {
       pausedByHide = false;      // a stopped piece is not one waiting to be resumed
       clock.reset();
       const tr = transport();
-      tr.stop();
+      const c = rawCtx();
+      // STOPPED AT THE AUDIO CLOCK'S NOW, not at Tone's, which sits a lookahead in the
+      // future. With the lookahead at a quarter second an implicit-now stop left notes still
+      // starting after the button — caught by tools/end-of-piece.mjs as two runs in six
+      // making a noise afterwards. Safe here in a way it is not for pause(): a stop throws
+      // the position away rather than having to remember it.
+      if (c) tr.stop(c.currentTime); else tr.stop();
       tr.position = 0;
       tr.cancel();               // drop the leftover schedule
       b.parkMelody();            // silence it and unhook it; the next Play reuses it
@@ -1297,7 +1321,11 @@ export function createToneBackend() {
     // gave the first note, and whether that came from a real reading or from the blind
     // floor. The whole fault this guards against is invisible on a desktop, so a phone has
     // to be able to say what it chose.
-    startRunway() { return { runway: lastRunway, measured: outputMeasured(rawCtx()), delay: outputDelay(rawCtx()) }; },
+    startRunway() {
+      let look = null;
+      try { look = Tone.getContext().lookAhead; } catch (_) { /* no context yet */ }
+      return { runway: lastRunway, measured: outputMeasured(rawCtx()), delay: outputDelay(rawCtx()), lookAhead: look };
+    },
     // Repeat what is loaded until Stop. Live: turning it on mid-run makes the pass it is in
     // the first of many, and turning it off lets that pass finish.
     setLoop(on) { looping = !!on; applyLoop(); },

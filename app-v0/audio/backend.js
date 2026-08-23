@@ -88,13 +88,37 @@ export function outputMeasured(ctx) {
   return (c.outputLatency || 0) > 0;                // or the device says what its path costs
 }
 
-// The head start the first note of a run is given, when the device has told us what its
-// output path costs. Sixty milliseconds is what a desktop needs, measured.
-export const RUNWAY_MIN = 0.06;
+// HOW FAR AHEAD THE SCHEDULER WORKS, and the cushion every note gets.
+//
+// Tone hands a scheduled callback its audio time this far in advance, so this is how much
+// main-thread contention a note can survive and still be built before the moment it is for.
+// Tone's default is 0.1, and on a phone that is not enough: reported from one, and caught by
+// its own timing report — one note in twenty-seven arriving 13ms LATE, which is a crackle
+// with a cause. Reproduced here at 10x CPU throttle, where 0.1 gave a note at -70ms; 0.2
+// cleared it with 47ms to spare and 0.35 with 159ms.
+//
+// It was raised once before, to 1.0, and reverted: Transport.seconds appeared to move with
+// it and took the drawn playhead a second ahead of the sound. Measured again at this
+// magnitude, that does not happen — 0.1 and 0.2 report the transport identically, to the
+// millisecond. What it does cost is latency: an implicit-now pause() lands this far in the
+// future, and Play waits this long before the first sound.
+export const LOOKAHEAD = 0.25;
+
+// The head start the FIRST note of a run is given, when the device has told us what its
+// output path costs.
+//
+// The lookahead does not help that one. At the moment the transport starts, its first tick
+// dispatches whatever sits at time 0, and the clock has only just begun — so that note's
+// entire cushion is the runway, and nothing else. It gets the same as every other note, for
+// the same reason: sixty milliseconds was a desktop's number, and the phone that reported
+// this was being handed exactly sixty.
+export const RUNWAY_MIN = LOOKAHEAD;
 // And when it has NOT told us. A phone's output path runs to a couple of hundred
 // milliseconds. Over-waiting costs a moment of quiet before the piece starts; under-waiting
 // costs the first note of every run its attack, which is the fault this exists for.
 export const RUNWAY_BLIND = 0.25;
+// Sanity: a blind device must never be given LESS warning than one that answered.
+export const RUNWAY_BLIND_MIN = Math.max(RUNWAY_BLIND, LOOKAHEAD);
 
 /**
  * HOW FAR AHEAD OF NOW TO START A PIECE whose first note is at time 0.
@@ -132,7 +156,7 @@ export function startRunway(ctx, measured, observed = 0, waited = 0) {
   // quarter second it would otherwise add. That is not dead code: it is what keeps the head
   // start whole if the waiting is ever shortened, and it fails loudly rather than silently
   // if the two numbers drift apart.
-  const floor = measured ? RUNWAY_MIN : Math.max(RUNWAY_MIN, RUNWAY_BLIND - Math.max(0, waited));
+  const floor = measured ? RUNWAY_MIN : Math.max(RUNWAY_MIN, RUNWAY_BLIND_MIN - Math.max(0, waited));
   return Math.max(floor, outputDelay(ctx), arith, seen);
 }
 
