@@ -1296,9 +1296,15 @@ function App({ examples }) {
       blank=${noteCount === 0} onRaga=${onPickRaga} onTala=${onPickTala} />`}
     <!-- Pushed off the bottom when the grip goes past shut, and the GRIP IS NOT IN HERE:
          it stays under the roll where a thumb can find it. The first version slid the drawer
-         down as well, which sent the only way back off the screen with everything else. -->
+         down as well, which sent the only way back off the screen with everything else.
+
+         ONE MOVEMENT, NOT TWO. The negative margin is the whole mechanism: it takes the
+         block's height out of the column, the roll's flex claims exactly that much, and the
+         block is carried down by the growth. A top: offset on top of that moved it a second
+         time — the rows left the screen at twice the rate the roll grew, so they were gone at
+         half the travel and the rest of the push opened blank space under the grip. -->
     <div class="below" ref=${belowRef} style=${stacked && drawerH < 0
-      ? `position:relative; top:${-drawerH}px; margin-bottom:${drawerH}px` : ''}>
+      ? `margin-bottom:${drawerH}px` : ''}>
     <${ChromeBar} rows=${rows.slice(1)} p=${ctl} />
     <${Footer} onPerf=${onPerf} />
     </div>

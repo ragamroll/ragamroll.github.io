@@ -72,12 +72,19 @@ const Sa = ({ p }) => html`<label class="sapick" title="Sa reference pitch — t
   </select>
 </label>`;
 
+// THE GLYPH SAYS WHICH, THE STYLING SAYS WHETHER. These carried their names — "🎶 Drone",
+// "🔊 Tala" — and four of them came to more than a phone's width, so a row of mixers took
+// three lines. The name is in the tooltip and in the Layout panel; what a reader needs here
+// is to tell them apart at a glance and hit the right one with a thumb.
+//
+// So the icon never changes: a control that swaps its glyph when you press it is a control
+// you have to read to find again. Off is dim and struck through (.vol-toggle[aria-pressed
+// =false]), which is one look for all three rather than a different pair of emoji each.
 const Drone = ({ p }) => html`<span class=${'vol' + (p.droneMuted ? ' muted' : '')}>
   <button class="vol-toggle" aria-pressed=${!p.droneMuted} onClick=${p.onToggleDrone}
+          aria-label="Drone"
           title=${p.droneMuted ? 'Drone off — click to turn on (keeps the set level)'
-                               : `Drone on (${pct(p.droneVol)}%) — click to silence`}>
-    ${p.droneMuted ? '🎵' : '🎶'} Drone
-  </button>
+                               : `Drone on (${pct(p.droneVol)}%) — click to silence`}>🪕</button>
   <input type="range" min="0" max="1" step="0.05" value=${p.droneVol}
          title=${`Drone volume ${pct(p.droneVol)}%`}
          onInput=${(e) => p.onDroneVol(Number(e.target.value))} />
@@ -85,25 +92,23 @@ const Drone = ({ p }) => html`<span class=${'vol' + (p.droneMuted ? ' muted' : '
 
 const Melody = ({ p }) => html`<span class=${'vol' + (p.melodyMuted ? ' muted' : '')}>
   <button class="vol-toggle" aria-pressed=${!p.melodyMuted} onClick=${p.onToggleMelody}
+          aria-label="Melody"
           title=${p.melodyMuted ? 'Melody muted — click to unmute'
-                                : 'Melody on — click to mute (solo tala + drone)'}>
-    ${p.melodyMuted ? '🔇' : '🎼'} Melody
-  </button>
+                                : 'Melody on — click to mute (solo tala + drone)'}>🎼</button>
 </span>`;
 
 const Tala = ({ p }) => html`<span class=${'vol' + (p.talaMuted ? ' muted' : '')}>
   <button class="vol-toggle" aria-pressed=${!p.talaMuted} onClick=${p.onToggleTala}
+          aria-label="Tala"
           title=${p.talaMuted ? 'Tala off — click to unmute (keeps the set level)'
-                              : `Tala on (${pct(p.talaVol)}%) — click to mute`}>
-    ${p.talaMuted ? '🔇' : '🔊'} Tala
-  </button>
+                              : `Tala on (${pct(p.talaVol)}%) — click to mute`}>🥁</button>
   <input type="range" min="0" max="1" step="0.05" value=${p.talaVol}
          title=${`Tala volume ${pct(p.talaVol)}%`}
          onInput=${(e) => p.onTalaVol(Number(e.target.value))} />
 </span>`;
 
-const Master = ({ p }) => html`<label class="vol" title=${`Master volume ${pct(p.masterVol)}%`}>
-  ${p.masterVol <= 0 ? '🔇' : '🔈'} Master
+const Master = ({ p }) => html`<label class="vol" title=${`Master volume ${pct(p.masterVol)}% — everything you hear`}>
+  <span aria-label="Master volume">${p.masterVol <= 0 ? '🔇' : '🔈'}</span>
   <input type="range" min="0" max="1" step="0.05" value=${p.masterVol}
          onInput=${(e) => p.onMasterVol(Number(e.target.value))} />
 </label>`;

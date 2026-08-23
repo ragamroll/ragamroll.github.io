@@ -82,14 +82,17 @@
       color:var(--muted); font-weight:600; display:inline-flex; align-items:center;
       justify-content:center; font-size:.85rem; flex:0 0 auto; }
     .toolbar .fs-btn[aria-pressed=true] { color:var(--amber); border-color:var(--amberSoft); }
-    /* At the BOTTOM now, so the rule that separates it from the roll is on top of it. */
-    .transport { display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; padding:.35rem .5rem; border-top:1px solid var(--hair); flex:0 0 auto; }
-    .transport button { font-size:.95rem; padding:.3rem .6rem; }
-    .transport .doc-btn { font-size:.82rem; padding:.28rem .6rem; }
-    .transport .doc-btn.ok { border-color:var(--teal); color:var(--teal); }
-    .transport-play { display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; margin-left:auto; }  /* wraps in portrait */
-    .transport .sapick { display:inline-flex; align-items:center; gap:.25rem; font-size:.85rem; margin-left:.4rem; }
-    .transport .sapick select { background:var(--panel2); color:var(--ink); border:1px solid var(--hair); border-radius:4px; padding:.1rem .25rem; font:inherit; }
+    /* THE CONTROLS' OWN SIZES. These were written for a .transport bar that no longer
+       exists — the chrome became rows drawn from a layout, and every one of these rules
+       quietly stopped matching anything. The range inputs went back to the browser's
+       default 129px, which is why a row of four mixers took three lines on a phone.
+       There is no container rule to restore: .chrome-row is the container. The blanket
+       `button { padding:.3rem .6rem }` is deliberately NOT restored either — it would push
+       the pinned row to two lines, and that is the one row that must never wrap. */
+    .chrome-row .doc-btn { font-size:.82rem; padding:.28rem .6rem; }
+    .chrome-row .doc-btn.ok { border-color:var(--teal); color:var(--teal); }
+    .chrome-row .sapick { display:inline-flex; align-items:center; gap:.25rem; font-size:.85rem; }
+    .chrome-row .sapick select { background:var(--panel2); color:var(--ink); border:1px solid var(--hair); border-radius:4px; padding:.1rem .25rem; font:inherit; }
     /* The roll's right-click menu. Fixed, because it is positioned in CLIENT coordinates
        from the pointer event — inside the scrolling roll it would slide away from the note
        it points at the moment anything scrolled. */
@@ -99,21 +102,27 @@
       color:var(--ink); padding:.4rem .55rem; border-radius:5px; font-size:.88rem; cursor:pointer; }
     .roll-ctx button:hover:not(:disabled) { background:var(--panel2); }
     .roll-ctx button:disabled { opacity:.4; cursor:default; }
-    .transport .tempo { display:inline-flex; align-items:center; gap:.3rem; font-size:.85rem; margin-left:.4rem; }
-    .transport .tempo .tempo-mult { width:4.5rem; accent-color:var(--teal); cursor:pointer; }
-    .transport .tempo .tempo-num { width:3.2rem; background:var(--panel2); color:var(--ink); border:1px solid var(--hair);
+    .chrome-row .tempo { display:inline-flex; align-items:center; gap:.3rem; font-size:.85rem; }
+    .chrome-row .tempo .tempo-mult { width:4.5rem; accent-color:var(--teal); cursor:pointer; }
+    .chrome-row .tempo .tempo-num { width:3.2rem; background:var(--panel2); color:var(--ink); border:1px solid var(--hair);
       border-radius:4px; padding:.1rem .25rem; font:inherit; }
-    .transport .tempo.on .tempo-num { border-color:var(--teal); color:var(--teal); }
-    .transport .tempo .tempo-state { font-size:.68rem; opacity:.55; }
-    .transport .tempo.on .tempo-state { color:var(--teal); opacity:.9; }
-    .transport .tempo .tempo-reset { cursor:pointer; padding:.1rem .4rem; font-size:.85rem;
+    .chrome-row .tempo.on .tempo-num { border-color:var(--teal); color:var(--teal); }
+    .chrome-row .tempo .tempo-state { font-size:.68rem; opacity:.55; }
+    .chrome-row .tempo.on .tempo-state { color:var(--teal); opacity:.9; }
+    .chrome-row .tempo .tempo-reset { cursor:pointer; padding:.1rem .4rem; font-size:.85rem;
       border-radius:4px; padding:0 .3rem; font-size:.8rem; }
-    .transport .vol { display:inline-flex; align-items:center; gap:.3rem; font-size:.8rem;
-      margin-left:.5rem; white-space:nowrap; opacity:.9; }
-    .transport .vol input[type=range] { width:5rem; cursor:pointer; accent-color:var(--teal); }
-    .transport .vol .vol-toggle { font-size:.78rem; padding:.12rem .45rem; }
-    .transport .vol .vol-toggle[aria-pressed=true] { border-color:var(--teal); color:var(--teal); }
-    .transport .vol.muted input[type=range] { opacity:.4; accent-color:#777; }
+    .chrome-row .vol { display:inline-flex; align-items:center; gap:.25rem; font-size:.8rem;
+      white-space:nowrap; opacity:.9; }
+    .chrome-row .vol input[type=range] { width:5rem; cursor:pointer; accent-color:var(--teal); }
+    /* An icon and nothing else, so it has to stay big enough for a thumb. The padding is
+       what keeps it there: at .1rem it measured 32x27, which is under every guideline going,
+       and a mixer you miss with your thumb mutes the wrong part. The row costs 4px for it. */
+    .chrome-row .vol .vol-toggle { font-size:.95rem; padding:.28rem .45rem; line-height:1.15; }
+    .chrome-row .vol .vol-toggle[aria-pressed=true] { border-color:var(--teal); }
+    /* OFF, and it must read as off without a second glyph to compare it with. Dim alone is
+       ambiguous on a phone in daylight; the line through it is not. */
+    .chrome-row .vol .vol-toggle[aria-pressed=false] { opacity:.45; text-decoration:line-through; }
+    .chrome-row .vol.muted input[type=range] { opacity:.4; accent-color:#777; }
     /* Unified Open ▾ menu */
     .openmenu { position:relative; display:inline-flex; }
     .openmenu-btn { cursor:pointer; }
@@ -633,12 +642,11 @@
     .footer .ver { color:var(--amber); font-family:ui-monospace,monospace; }
     /* Mobile portrait. The head needs nothing here any more — it holds no controls
        since they moved to the bottom, and it is a single non-wrapping row at every
-       width. Only the transport still has more than fits on one line. */
+       width. */
     @media (max-width:560px) {
-      /* Portrait: don't right-pin the playback group — let it wrap to full width
-         so nothing (Tala/Master/Drone) runs off the edge. */
-      .transport-play { margin-left:0; flex-basis:100%; }
-      .transport .vol { margin-left:0; }
+      /* Portrait: the sliders give up a little more width. Nothing right-pins a group any
+         more — the rows do that, and each is as wide as the window. */
+      .chrome-row .vol input[type=range] { width:4.2rem; }
     }
   </style>
 </head>
