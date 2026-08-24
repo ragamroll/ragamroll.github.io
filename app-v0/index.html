@@ -7,6 +7,18 @@
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/icon-192.png" />
   <meta name="theme-color" content="#1a1a1a" />
+  <!-- BEFORE THE FIRST PAINT, and before app.js — which is a module and therefore deferred.
+       A reader who chose light and reloads must not be shown a dark page for the length of a
+       module graph. Only an explicit choice is written here: 'system' leaves the attribute
+       off, which is what hands the question back to the media query above. -->
+  <script>
+    (function () {
+      try {
+        var pref = localStorage.getItem('ragamroll.theme');
+        if (pref === 'light' || pref === 'dark') document.documentElement.dataset.theme = pref;
+      } catch (_) { /* storage can be refused; the media query still answers */ }
+    })();
+  </script>
   <style>
     /* The same palette draw.html has always used, verbatim — warm paper-and-ink rather
        than grey-on-grey, and a light theme that follows the system. It lives here so the
@@ -22,11 +34,23 @@
       --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
       --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
     }
-    @media (prefers-color-scheme:light){:root{
+    /* THE LIGHT PALETTE, WRITTEN TWICE, and the two copies are one palette: change one and
+       you must change the other. web/test/theme.test.js reads this file and fails if they
+       drift, which is the only reason it is safe to have two.
+       Why two: the theme follows the system UNTIL the reader says otherwise, and CSS cannot
+       put a media rule and a plain selector in the same block. The media copy answers
+       "system says light" and stands down the moment [data-theme] is set; the attribute copy
+       answers "the reader chose light". Dark needs no copy at all — it is :root above. */
+    @media (prefers-color-scheme:light){:root:not([data-theme]){
       --bg:#f4f0e6;--panel:#fbf8f0;--panel2:#f0ead9;--ink:#2a2418;--muted:#6f6752;
       --hair:rgba(42,36,24,.14);--hair2:rgba(42,36,24,.07);
       --amber:#a76f16;--amberSoft:rgba(167,111,22,.6);--teal:#177f5e;--tealSoft:rgba(23,127,94,.95);--terra:#b4553f;
     }}
+    :root[data-theme="light"]{
+      --bg:#f4f0e6;--panel:#fbf8f0;--panel2:#f0ead9;--ink:#2a2418;--muted:#6f6752;
+      --hair:rgba(42,36,24,.14);--hair2:rgba(42,36,24,.07);
+      --amber:#a76f16;--amberSoft:rgba(167,111,22,.6);--teal:#177f5e;--tealSoft:rgba(23,127,94,.95);--terra:#b4553f;
+    }
     /* Draw's controls, verbatim. The app's buttons were square, variously sized and
        coloured one at a time; these are one rule for every button on the page, with the
        two states that mean something — `pri` for the action a bar is FOR, `on` for a
@@ -68,6 +92,8 @@
     .toolbar .readout { margin-left:auto; opacity:.8; font-size:.85rem; font-family:var(--mono);
       min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:right; }
     .toolbar .readout.blank { opacity:.55; font-style:italic; }
+    /* The theme switch, beside the badge: the page's own look, next to the page's own name. */
+    .theme-btn { padding:.15rem .45rem; font-size:.9rem; line-height:1; }
     .toolbar .app-badge { font-weight:bold; font-size:.95rem; background:var(--panel2); border:1px solid var(--hair);
       border-radius:10px; padding:.12rem .55rem; margin-right:.25rem;
       /* Never breaks. On a narrow phone the name wrapped to two lines and took the whole

@@ -17,6 +17,7 @@ import { stepFreq } from './core/shruti.js';
 import { sampleCurve, GAMAKA_SAMPLES } from './core/gamaka-inline.js';
 import { buildRagaSteps } from './core/detect-raga-helper.js';
 import { Toolbar } from './components/Toolbar.js';
+import { readTheme, applyTheme, nextTheme, resolveTheme, THEME_KEY } from './core/theme.js';
 import { EditorDrawer } from './components/EditorDrawer.js';
 import { Diagnostics } from './components/Diagnostics.js';
 import { RagaDialog } from './components/RagaDialog.js';
@@ -1102,6 +1103,30 @@ function App({ examples }) {
   const onOpenScale = useCallback(() => setDialog('scale'), []);
   const onOpenLayout = useCallback(() => setDialog('layout'), []);
   const onOpenSettings = useCallback(() => setDialog('settings'), []);
+
+  // WHICH PALETTE. Kept here rather than in the toolbar because the ROLL needs it: a canvas
+  // inherits nothing, so the palette is re-read at draw time and something has to say when
+  // the answer changed. index.html has already applied any stored choice before this ran.
+  const [theme, setTheme] = useState(() => readTheme());
+  const [themeNow, setThemeNow] = useState(() => resolveTheme(readTheme()));
+  const onTheme = useCallback(() => setTheme((t) => {
+    const next = nextTheme(t);
+    try { localStorage.setItem(THEME_KEY, next); } catch { /* the choice lasts this session */ }
+    applyTheme(next);
+    setThemeNow(resolveTheme(next));
+    return next;
+  }), []);
+  // Following the system means following it as it CHANGES — a phone that goes dark at sunset
+  // moves the page with it, and the roll has to be told or it keeps yesterday's palette.
+  useEffect(() => {
+    applyTheme(theme);
+    setThemeNow(resolveTheme(theme));
+    if (theme !== 'system' || !window.matchMedia) return undefined;
+    const mq = window.matchMedia('(prefers-color-scheme: light)');
+    const on = () => setThemeNow(mq.matches ? 'light' : 'dark');
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, [theme]);
   // Both default ON: the octave is the half of the address a reader most often wants, and the
   // comma is what the roll is FOR. Stored as '0' only when turned off, so a browser that has
   // never seen the panel opens with everything named.
@@ -1254,7 +1279,8 @@ function App({ examples }) {
 
   return html`
     ${!AUDIO.ok && html`<div class="audio-warning" role="status">⚠ ${AUDIO.why}</div>`}
-    <${Toolbar} docName=${docName} blank=${noteCount === 0} duration=${duration} />
+    <${Toolbar} docName=${docName} blank=${noteCount === 0} duration=${duration}
+                theme=${theme} onTheme=${onTheme} />
     ${instrOpen && html`<${InstrumentDialog} values=${instr} onSet=${onInstrSet}
                                         onReset=${onInstrReset} onAudition=${onInstrAudition}
                                         playing=${playState === 'playing'}
@@ -1309,7 +1335,7 @@ function App({ examples }) {
           gamaka=${rollGamaka} onGamakaIntent=${onGamakaIntent} onGamakaPitch=${onCurvePitch}
           canPasteGamaka=${!!curveClip} onCopyGamakaAt=${onCopyGamakaAt} onPasteGamakaAt=${onPasteGamakaAt}
           secPerUnit=${secPerUnit} saMidi=${saPitch}
-          labelOct=${labelOct} labelComma=${labelComma}
+          labelOct=${labelOct} labelComma=${labelComma} theme=${themeNow}
           lanes=${laneData ? lanesSide : 'off'} lanesOrder=${lanesOrder} lanesHeadRef=${laneHeadRef}
           onLanesSide=${onLanesSide} onLanesOrder=${onLanesOrder} onLanesHide=${onLanesHide}
           onHoverNote=${gkaOn ? onHoverNote : null}

@@ -32,7 +32,7 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
   markerA = 0, markerB = 0, gamaka, onGamakaIntent, onGamakaPitch,
   canPasteGamaka, onCopyGamakaAt, onPasteGamakaAt, onHoverNote, secPerUnit = 0, saMidi = null,
   lanes = 'off', lanesOrder = 'ws', lanesHeadRef,
-  labelOct = true, labelComma = true,
+  labelOct = true, labelComma = true, theme = 'dark',
   onLanesSide, onLanesOrder, onLanesHide }) {
   const holder = useRef(null), content = useRef(null), canvas = useRef(null), gutter = useRef(null);
   const roll = useRef(null);
@@ -397,6 +397,14 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
     if (u > 0) hd.scrollTop = Math.max(0, Math.min(Math.max(0, r.virtH() - hd.clientHeight), pad + was * u - mid));
     r.render();
   }, [zoom]);
+
+  // THE PALETTE CHANGED. The roll reads its colours from the page's CSS variables at draw
+  // time — a canvas inherits nothing — so a theme switch is invisible to it until someone
+  // says so. This is that someone. A render, not a resize: nothing about the geometry moved.
+  useEffect(() => {
+    const r = roll.current; if (!r) return;
+    r.render();
+  }, [theme]);
 
   // How a pitch is spelt. A resize, not just a render: the header's depth is measured off the
   // longest label, so dropping the octave gives two characters back to the roll.

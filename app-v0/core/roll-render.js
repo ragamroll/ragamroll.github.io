@@ -246,11 +246,26 @@ export function renderRoll(ctx, m, v, hooks = {}) {
       for (const [t, text] of items) ctx.fillText(text, v.pad.l - 4, Y(t) + dy);
       ctx.globalAlpha = 1; ctx.font = '11px ' + mono;
     };
+    // THE LAGHU IS THE SHADED ONE, and the drutams are plain.
+    //
+    // This shaded every OTHER anga by index, which for adi — I O O — meant the laghu and the
+    // SECOND drutam, skipping the first. Three angas is an odd count, so the shading also ran
+    // straight through the avartana line: the last anga of one cycle and the first of the next
+    // were both shaded and merged into one block, and a band meant to show where you are in
+    // the cycle marked nothing at all.
+    //
+    // By KIND it repeats identically every cycle. The laghu is the anga you count through and
+    // the one whose length changes with the jati, so it is the one worth marking; the drutams
+    // are told apart by their own anga lines and their O in the gutter.
+    //
+    // At 10%. It was at 5%, which over either paper is about four levels of RGB — not hidden,
+    // just not there. It only ever looked like a colour in a screen recording, where the
+    // roll's transparent canvas was filmed without its paper and the alpha was thrown away.
     const c0 = Math.floor(Math.max(0, vLo) / T.measure) * T.measure;
     for (let c = c0; c < vHi && c < TOTAL; c += T.measure) {
-      angs.forEach(([s, e], i) => { if (i % 2 !== 0) return;
+      angs.forEach(([s, e]) => { if (glyphOf(s, e) !== 'I') return;
         const y0 = Math.max(p.y, Y(c + s)), y1 = Math.min(p.y + p.h, Y(Math.min(c + e, TOTAL)));
-        if (y1 > y0) { ctx.fillStyle = 'rgba(70,195,154,.05)'; ctx.fillRect(p.x, y0, p.w, y1 - y0); } });
+        if (y1 > y0) { ctx.fillStyle = 'rgba(70,195,154,.10)'; ctx.fillRect(p.x, y0, p.w, y1 - y0); } });
     }
     if (T.beat > 0) {
       const beats = [];

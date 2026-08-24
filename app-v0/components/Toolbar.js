@@ -2,6 +2,7 @@ import { html } from '../vendor/htm-preact.js';
 import { useState, useEffect, useCallback } from '../vendor/hooks.module.js';
 import { OpenMenu } from './OpenMenu.js';
 import { MELODY_VOICES, isTunable } from '../audio/voices.js';
+import { THEME_FACE, THEME_TITLE } from '../core/theme.js';
 // The voices come from the backend's own list. Kept here as a second copy, this menu
 // offered two names — `pluck` and `reed-fm` — that no backend case implemented, and both
 // played as the bowed synth without a word.
@@ -69,9 +70,15 @@ function FullscreenButton() {
 // THE CONTROLS ARE NOT HERE ANY MORE. They are rows under the roll, drawn from a layout the
 // reader can rearrange — see core/chrome-layout.js. What is left here is what identifies the
 // page rather than operates it.
-export function Toolbar({ docName, blank, duration }) {
+export function Toolbar({ docName, blank, duration, theme, onTheme }) {
   return html`<div class="toolbar">
     <span class="app-badge">RagaM-Roll</span>
+    <!-- BESIDE THE NAME, because it is about this page rather than about the piece — the same
+         reason fullscreen sits up here and the mixers do not. The glyph is the STATE, not the
+         action: what it shows is the theme you are in, which is a thing a reader can check
+         against the page in front of them. -->
+    ${onTheme && html`<button class="theme-btn" title=${THEME_TITLE[theme] || ''}
+      aria-label=${THEME_TITLE[theme] || 'Theme'} onClick=${onTheme}>${THEME_FACE[theme] || '◐'}</button>`}
     <a class="help-link" href="./help.html" target="_blank" rel="noopener"
        title="Help — notation guide &amp; features">?</a>
     <span class=${'readout' + (blank ? ' blank' : '')}>${blank ? 'blank / new' : docName}</span>
