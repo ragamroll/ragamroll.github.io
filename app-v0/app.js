@@ -86,6 +86,12 @@ const LS_LOOP = 'ragamroll.loop';            // repeat what is played until Stop
 const LS_LABEL_OCT = 'ragamroll.labelOctave';
 const LS_LABEL_COMMA = 'ragamroll.labelComma';
 const LS_FLASH = 'ragamroll.noteFlash';      // whether a note lights up as it is reached
+// WHERE THE PLAYHEAD SITS while a piece plays, as a share of the roll's height. 0.4 is where
+// it has always been: a little above centre, so what is coming has more room than what has
+// gone. Near the top is for filming — the line sits just under the pitch names and the whole
+// window is what happens next.
+const LS_HEAD_POS = 'ragamroll.playheadPos';
+const HEAD_POS_DEFAULT = 0.4, HEAD_POS_MIN = 0.05, HEAD_POS_MAX = 0.6;
 const DEFAULT_NAME = 'ragamroll';
 // The narrowest the NOTATION column is allowed to get while it is carrying the controls.
 // Measured, not guessed: the widest row comes to 386px of controls, and with the row's own
@@ -925,6 +931,23 @@ function App({ examples }) {
     r.setUser({ min: lo, max: hi, bottom: bot }).resize();
   }, [docEpoch, noteCount, model, compiled.parsed]);
 
+  // DECLARED ABOVE applyScroll, which reads the ref. A const below its reader is in the
+  // temporal dead zone when that reader runs — the seventh time this file has had the chance,
+  // and it takes the app down on the first press rather than failing quietly.
+  const [headPos, setHeadPos] = useState(() => {
+    const v = Number(localStorage.getItem(LS_HEAD_POS));
+    return v >= HEAD_POS_MIN && v <= HEAD_POS_MAX ? v : HEAD_POS_DEFAULT;
+  });
+  // In a ref as well: applyScroll is built once and would otherwise keep the value it was
+  // born with. This file has been bitten by a stale closure often enough to say so.
+  const headPosRef = useRef(headPos);
+  const onHeadPos = useCallback((v) => {
+    const n = Math.min(HEAD_POS_MAX, Math.max(HEAD_POS_MIN, Number(v) || HEAD_POS_DEFAULT));
+    localStorage.setItem(LS_HEAD_POS, String(n));
+    headPosRef.current = n;
+    setHeadPos(n);
+  }, []);
+
   const applyScroll = useCallback(() => {
     const pos = playerRef.current.position();
     // The roll draws the playhead; this decides where it is. Transport seconds minus
@@ -942,8 +965,15 @@ function App({ examples }) {
       r.setPlayhead(units).render();
       setLaneHead(units);
       const hd = r.canvas.parentElement.parentElement;
+      // NEVER UNDER THE LABELS. The band above the grid is the pitch axis and the roll clips
+      // to it, so a playhead asked for higher than the header is deep would not be drawn at
+      // all — the setting would look like it had stopped working. The header's own depth is
+      // the floor, which is also very nearly what "just below the names" means: it is the
+      // longest label's length plus its padding.
+      const want = hd.clientHeight * headPosRef.current;
+      const anchor = Math.max((r.pad ? r.pad.t : 0) + 10, want);
       hd.scrollTop = Math.max(0, Math.min(Math.max(0, r.virtH() - hd.clientHeight),
-        r.yVirt(units) - hd.clientHeight * 0.4));
+        r.yVirt(units) - anchor));
     }
     return pos;
   }, []);
@@ -1301,6 +1331,7 @@ function App({ examples }) {
     ${dialog === 'settings' && html`<${SettingsDialog} labelOct=${labelOct} labelComma=${labelComma}
                                                       onLabelOct=${onLabelOct} onLabelComma=${onLabelComma}
                                                       flash=${flash} onFlash=${onFlash}
+                                                      headPos=${headPos} onHeadPos=${onHeadPos}
                                                       onClose=${onCloseDialog} />`}
     <${Diagnostics} items=${model.diagnostics} />
     <div class="workspace" ref=${wsRef}>

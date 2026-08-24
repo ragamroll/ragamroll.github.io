@@ -21,7 +21,8 @@ import { pitchLabel } from '../core/roll-model.js';
  */
 const SAMPLE = [['S', 4], ['R2b', 4], ['M1a', 5], ['N3a', 5]];
 
-export function SettingsDialog({ labelOct, labelComma, onLabelOct, onLabelComma, flash, onFlash, onClose }) {
+export function SettingsDialog({ labelOct, labelComma, onLabelOct, onLabelComma, flash, onFlash,
+  headPos, onHeadPos, onClose }) {
   const close = (e) => { if (e.target === e.currentTarget) onClose(); };
   const opts = { octave: labelOct, comma: labelComma };
 
@@ -59,6 +60,16 @@ export function SettingsDialog({ labelOct, labelComma, onLabelOct, onLabelComma,
           white dot on the playhead says the same thing and says it better — on the pitch rather
           than around it, for the whole note, and riding the curve where there is one — so this
           is here to turn off.</span>
+        </label>
+
+        <label class="set-row">
+          <input class="set-range" type="range" min="0.05" max="0.6" step="0.05" value=${headPos}
+                 onInput=${(e) => onHeadPos(Number(e.target.value))} />
+          <span class="set-name">Playhead ${Math.round(headPos * 100)}%</span>
+          <span class="instr-hint">How far down the roll the line sits while a piece plays.
+          A little above centre by default, so what is coming has more room than what has gone.
+          Near the top — just under the pitch names, which is as high as it will go — the whole
+          window is what happens next, which is what a recording wants.</span>
         </label>
 
         <p class="instr-hint instr-foot">On the axis, that reads:
