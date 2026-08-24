@@ -32,7 +32,7 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
   markerA = 0, markerB = 0, gamaka, onGamakaIntent, onGamakaPitch,
   canPasteGamaka, onCopyGamakaAt, onPasteGamakaAt, onHoverNote, secPerUnit = 0, saMidi = null,
   lanes = 'off', lanesOrder = 'ws', lanesHeadRef,
-  labelOct = true, labelComma = true, theme = 'dark',
+  labelOct = true, labelComma = true, theme = 'dark', flash = true,
   onLanesSide, onLanesOrder, onLanesHide }) {
   const holder = useRef(null), content = useRef(null), canvas = useRef(null), gutter = useRef(null);
   const roll = useRef(null);
@@ -98,7 +98,11 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
       // roll to look at.
       palette: () => ({ amber: cssvar('--amber'), amberS: cssvar('--amberSoft'), teal: cssvar('--teal'),
         terra: cssvar('--terra'), hair: cssvar('--hair2'), muted: cssvar('--muted'),
-        panel2: cssvar('--panel2'), mono: cssvar('--mono'), bg: cssvar('--bg'), sans: cssvar('--sans') }),
+        panel2: cssvar('--panel2'), mono: cssvar('--mono'), bg: cssvar('--bg'), sans: cssvar('--sans'),
+        // The roll's own paper. Same colour the pane behind it is painted, so the page looks
+        // exactly as it did — but the canvas is now opaque, which is what a screen capture
+        // needs and what saves compositing every frame it films.
+        paper: cssvar('--panel') }),
     });
     roll.current = r;
     if (api) api.current = r;
@@ -405,6 +409,12 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
     const r = roll.current; if (!r) return;
     r.render();
   }, [theme]);
+
+  // Whether a note lights up as it is reached. A render: nothing about the geometry moved.
+  useEffect(() => {
+    const r = roll.current; if (!r) return;
+    r.setView({ flash }).render();
+  }, [flash]);
 
   // How a pitch is spelt. A resize, not just a render: the header's depth is measured off the
   // longest label, so dropping the octave gives two characters back to the roll.

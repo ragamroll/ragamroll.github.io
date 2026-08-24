@@ -74,7 +74,17 @@ export function renderRoll(ctx, m, v, hooks = {}) {
   const mono = C.mono, notes = m.notes, starts = m.starts, TOTAL = m.total;
   const [sa, sb] = g.xRange;
 
-  ctx.clearRect(0, 0, v.w, v.h);
+  // PAPER, when the host names one. The roll used to clear to nothing and let the CSS behind
+  // it be the paper, which looks identical on the page and is not the same picture: a
+  // transparent canvas filmed by captureStream has no paper at all, and VP9 carries no alpha,
+  // so every wash came out at full strength and the empty stretches came out black. Filling
+  // costs what clearing cost — it is the same pass over the same pixels — where compositing
+  // the frames afterwards cost half the frame rate: 29.9fps to 16.5 on a 1080x1920 capture.
+  //
+  // A host that names no paper still gets the transparent canvas it had. The gamaka page is
+  // one: its palette has no `paper`, and its stage is styled behind the roll on purpose.
+  if (C.paper) { ctx.fillStyle = C.paper; ctx.fillRect(0, 0, v.w, v.h); }
+  else ctx.clearRect(0, 0, v.w, v.h);
   ctx.font = '11px ' + mono;
 
   // Octave bands and Sa lines: alternate shade per octave, with the MIDDLE Sa drawn
@@ -368,7 +378,11 @@ export function renderRoll(ctx, m, v, hooks = {}) {
     // a light one, is lost either way, which is what it did. Dark goes bright and bright goes
     // dark: a reversal cannot be lost against either background, and needs no colour of its own.
     const flashUnits = v.secPerUnit > 0 ? FLASH_SEC / v.secPerUnit : FLASH_UNITS_FALLBACK;
-    const lit = (mode === 'roll' && v.playPos != null && nn.dur > 0 && flashUnits > 0)
+    // THE FLASH IS OPTIONAL. It was the only thing saying "this note, now" until the sounding
+    // dot arrived, and the dot says it better: it is on the pitch rather than around it, it
+    // is there for the whole note rather than a tenth of a second, and on a curve it rides
+    // the ornament. Off, the roll stops blinking at a reader who is following the dot.
+    const lit = (mode === 'roll' && v.flash !== false && v.playPos != null && nn.dur > 0 && flashUnits > 0)
       ? 1 - (v.playPos - starts[i]) / flashUnits : 0;
     const strike = (lit > 0 && lit <= 1 && v.playPos < starts[i] + nn.dur) ? lit : 0;
     const DARK = 'rgba(38,43,52,.9)', LIGHT = 'rgba(239,230,208,.85)';

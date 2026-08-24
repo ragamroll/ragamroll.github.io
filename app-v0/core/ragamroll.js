@@ -39,7 +39,10 @@ export function createRagamRoll(el, opts = {}) {
     markerA: 0, markerB: 0, saMidi: null, grabIdx: -1, labels: true, ruler: false,
     // How a pitch is spelt on the axis: octave first, comma shown. Both are the reader's,
     // and both are drawing questions — see pitchLabel.
-    labelOct: true, labelComma: true };
+    labelOct: true, labelComma: true,
+    // Whether a note lights up as it is reached. See roll-render: the sounding dot says the
+    // same thing better, so this is the reader's to turn off.
+    flash: true };
   let bounds = { total: 1, stepMin: -26, stepMax: 66, gridPitches: [] };
   const pad = { l: 40, r: 12, t: PAD_T_MIN, b: 12 };
   // The seconds ruler needs a margin of its own on the right. Reserved HERE rather than in
@@ -131,7 +134,7 @@ export function createRagamRoll(el, opts = {}) {
       tEnd: draw ? model.starts[view.sel] + model.notes[view.sel].dur : bounds.total,
       palette: palette(), sel: view.sel, selRest: view.selRest, grabIdx: view.grabIdx, playPos: view.playPos,
       markerA: view.markerA, markerB: view.markerB, labels: view.labels,
-      labelOct: view.labelOct, labelComma: view.labelComma,
+      labelOct: view.labelOct, labelComma: view.labelComma, flash: view.flash,
       // The gesture layers' in-flight state, which the renderer draws: a paint being
       // dragged, the margin armed to take one, a freehand stroke in progress, and the
       // A–B tabs. This object is a WHITELIST — anything not named here is dropped on the

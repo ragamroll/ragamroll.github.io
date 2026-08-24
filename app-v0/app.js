@@ -85,6 +85,7 @@ const LS_LOOP = 'ragamroll.loop';            // repeat what is played until Stop
 // notation should carry it.
 const LS_LABEL_OCT = 'ragamroll.labelOctave';
 const LS_LABEL_COMMA = 'ragamroll.labelComma';
+const LS_FLASH = 'ragamroll.noteFlash';      // whether a note lights up as it is reached
 const DEFAULT_NAME = 'ragamroll';
 // The narrowest the NOTATION column is allowed to get while it is carrying the controls.
 // Measured, not guessed: the widest row comes to 386px of controls, and with the row's own
@@ -1134,6 +1135,8 @@ function App({ examples }) {
   const [labelComma, setLabelComma] = useState(() => localStorage.getItem(LS_LABEL_COMMA) !== '0');
   const onLabelOct = useCallback((on) => { localStorage.setItem(LS_LABEL_OCT, on ? '1' : '0'); setLabelOct(on); }, []);
   const onLabelComma = useCallback((on) => { localStorage.setItem(LS_LABEL_COMMA, on ? '1' : '0'); setLabelComma(on); }, []);
+  const [flash, setFlash] = useState(() => localStorage.getItem(LS_FLASH) !== '0');
+  const onFlash = useCallback((on) => { localStorage.setItem(LS_FLASH, on ? '1' : '0'); setFlash(on); }, []);
   const onCloseDialog = useCallback(() => setDialog(null), []);
 
   // --- Draggable pane divider. The workspace is a bounded flex column holding ONE row,
@@ -1297,6 +1300,7 @@ function App({ examples }) {
     ${dialog === 'layout' && html`<${LayoutDialog} rows=${rows} onSet=${setRows} onClose=${onCloseDialog} />`}
     ${dialog === 'settings' && html`<${SettingsDialog} labelOct=${labelOct} labelComma=${labelComma}
                                                       onLabelOct=${onLabelOct} onLabelComma=${onLabelComma}
+                                                      flash=${flash} onFlash=${onFlash}
                                                       onClose=${onCloseDialog} />`}
     <${Diagnostics} items=${model.diagnostics} />
     <div class="workspace" ref=${wsRef}>
@@ -1335,7 +1339,7 @@ function App({ examples }) {
           gamaka=${rollGamaka} onGamakaIntent=${onGamakaIntent} onGamakaPitch=${onCurvePitch}
           canPasteGamaka=${!!curveClip} onCopyGamakaAt=${onCopyGamakaAt} onPasteGamakaAt=${onPasteGamakaAt}
           secPerUnit=${secPerUnit} saMidi=${saPitch}
-          labelOct=${labelOct} labelComma=${labelComma} theme=${themeNow}
+          labelOct=${labelOct} labelComma=${labelComma} theme=${themeNow} flash=${flash}
           lanes=${laneData ? lanesSide : 'off'} lanesOrder=${lanesOrder} lanesHeadRef=${laneHeadRef}
           onLanesSide=${onLanesSide} onLanesOrder=${onLanesOrder} onLanesHide=${onLanesHide}
           onHoverNote=${gkaOn ? onHoverNote : null}
