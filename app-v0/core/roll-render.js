@@ -20,6 +20,7 @@
 // has already worked out — the two cannot disagree about where a note is.
 import { rollGeometry, gridHandles, abChipBox } from './roll-geometry.js';
 import { EDO } from './shruti.js';
+import { pitchLabel } from './roll-model.js';
 
 // Height of the draggable A/B tabs in the left margin. Shared with the gesture layer,
 // which hit-tests a press against it.
@@ -175,12 +176,18 @@ export function renderRoll(ctx, m, v, hooks = {}) {
     if (v.labels === false) continue;
     const black = m.isBlack(gp.step);
     ctx.font = 'bold 10px ' + mono;
-    const cw = chipW(ctx, gp.label) + 8, ch = v.chipH;
+    // Spelt HERE, from the row's parts, so the reader's choice about the octave and the
+    // comma costs a re-render and not a rebuild of the model. A row from an older caller
+    // that carries only a finished label still draws it.
+    const text = gp.name !== undefined
+      ? pitchLabel(gp.name, gp.oct, { octave: v.labelOct !== false, comma: v.labelComma !== false })
+      : gp.label;
+    const cw = chipW(ctx, text) + 8, ch = v.chipH;
     ctx.save(); ctx.translate(x, p.y - 6 - cw / 2); ctx.rotate(-Math.PI / 2);
     ctx.fillStyle = black ? '#20242b' : '#efe6d0'; roundRect(ctx, -cw / 2, -ch / 2, cw, ch, 4); ctx.fill();
     ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = .5; ctx.stroke();
     ctx.fillStyle = black ? '#efe6d0' : '#20242b'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(gp.label, 0, .5);
+    ctx.fillText(text, 0, .5);
     ctx.restore(); ctx.textBaseline = 'alphabetic';
     ctx.font = '11px ' + mono;
   }

@@ -13,7 +13,7 @@
 // It does not own audio, and it does not edit. An editor supplies `hooks` to paint
 // its own chrome (see roll-render.js) and reads `geometry()` to hit-test against the
 // exact coordinates that were drawn.
-import { buildRollModel, gridBounds, gridPitches, isBlackKey } from './roll-model.js';
+import { buildRollModel, gridBounds, gridPitches, isBlackKey, pitchLabel } from './roll-model.js';
 import { BOXES } from './shruti.js';
 import { rollGeometry } from './roll-geometry.js';
 import { renderRoll } from './roll-render.js';
@@ -36,7 +36,10 @@ export function createRagamRoll(el, opts = {}) {
   let model = EMPTY;
   let user = { min: null, max: null, bottom: null };
   let view = { mode: 'roll', sel: -1, selRest: -1, drawSpan: 22, zoom: 1, playPos: null,
-    markerA: 0, markerB: 0, saMidi: null, grabIdx: -1, labels: true, ruler: false };
+    markerA: 0, markerB: 0, saMidi: null, grabIdx: -1, labels: true, ruler: false,
+    // How a pitch is spelt on the axis: octave first, comma shown. Both are the reader's,
+    // and both are drawing questions — see pitchLabel.
+    labelOct: true, labelComma: true };
   let bounds = { total: 1, stepMin: -26, stepMax: 66, gridPitches: [] };
   const pad = { l: 40, r: 12, t: PAD_T_MIN, b: 12 };
   // The seconds ruler needs a margin of its own on the right. Reserved HERE rather than in
@@ -48,13 +51,19 @@ export function createRagamRoll(el, opts = {}) {
   // The header has to be as deep as the longest pitch name is LONG, because the names
   // stand upright along their own grid lines. Horizontal, they were as wide as their
   // text and collided on a narrow screen; upright trades that width for header depth.
+  // Measured with the SPELLING that will be drawn, not the row's default one: the header is
+  // as deep as the longest label is long, and "4.R2b" is not the width of "R2".
   const labelDepth = (gp) => {
     if (!gp || !gp.length) return PAD_T_MIN;
     ctx.save(); ctx.font = 'bold 10px ' + (palette().mono || 'monospace');
-    let x = 0; for (const g of gp) x = Math.max(x, ctx.measureText(g.label).width);
+    let x = 0;
+    for (const g of gp) x = Math.max(x, ctx.measureText(spell(g)).width);
     ctx.restore();
     return Math.max(PAD_T_MIN, Math.round(x + 8) + 12);
   };
+  const spell = (g) => (g.name !== undefined
+    ? pitchLabel(g.name, g.oct, { octave: view.labelOct, comma: view.labelComma })
+    : g.label);
 
   // A pitch VIEW, as against the grid's bounds.
   //
@@ -122,6 +131,7 @@ export function createRagamRoll(el, opts = {}) {
       tEnd: draw ? model.starts[view.sel] + model.notes[view.sel].dur : bounds.total,
       palette: palette(), sel: view.sel, selRest: view.selRest, grabIdx: view.grabIdx, playPos: view.playPos,
       markerA: view.markerA, markerB: view.markerB, labels: view.labels,
+      labelOct: view.labelOct, labelComma: view.labelComma,
       // The gesture layers' in-flight state, which the renderer draws: a paint being
       // dragged, the margin armed to take one, a freehand stroke in progress, and the
       // A–B tabs. This object is a WHITELIST — anything not named here is dropped on the
@@ -154,7 +164,11 @@ export function createRagamRoll(el, opts = {}) {
     },
     pitchView: () => (pitchView ? { ...pitchView } : null),
     setView(v) {
-      const reBound = v.zoom != null && v.zoom !== view.zoom;
+      // A spelling change moves the header as surely as a zoom does: the depth is measured
+      // off the longest label, and dropping the octave takes two characters off every one.
+      const reSpell = (v.labelOct != null && v.labelOct !== view.labelOct)
+        || (v.labelComma != null && v.labelComma !== view.labelComma);
+      const reBound = (v.zoom != null && v.zoom !== view.zoom) || reSpell;
       // `ruler` decides the seconds ruler; `secPerUnit` is just what a unit is worth in time.
       // They used to be the same field, so a pane too narrow for the ruler also reported that
       // it had no idea how fast the piece was — which on a phone is every pane, and which

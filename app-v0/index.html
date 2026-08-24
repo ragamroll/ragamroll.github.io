@@ -567,6 +567,13 @@
     .layout-ids { display:flex; flex-wrap:wrap; gap:.25rem; }
     .layout-ids code { background:var(--hair2); border-radius:3px; padding:.05rem .3rem; font-size:.8rem; }
     .layout-btn.active { border-color:var(--teal); color:var(--teal); }
+    /* A settings row: the box, the name, and what turning it off actually does — the last of
+       which is the part worth reading, so it wraps under rather than being cut short. */
+    .set-row { display:grid; grid-template-columns:auto 5rem 1fr; gap:.4rem; align-items:baseline;
+      margin:.5rem 0; cursor:pointer; }
+    .set-row .set-name { font-weight:600; }
+    .set-row code { background:var(--hair2); border-radius:3px; padding:.05rem .25rem; }
+    .instr-foot code { background:var(--hair2); border-radius:3px; padding:.05rem .3rem; margin-right:.2rem; }
     /* The chrome, drawn a row at a time from the layout. Row 1 is pinned under the roll. */
     /* Tight on purpose. The pinned row came to 379px of controls in a 395px phone — over by
        a hair, and a hair is a whole second line. */

@@ -1,4 +1,4 @@
-const CACHE = 'ragamroll-99ae381';
+const CACHE = 'ragamroll-b75583d';
 
 // SERVED FROM A LOCAL SERVER: stand down entirely.
 //
@@ -21,7 +21,7 @@ const ASSETS = [
   './components/Editor.js', './components/RollPane.js', './components/RollTools.js', './components/EditTools.js', './components/EditorDrawer.js', './components/Toolbar.js',
   './components/Diagnostics.js', './components/Controls.js', './components/ChromeBar.js', './core/chrome-layout.js', './components/ReferenceDialog.js', './components/Splitter.js',
   './components/Footer.js', './components/PerfDialog.js', './components/OpenMenu.js', './components/ScaleDialog.js', './components/TalaDialog.js',
-  './components/RagaDialog.js',
+  './components/RagaDialog.js', './components/SettingsDialog.js',
   './audio/schedule.js', './audio/drone.js', './audio/backend.js', './audio/backends/tone.js', './audio/backends/webaudio.js', './audio/player.js',
   './core/app-update.js', './core/perf.js', './core/parser.js', './core/gamaka-inline.js', './core/gamaka-curve.js', './core/tuning.js', './core/raga-base.js', './core/raga-db.json', './core/reference.js',
   './core/shruti.js', './core/melakarta.js', './core/tala-preview.js', './core/raga-shruti.js', './core/share.js', './core/share-legacy.js',

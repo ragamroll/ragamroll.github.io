@@ -24,6 +24,7 @@ import { InstrumentDialog } from './components/InstrumentDialog.js';
 import { TalaDialog } from './components/TalaDialog.js';
 import { ScaleDialog } from './components/ScaleDialog.js';
 import { LayoutDialog } from './components/LayoutDialog.js';
+import { SettingsDialog } from './components/SettingsDialog.js';
 import { buildSequence } from './core/midi/sequence.js';
 import { writeSMF } from './core/midi/smf.js';
 import { createPlayer } from './audio/player.js';
@@ -78,6 +79,11 @@ const AUDIO = audioSupport();
 const LS_GKA = 'ragamroll.showSource';       // the provenance strip, on or off
 const LS_READ = 'ragamroll.reading';         // the notation folded to its swaras
 const LS_LOOP = 'ragamroll.loop';            // repeat what is played until Stop
+// How the roll spells a pitch on its axis. The reader's, and the browser's — it is about how
+// this pair of eyes reads a grid, the same class of thing as the mixer levels, and no
+// notation should carry it.
+const LS_LABEL_OCT = 'ragamroll.labelOctave';
+const LS_LABEL_COMMA = 'ragamroll.labelComma';
 const DEFAULT_NAME = 'ragamroll';
 // The narrowest the NOTATION column is allowed to get while it is carrying the controls.
 // Measured, not guessed: the widest row comes to 386px of controls, and with the row's own
@@ -1095,6 +1101,14 @@ function App({ examples }) {
   const onOpenTalas = useCallback(() => setDialog('talas'), []);
   const onOpenScale = useCallback(() => setDialog('scale'), []);
   const onOpenLayout = useCallback(() => setDialog('layout'), []);
+  const onOpenSettings = useCallback(() => setDialog('settings'), []);
+  // Both default ON: the octave is the half of the address a reader most often wants, and the
+  // comma is what the roll is FOR. Stored as '0' only when turned off, so a browser that has
+  // never seen the panel opens with everything named.
+  const [labelOct, setLabelOct] = useState(() => localStorage.getItem(LS_LABEL_OCT) !== '0');
+  const [labelComma, setLabelComma] = useState(() => localStorage.getItem(LS_LABEL_COMMA) !== '0');
+  const onLabelOct = useCallback((on) => { localStorage.setItem(LS_LABEL_OCT, on ? '1' : '0'); setLabelOct(on); }, []);
+  const onLabelComma = useCallback((on) => { localStorage.setItem(LS_LABEL_COMMA, on ? '1' : '0'); setLabelComma(on); }, []);
   const onCloseDialog = useCallback(() => setDialog(null), []);
 
   // --- Draggable pane divider. The workspace is a bounded flex column holding ONE row,
@@ -1211,7 +1225,7 @@ function App({ examples }) {
     saPitch, autoSaMidi, onSetSa,
     examples, exampleValue, onNew, onOpen, onExample, onOpenLink,
     onOpenRagas, onOpenTalas, onOpenScale, scaleActive: !!scale,
-    onOpenLayout, layoutCustom: !isDefaultLayout(rows),
+    onOpenLayout, layoutCustom: !isDefaultLayout(rows), onOpenSettings,
     timbre, onTimbre, onOpenInstrument: () => setInstrOpen(true),
   };
 
@@ -1255,6 +1269,9 @@ function App({ examples }) {
     ${dialog === 'scale' && html`<${ScaleDialog} scale=${scale} onApply=${onApplyScale} onClose=${onCloseDialog}
                                                  ragas=${getRagas()} ragaName=${ragaName} />`}
     ${dialog === 'layout' && html`<${LayoutDialog} rows=${rows} onSet=${setRows} onClose=${onCloseDialog} />`}
+    ${dialog === 'settings' && html`<${SettingsDialog} labelOct=${labelOct} labelComma=${labelComma}
+                                                      onLabelOct=${onLabelOct} onLabelComma=${onLabelComma}
+                                                      onClose=${onCloseDialog} />`}
     <${Diagnostics} items=${model.diagnostics} />
     <div class="workspace" ref=${wsRef}>
       <div class=${'cols' + (stacked ? ' stacked' : '')} ref=${colsRef}
@@ -1292,6 +1309,7 @@ function App({ examples }) {
           gamaka=${rollGamaka} onGamakaIntent=${onGamakaIntent} onGamakaPitch=${onCurvePitch}
           canPasteGamaka=${!!curveClip} onCopyGamakaAt=${onCopyGamakaAt} onPasteGamakaAt=${onPasteGamakaAt}
           secPerUnit=${secPerUnit} saMidi=${saPitch}
+          labelOct=${labelOct} labelComma=${labelComma}
           lanes=${laneData ? lanesSide : 'off'} lanesOrder=${lanesOrder} lanesHeadRef=${laneHeadRef}
           onLanesSide=${onLanesSide} onLanesOrder=${onLanesOrder} onLanesHide=${onLanesHide}
           onHoverNote=${gkaOn ? onHoverNote : null}

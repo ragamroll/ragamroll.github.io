@@ -32,6 +32,7 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
   markerA = 0, markerB = 0, gamaka, onGamakaIntent, onGamakaPitch,
   canPasteGamaka, onCopyGamakaAt, onPasteGamakaAt, onHoverNote, secPerUnit = 0, saMidi = null,
   lanes = 'off', lanesOrder = 'ws', lanesHeadRef,
+  labelOct = true, labelComma = true,
   onLanesSide, onLanesOrder, onLanesHide }) {
   const holder = useRef(null), content = useRef(null), canvas = useRef(null), gutter = useRef(null);
   const roll = useRef(null);
@@ -396,6 +397,13 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
     if (u > 0) hd.scrollTop = Math.max(0, Math.min(Math.max(0, r.virtH() - hd.clientHeight), pad + was * u - mid));
     r.render();
   }, [zoom]);
+
+  // How a pitch is spelt. A resize, not just a render: the header's depth is measured off the
+  // longest label, so dropping the octave gives two characters back to the roll.
+  useEffect(() => {
+    const r = roll.current; if (!r) return;
+    r.setView({ labelOct, labelComma }).resize().render();
+  }, [labelOct, labelComma]);
 
   // What is selected is the roll's to DRAW — it already gives a selected note a heavier
   // border and its end caps — so it is pushed in as view state rather than tracked

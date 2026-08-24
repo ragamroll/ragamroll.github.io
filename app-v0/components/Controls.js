@@ -203,6 +203,12 @@ const Scale = ({ p }) => html`<button class=${'scale-btn' + (p.scaleActive ? ' a
 // The arrangement's own control, which is why it can sit anywhere the rest can. The dot says
 // this browser is no longer showing the built-in rows — otherwise a reader who moved something
 // months ago and forgot has no way to tell their layout from everyone else's.
+// HOW THE ROLL READS, as against where the controls sit. The gear is the settings gear and
+// nothing else's — Scale carries one too, which is a different question about the same axis
+// (which pitches are IN the scale, not what they are called), so this one says what it is.
+const Settings = ({ p }) => html`<button class="settings-btn" onClick=${p.onOpenSettings}
+  title="How the roll spells a pitch — the octave and the comma on the axis labels">⚙ Settings</button>`;
+
 const Layout = ({ p }) => html`<button class=${'layout-btn' + (p.layoutCustom ? ' active' : '')}
   onClick=${p.onOpenLayout}
   title="Where the controls sit — save this arrangement to a file, or load one back">Layout${p.layoutCustom ? ' •' : ''}</button>`;
@@ -212,7 +218,7 @@ export const CONTROL_COMPONENTS = {
   drone: Drone, melody: Melody, tala: Tala,
   master: Master, tempo: Tempo, sync: Sync,
   lanes: Lanes, save: Save, share: Share, midi: Midi,
-  ragas: Ragas, talas: Talas, scale: Scale, layout: Layout,
+  ragas: Ragas, talas: Talas, scale: Scale, layout: Layout, settings: Settings,
 };
 
 // What each is called when a reader is looking at a list of them rather than at the control.
@@ -221,5 +227,5 @@ export const CONTROL_NAMES = {
   timbre: 'Instrument', sa: 'Sa', drone: 'Drone', melody: 'Melody', tala: 'Tala',
   master: 'Master', tempo: 'Tempo', sync: 'A/V trim', lanes: 'Lanes', save: 'Save',
   share: 'Share', midi: 'Export MIDI', ragas: 'Ragas', talas: 'Talas', scale: 'Scale',
-  layout: 'Layout',
+  layout: 'Layout', settings: 'Settings',
 };

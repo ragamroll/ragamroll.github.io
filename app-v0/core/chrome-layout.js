@@ -17,7 +17,7 @@ export const CONTROLS = [
   'drone', 'melody', 'tala',
   'master', 'tempo', 'sync',
   'lanes', 'save', 'share', 'midi',
-  'ragas', 'talas', 'scale', 'layout',
+  'ragas', 'talas', 'scale', 'layout', 'settings',
 ];
 
 // The built-in arrangement. Row 1 is the pinned one.
@@ -26,7 +26,7 @@ export const DEFAULT_ROWS = [
   ['master', 'melody', 'drone', 'tala'],
   ['sa', 'sync', 'tempo'],
   ['lanes', 'save', 'share', 'midi'],
-  ['layout', 'ragas', 'talas', 'scale'],
+  ['layout', 'settings', 'ragas', 'talas', 'scale'],
 ];
 
 export const LAYOUT_KEY = 'ragamroll.layout';

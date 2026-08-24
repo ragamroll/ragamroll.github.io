@@ -102,10 +102,30 @@ export function gridBounds(m, user = {}) {
 export function gridPitches(notes, stepMin, stepMax, raga) {
   const { ragaSteps, ragaSwaraName } = buildRagaSteps(raga || '');
   const rows = new Map();
+  const row = (step, name, oct) => ({ step, name, oct, label: pitchLabel(name, oct) });
   if (ragaSteps) for (const s of ragaRowsInRange(ragaSteps, stepMin, stepMax))
-    rows.set(s, { step: s, label: (ragaSwaraName.get(((s % EDO) + EDO) % EDO) || '') + (Math.floor(s / EDO) + 5) });
-  for (const n of notes) if (!rows.has(n.step)) rows.set(n.step, { step: n.step, label: n.swara + n.octave });
+    rows.set(s, row(s, ragaSwaraName.get(((s % EDO) + EDO) % EDO) || '', Math.floor(s / EDO) + 5));
+  for (const n of notes) if (!rows.has(n.step)) rows.set(n.step, row(n.step, n.swara, n.octave));
   return [...rows.values()].sort((a, b) => a.step - b.step);
+}
+
+// HOW A PITCH IS SPELT on the axis. The name and the octave are kept apart on the row and
+// put together here, so which parts are shown is a question asked at DRAW time rather than
+// one baked into the model: turning the octave off is a re-render, not a rebuild.
+//
+// The octave leads — "4.R2b", not "R2b4". A label is read left to right and the octave is
+// the coarse half of the address; buried at the end it was the last thing read and the
+// easiest to mistake for part of the name, which in a spelling that already ends in a digit
+// and a letter is a real confusion.
+//
+// The COMMA is the trailing a/b: the two 53-EDO steps a syntonic comma apart that share a
+// swara slot. It is the finest distinction on the axis and not everyone reading wants it,
+// so it comes off separately — and only where there IS one. S and P have no comma and no
+// variety digit, and must not lose their last letter to a careless strip.
+export function pitchLabel(name, oct, opts = {}) {
+  const { octave = true, comma = true } = opts;
+  const n = comma ? String(name) : String(name).replace(/(\d)[ab]$/, '$1');
+  return octave && oct != null ? `${oct}.${n}` : n;
 }
 
 // Is a shruti nearest a black piano key, given where Sa is? 53-EDO does not line up
