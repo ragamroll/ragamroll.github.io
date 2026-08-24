@@ -79,6 +79,13 @@ const LS_GKA = 'ragamroll.showSource';       // the provenance strip, on or off
 const LS_READ = 'ragamroll.reading';         // the notation folded to its swaras
 const LS_LOOP = 'ragamroll.loop';            // repeat what is played until Stop
 const DEFAULT_NAME = 'ragamroll';
+// The narrowest the NOTATION column is allowed to get while it is carrying the controls.
+// Measured, not guessed: the widest row comes to 386px of controls, and with the row's own
+// padding and the gaps between them it wraps at a column width of 396 — checked by dragging
+// the divider to the stop, not by reading the CSS. A wrapped row's second line is height
+// taken off the notation while the roll gains nothing, so squeezing past here buys nothing.
+// The extra over 396 is the margin a font that renders a hair wider elsewhere will need.
+const CHROME_MIN_PX = 420;
 
 // Derive a document base-name (no extension) from an opened file / example name.
 function baseName(name) {
@@ -1182,7 +1189,12 @@ function App({ examples }) {
     const el = colsRef.current; if (!el) return;
     const r = el.getBoundingClientRect();
     const first = Math.max(15, Math.min(85, ((clientX - r.left) / r.width) * 100));
-    setEditorPct(rollFirst ? 100 - first : first);
+    // The controls ride in this column side by side, so its floor is THEIR floor rather than
+    // a share of the window: dragged below CHROME_MIN_PX the rows wrap, and the height they
+    // gain comes straight off the notation while the roll gains nothing. Capped at half the
+    // window so a small landscape window still has a divider that moves.
+    const floor = Math.min(50, (CHROME_MIN_PX / r.width) * 100);
+    setEditorPct(Math.max(floor, rollFirst ? 100 - first : first));
   }, [rollFirst]);
 
   // ONE BAG for every control the layout can place. They all take the same shape rather than
@@ -1255,6 +1267,21 @@ function App({ examples }) {
             reading=${reading} onReading=${() => setReading((v) => !v)} />
           <${Editor} value=${text} onInput=${setText} readOnly=${reading} onPeek=${gkaOn ? onPeek : null}
             durations=${readingMeta.durations} measure=${readingMeta.measure} />
+          <!-- SIDE BY SIDE, THE CONTROLS LIVE WITH THE NOTATION. Full-width rows under both
+               panes charge the roll their whole height for nothing: the widest row is 386px
+               of controls, so half a window holds them with room to spare, and the roll gets
+               all 183px back. Stacked keeps them below, where the column is the only column
+               and the grip needs something to push away.
+
+               ROW 1 COMES WITH THEM, and in its own place at the top. Its pinning is about
+               the GRIP — it is the row the reader cannot afford to have pushed off the
+               screen — and there is no grip here. Left behind as a bar under both panes it
+               would have been the one row drawn out of order: the reader arranged the rows
+               top to bottom, and row 1 would have appeared last. -->
+          <div class="chrome-col">
+            <${ChromeRow} ids=${rows[0] || []} p=${ctl} cls="chrome-pinned" />
+            <${ChromeBar} rows=${rows.slice(1)} p=${ctl} />
+          </div>
         </div>`}
         ${!stacked && html`<${Splitter} orientation="v" onResize=${onVDrag} style="order:2"
           onSwap=${onSwap} swapTitle=${rollFirst ? 'Swap: put the notation on the left' : 'Swap: put the roll on the left'} />`}
@@ -1285,8 +1312,9 @@ function App({ examples }) {
       </div>
     </div>
     <!-- ROW 1, pinned. Outside the panel below, so pushing the grip all the way down cannot
-         reach it: room to read is worth nothing if the music cannot be stopped. -->
-    <${ChromeRow} ids=${rows[0] || []} p=${ctl} cls="chrome-pinned" />
+         reach it: room to read is worth nothing if the music cannot be stopped. Stacked only
+         — side by side it rides at the top of the notation column with the other rows. -->
+    ${stacked && html`<${ChromeRow} ids=${rows[0] || []} p=${ctl} cls="chrome-pinned" />`}
     ${stacked && html`<${EditorDrawer} h=${drawerH} setH=${setDrawer}
       text=${text} onText=${setText}
       gkaOn=${gkaOn} onGkaToggle=${() => setGkaOn((v) => !v)} gkaText=${gkaText} hasGka=${hasGka}
@@ -1305,7 +1333,7 @@ function App({ examples }) {
          half the travel and the rest of the push opened blank space under the grip. -->
     <div class="below" ref=${belowRef} style=${stacked && drawerH < 0
       ? `margin-bottom:${drawerH}px` : ''}>
-    <${ChromeBar} rows=${rows.slice(1)} p=${ctl} />
+    ${stacked && html`<${ChromeBar} rows=${rows.slice(1)} p=${ctl} />`}
     <${Footer} onPerf=${onPerf} />
     </div>
     ${perfOpen && html`<${PerfDialog} perf=${perfRef.current} version=${VERSION}

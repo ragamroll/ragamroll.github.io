@@ -576,6 +576,10 @@
     .chrome-pinned { border-bottom:1px solid var(--hair2); }
     /* Everything below the roll: the notation drawer, the transport, the controls, the
        footer. It slides down as one when the grip is pushed past shut. */
+    /* The controls' home when the panes are side by side: a block at the foot of the
+       notation column, tight rows with the pane's gap around the group rather than between
+       every row. flex:0 0 auto so the notation box is what gives way, never the buttons. */
+    .chrome-col { flex:0 0 auto; display:flex; flex-direction:column; }
     .below { display:contents; }
     .below[style] { display:block; flex:0 0 auto; }
     /* The A/V trim: two nudges and a reading that is only there once it means something. */
