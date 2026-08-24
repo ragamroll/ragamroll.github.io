@@ -329,6 +329,9 @@ export function renderRoll(ctx, m, v, hooks = {}) {
   // LEFT because that margin is 40px of label column and a gutter; the right has 12px of
   // padding and the canvas ends.
   const colW = mode === 'draw' ? 0 : Math.max(9, p.w / (m.stepMax - m.stepMin) * 4);
+  // Where the playhead meets the curve of the note sounding now. FOUND here, DRAWN after the
+  // playhead bar — see below for why the two are not the same place.
+  let sounding = null;
   ctx.save();
   ctx.beginPath(); ctx.rect(p.x, 0, p.w, v.h); ctx.clip();
   for (let i = 0; i < notes.length; i++) {
@@ -374,17 +377,15 @@ export function renderRoll(ctx, m, v, hooks = {}) {
     ctx.stroke();
     ctx.setLineDash([]); ctx.globalAlpha = 1;
     if (nn.curve) drawCurve(ctx, g, nn.curve, starts[i], starts[i] + nn.dur, C.teal, mode === 'draw' ? 3 : 2, v.sample);
-    // WHERE THE LINE MEETS THE CURVE: the pitch actually sounding at this instant, riding the
-    // ornament. One sample and one small circle for the note under the playhead — the melody
-    // is monophonic, so there is never more than one. A ring under it so the dot reads on the
-    // curve's own colour as well as on the bar.
-    if (mode === 'roll' && nn.curve && v.playPos != null && v.sample
-        && v.playPos >= starts[i] && v.playPos < starts[i] + nn.dur && nn.dur > 0) {
-      const dx = X(v.sample(nn.curve, (v.playPos - starts[i]) / nn.dur)), dy = Y(v.playPos);
-      ctx.beginPath(); ctx.arc(dx, dy, 5, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fill();
-      ctx.beginPath(); ctx.arc(dx, dy, 3.4, 0, Math.PI * 2);
-      ctx.fillStyle = C.teal; ctx.fill();
+    // WHERE THE LINE MEETS THE NOTE: the pitch actually sounding at this instant. On an
+    // ornamented note that is a point on the curve, riding it; on a plain one it is the note's
+    // own pitch, so the dot sits inside the bar on its grid line. EVERY note, not only the
+    // curved ones — the reading is "here is what you are hearing", and a plain note is no less
+    // an answer to that. One per instant: the melody is monophonic.
+    if (mode === 'roll' && v.playPos != null && nn.dur > 0
+        && v.playPos >= starts[i] && v.playPos < starts[i] + nn.dur) {
+      const sx = (nn.curve && v.sample) ? X(v.sample(nn.curve, (v.playPos - starts[i]) / nn.dur)) : x;
+      sounding = { x: sx, y: Y(v.playPos) };
     }
     // The swara follows the bar it sits on. While the strike has the bar more than half
     // reversed, the letter reverses with it or it disappears exactly when it is being pointed at.
@@ -551,6 +552,19 @@ export function renderRoll(ctx, m, v, hooks = {}) {
     ctx.strokeStyle = C.teal; ctx.globalAlpha = .95; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(p.x, y); ctx.lineTo(p.x + p.w, y); ctx.stroke(); ctx.globalAlpha = 1;
     ctx.fillStyle = C.teal; ctx.beginPath(); ctx.moveTo(p.x, y - 4); ctx.lineTo(p.x + 7, y); ctx.lineTo(p.x, y + 4); ctx.closePath(); ctx.fill();
+    // THE SOUNDING PITCH, drawn LAST and in a colour neither the bar nor the curve uses.
+    // It used to be drawn inside the note loop, in teal: the same teal as the curve it rides
+    // AND as the playhead bar drawn over it a moment later. A teal disc on a teal line is not
+    // a dot, and the only thing that read was the crescent of its dark ring — so through a
+    // gamaka it looked like it vanished, and what still looked like a dot was the playhead
+    // crossing a pitch line. White on a dark halo, over everything, reads on both.
+    if (sounding) {
+      ctx.beginPath(); ctx.arc(sounding.x, sounding.y, 6, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(sounding.x, sounding.y, 3.6, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff'; ctx.fill();   // a literal: the palette has no ink, and on the dark
+                                            // halo white is the one value that reads in either theme
+    }
   }
 
   // The three grid stretch-handles, drawn last so nothing sits on top of them. They are
