@@ -22,11 +22,11 @@ export const CONTROLS = [
 
 // The built-in arrangement. Row 1 is the pinned one.
 export const DEFAULT_ROWS = [
-  ['rewind', 'play', 'stop', 'loop', 'open', 'timbre'],
-  ['drone', 'melody', 'tala', 'sa'],
-  ['master', 'tempo', 'sync'],
+  ['play', 'rewind', 'stop', 'loop', 'open', 'timbre'],
+  ['master', 'melody', 'drone', 'tala'],
+  ['sa', 'sync', 'tempo'],
   ['lanes', 'save', 'share', 'midi'],
-  ['ragas', 'talas', 'scale', 'layout'],
+  ['layout', 'ragas', 'talas', 'scale'],
 ];
 
 export const LAYOUT_KEY = 'ragamroll.layout';
