@@ -113,6 +113,17 @@ const Master = ({ p }) => html`<label class="vol" title=${`Master volume ${pct(p
          onInput=${(e) => p.onMasterVol(Number(e.target.value))} />
 </label>`;
 
+// NO RUNNING COMMENTARY. This carried a reading beside the box — "comp 120" at rest, "186 bpm ·
+// 1.55×" when set — and between them they cost 205px of a 395px phone, which put the row onto a
+// second line. Both were saying something already on screen: at rest the box's own placeholder
+// is the composition's tempo, and set, the box holds the BPM and is lit. The ratio is the one
+// thing neither shows, and it is in the tooltip.
+//
+// THE WIDTH IS THE POINT, not the pixels saved. The control grew by 60px when it was
+// overridden, so setting a tempo reflowed the row and moved the A/V nudges out from under a
+// thumb mid-adjustment — the same fault the trim's own fixed-width reading was written to
+// avoid. It is one width now, in both states, bar the ↺.
+//
 // The RATIO is honest and the SLIDER's own position is what gets clamped — pinning the ratio to
 // the slider's range read "2.0×" for 240 BPM and for 400 alike, so a tempo typed past the
 // slider's end looked like a control that had stopped responding to anything.
@@ -122,7 +133,9 @@ const Tempo = ({ p }) => {
   const ratio = eff / p.compositionTempo;
   const sliderAt = Math.max(MULT_MIN, Math.min(MULT_MAX, Math.round(ratio / MULT_STEP) * MULT_STEP));
   return html`<label class=${'tempo' + (overridden ? ' on' : '')}
-    title=${`Playback tempo. Slider = speed × the composition's ${p.compositionTempo} BPM (${MULT_STEP} steps, ${MULT_MIN}–${MULT_MAX}×); the box sets an exact BPM (${BPM_MIN}–${BPM_MAX}), including past the slider's ends. ↺ = back to composition.`}>
+    title=${(overridden ? `Playing at ${eff} BPM — ${ratio.toFixed(2)}× the composition's ${p.compositionTempo}. `
+                        : `Playing at the composition's own ${p.compositionTempo} BPM. `)
+      + `Slider = speed × ${p.compositionTempo} BPM (${MULT_STEP} steps, ${MULT_MIN}–${MULT_MAX}×); the box sets an exact BPM (${BPM_MIN}–${BPM_MAX}), including past the slider's ends. ↺ = back to composition.`}>
     ♩
     <input class="tempo-mult" type="range" min=${String(MULT_MIN)} max=${String(MULT_MAX)} step=${String(MULT_STEP)} value=${sliderAt}
            onInput=${(e) => p.onTempo(clampBpm(Math.round(p.compositionTempo * Number(e.target.value))))} />
@@ -130,7 +143,6 @@ const Tempo = ({ p }) => {
            value=${overridden ? String(p.tempoOverride) : ''}
            onInput=${(e) => { const v = e.target.value; if (v === '') p.onResetTempo(); else p.onTempo(Number(v)); }}
            onBlur=${(e) => { e.target.value = overridden ? String(p.tempoOverride) : ''; }} />
-    <span class="tempo-state">${overridden ? `${eff} bpm · ${ratio.toFixed(2)}×` : `comp ${p.compositionTempo}`}</span>
     ${overridden ? html`<button class="tempo-reset" title="Use composition tempo" onClick=${p.onResetTempo}>↺</button>` : ''}
   </label>`;
 };

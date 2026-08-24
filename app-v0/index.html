@@ -107,8 +107,6 @@
     .chrome-row .tempo .tempo-num { width:3.2rem; background:var(--panel2); color:var(--ink); border:1px solid var(--hair);
       border-radius:4px; padding:.1rem .25rem; font:inherit; }
     .chrome-row .tempo.on .tempo-num { border-color:var(--teal); color:var(--teal); }
-    .chrome-row .tempo .tempo-state { font-size:.68rem; opacity:.55; }
-    .chrome-row .tempo.on .tempo-state { color:var(--teal); opacity:.9; }
     .chrome-row .tempo .tempo-reset { cursor:pointer; padding:.1rem .4rem; font-size:.85rem;
       border-radius:4px; padding:0 .3rem; font-size:.8rem; }
     .chrome-row .vol { display:inline-flex; align-items:center; gap:.25rem; font-size:.8rem;
@@ -647,6 +645,10 @@
       /* Portrait: the sliders give up a little more width. Nothing right-pins a group any
          more — the rows do that, and each is as wide as the window. */
       .chrome-row .vol input[type=range] { width:4.2rem; }
+      .chrome-row .tempo .tempo-mult { width:3.2rem; }
+      /* Three digits and no more: the box takes 20-600. Overridden, the ↺ appears beside it,
+         and without this the row lands 3px over the window and takes a second line for them. */
+      .chrome-row .tempo .tempo-num { width:2.8rem; }
     }
   </style>
 </head>
