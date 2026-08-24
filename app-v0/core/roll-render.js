@@ -225,6 +225,18 @@ export function renderRoll(ctx, m, v, hooks = {}) {
   // The tala grid: akshara pulse, anga starts with their I/O/U glyph, and avartana
   // boundaries numbered. A piece with no cycle (Tala=none, or an alapana) draws none
   // of it rather than a meaningless one.
+  // EVERYTHING BELOW IS DRAWN AT A TIME, and time runs off both ends of the window. The band
+  // above the grid holds the pitch names, and it is not a place any of this belongs — but
+  // culling in time cannot keep them out, because the visible-time window is the CANVAS's,
+  // not the plot's. Reported from the app: scrolled up, the notes and the tala's own lines
+  // were drawn over "4.R2b" and the chips beside it.
+  //
+  // Full width rather than the plot's: the tala's numbers and its I/O/U glyphs live in the
+  // LEFT GUTTER on purpose, and a plot-width clip would take them with it. The notes get a
+  // tighter clip of their own below, because they have no business in the gutter either.
+  const timeBand = () => { ctx.save(); ctx.beginPath(); ctx.rect(0, p.y, v.w, p.h); ctx.clip(); };
+  timeBand();
+
   const T = m.tala;
   if (mode === 'roll' && T && T.measure > 0) {
     const angOff = T.accents.map((a) => a - 1);
@@ -364,8 +376,14 @@ export function renderRoll(ctx, m, v, hooks = {}) {
   // Where the playhead meets the curve of the note sounding now. FOUND here, DRAWN after the
   // playhead bar — see below for why the two are not the same place.
   let sounding = null;
+  // CLIPPED TO THE PLOT, top and bottom as well as left and right. It used to clip the full
+  // height of the canvas, which is no clip at all above the grid: the header band is where the
+  // pitch names live, and as the roll scrolled the notes and their gamakas were drawn straight
+  // over "4.R2b" and the chips beside it. Culling in time cannot answer this — a note
+  // STRADDLING the top edge is visible and must be cut, not dropped.
+  ctx.restore();                                   // the time band; the notes take a tighter one
   ctx.save();
-  ctx.beginPath(); ctx.rect(p.x, 0, p.w, v.h); ctx.clip();
+  ctx.beginPath(); ctx.rect(p.x, p.y, p.w, p.h); ctx.clip();
   for (let i = 0; i < notes.length; i++) {
     if (mode === 'draw' && i !== v.sel) continue;
     if (mode === 'roll') { const s0 = starts[i], s1 = s0 + notes[i].dur; if (s1 < vLo || s0 > vHi) continue; }
@@ -459,7 +477,8 @@ export function renderRoll(ctx, m, v, hooks = {}) {
   // anything. Drawn from view state like everything else the gesture layers need shown.
   if (mode === 'roll' && v.gamakaMode) {
     ctx.save();
-    ctx.beginPath(); ctx.rect(p.x, 0, p.w, v.h); ctx.clip();   // an anchor is off the paper too
+    ctx.beginPath(); ctx.rect(p.x, p.y, p.w, p.h); ctx.clip();   // an anchor is off the paper too,
+                                                                 // and over the labels is off it
     for (let i = 0; i < notes.length; i++) {
       const c = notes[i].curve; if (!c) continue;
       const t0 = starts[i], t1 = t0 + notes[i].dur;
