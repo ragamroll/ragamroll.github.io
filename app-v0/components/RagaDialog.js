@@ -135,7 +135,7 @@ export function RagaDialog({ ragas, player, saMidi = 60, droneLevel = 0.5, ragaN
           // about the sound. Kept at 40% of the way down, so what is coming is visible.
           const hd = document.querySelector('.rg-sheet .roll-holder');
           if (hd) {
-            hd.scrollTop = Math.max(0, Math.min(Math.max(0, r.virtH() - hd.clientHeight),
+            hd.scrollTop = Math.max(0, Math.min(Math.max(0, r.contentH() - hd.clientHeight),
               r.yVirt(pos) - hd.clientHeight * 0.4));
           }
         }

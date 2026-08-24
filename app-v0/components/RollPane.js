@@ -295,16 +295,16 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
         // The scroll window is sized from the grid, so a taller grid has to be told to
         // the div before the roll is redrawn into it — otherwise the new time exists and
         // cannot be scrolled to.
-        content.current.style.height = r.virtH() + 'px';
+        content.current.style.height = r.contentH() + 'px';
         if (it.which === 'bottom') {
           // Glue the new bottom edge under the finger dragging it, so the time being
           // added is visible while it is being added.
-          hd.scrollTop = Math.max(0, Math.min(Math.max(0, r.virtH() - hd.clientHeight),
+          hd.scrollTop = Math.max(0, Math.min(Math.max(0, r.contentH() - hd.clientHeight),
             r.yVirt(r.bounds().total) - it.y));
         } else if (it.which === 'extend') {
           // A tap adds an avartana BELOW the fold; scroll so the new bottom — with the
           // tab still on it — is where the next tap will be.
-          hd.scrollTop = Math.max(0, Math.min(Math.max(0, r.virtH() - hd.clientHeight),
+          hd.scrollTop = Math.max(0, Math.min(Math.max(0, r.contentH() - hd.clientHeight),
             r.yVirt(r.bounds().total) - (hd.clientHeight - 40)));
         }
         r.render();
@@ -398,7 +398,7 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
     const was = r.pxPerUnit() > 0 ? (hd.scrollTop + mid - pad) / r.pxPerUnit() : 0;
     r.setView({ zoom }).resize();
     const u = r.pxPerUnit();
-    if (u > 0) hd.scrollTop = Math.max(0, Math.min(Math.max(0, r.virtH() - hd.clientHeight), pad + was * u - mid));
+    if (u > 0) hd.scrollTop = Math.max(0, Math.min(Math.max(0, r.contentH() - hd.clientHeight), pad + was * u - mid));
     r.render();
   }, [zoom]);
 
@@ -471,7 +471,7 @@ export function RollPane({ model, api, style, onIntent, allow, sel, tools, zoom 
       returnTo.current = null;
       // A little above centre, so the note you were editing is on screen with what
       // follows it — you came back to put it in context.
-      hd.scrollTop = Math.max(0, Math.min(Math.max(0, r.virtH() - hd.clientHeight),
+      hd.scrollTop = Math.max(0, Math.min(Math.max(0, r.contentH() - hd.clientHeight),
         r.yVirt(t) - hd.clientHeight * 0.4));
       r.render();
     }

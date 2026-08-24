@@ -115,6 +115,17 @@ export function createRagamRoll(el, opts = {}) {
   const pxU = () => pxPerUnit() * view.zoom;
   const scrollTop = () => (view.mode === 'roll' ? holder.scrollTop : 0);
   const virtH = () => Math.round(pad.t + bounds.total * pxU() + pad.b);
+  // AND ONE SCREEN OF GRID PAST IT. The playhead is held at a fixed place on screen while a
+  // piece plays, and near the end there is nothing left below it to pull up: the scroll hits
+  // its limit and the line slides down the window instead of the music coming up to meet it.
+  // Measured on a 288-unit piece it slid for the last 43% of the piece, because one window was
+  // half the whole roll; on a long one it is the last window's worth either way.
+  //
+  // The tail is the PLOT's height, so the last note can sit anywhere the playhead setting puts
+  // it — including just under the pitch names, which is as high as that setting goes — with
+  // empty grid below. Scrolling by hand reaches it too, the way it does in an editor.
+  const tailH = () => (view.mode === 'roll' && holder ? Math.max(0, holder.clientHeight - pad.t - pad.b) : 0);
+  const contentH = () => Math.round(virtH() + tailH());
   const yVirt = (t) => pad.t + t * pxU();
   const saMidi = () => (view.saMidi == null ? model.saRef : view.saMidi);
 
@@ -201,7 +212,7 @@ export function createRagamRoll(el, opts = {}) {
     view: () => ({ ...view }),
     geometry: () => rollGeometry({ ...asView(), stepMin: bounds.stepMin, stepMax: bounds.stepMax, total: bounds.total }),
     pxPerUnit: pxU,
-    virtH, yVirt,
+    virtH, contentH, yVirt,
     size: () => ({ w, h }),
 
     // ---- the canvas ----
@@ -209,7 +220,7 @@ export function createRagamRoll(el, opts = {}) {
       const baseH = Math.max(150, holder.clientHeight);
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       w = holder.clientWidth; h = baseH;   // always viewport-sized: a long piece scrolls, so the canvas never overflows the browser's limit
-      if (view.mode === 'roll') content.style.height = virtH() + 'px';   // a tall empty div is what gives the scrollbar its range
+      if (view.mode === 'roll') content.style.height = contentH() + 'px';   // a tall empty div is what gives the scrollbar its range
       else { content.style.height = baseH + 'px'; holder.scrollTop = 0; }   // one note fills the viewport; nothing to scroll
       canvas.width = w * dpr; canvas.height = h * dpr;
       canvas.style.width = w + 'px'; canvas.style.height = h + 'px';

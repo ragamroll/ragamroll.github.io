@@ -972,7 +972,7 @@ function App({ examples }) {
       // longest label's length plus its padding.
       const want = hd.clientHeight * headPosRef.current;
       const anchor = Math.max((r.pad ? r.pad.t : 0) + 10, want);
-      hd.scrollTop = Math.max(0, Math.min(Math.max(0, r.virtH() - hd.clientHeight),
+      hd.scrollTop = Math.max(0, Math.min(Math.max(0, r.contentH() - hd.clientHeight),
         r.yVirt(units) - anchor));
     }
     return pos;

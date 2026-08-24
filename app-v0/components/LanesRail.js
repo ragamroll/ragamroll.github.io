@@ -66,7 +66,10 @@ export function LanesRail({ model, rollRef, holderRef, side = 'left', order = 'w
     const sync = () => {
       const r = rollRef.current;
       if (!r || !inner.current) return;
-      setVirt(r.virtH());
+      // contentH, not virtH: the roll scrolls one screen of grid PAST the end so the playhead
+      // can hold its place to the last note, and a rail sized to the piece alone would run out
+      // of column exactly there — the syllables would stop tracking the notes at the end.
+      setVirt(r.contentH ? r.contentH() : r.virtH());
       const pad = r.geometry().plot.y;
       setBand(pad);                      // the roll's own header height, asked of the roll
       inner.current.style.transform = `translateY(${-hd.scrollTop}px)`;
