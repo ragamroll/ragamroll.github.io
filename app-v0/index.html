@@ -516,7 +516,8 @@
        (The lane editor runs time left to right, where its text already starts at the
        leading edge — the same claim, in that orientation.) */
     .lane-box { position:absolute; border-radius:3px; overflow:hidden; padding:1px 3px 0;
-      display:flex; align-items:flex-start; font:calc(11px * var(--lane-scale))/1.05 var(--mono); color:var(--ink);
+      display:flex; align-items:flex-start; justify-content:center;
+      font:calc(11px * var(--lane-scale))/1.05 var(--mono); color:var(--ink);
       border:1px solid var(--hair); }
     .lane-box.w { left:2px; width:calc(50% - 3px); background:color-mix(in srgb, var(--teal) 22%, var(--panel)); }
     .lane-box.s { left:50%; width:calc(50% - 3px); background:color-mix(in srgb, var(--terra) 22%, var(--panel)); }
@@ -524,7 +525,11 @@
        notes — depends on which they are following, and both answers are ordinary. */
     .lanes-rail.swapped .lane-box.w { left:50%; }
     .lanes-rail.swapped .lane-box.s { left:2px; }
-    .lane-box span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    /* CENTRED across the cell, and text-align with it: a syllable that fits is centred by the
+       flex line, and one that does not fills the cell and is centred by the text rule — which
+       is also what keeps its ellipsis at the end where it belongs. Top-aligned still, because
+       a cell is as tall as its note is long and the text belongs at the moment it starts. */
+    .lane-box span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:center; }
     /* The same line the roll draws across its own plot, continued across the rail: what is
        being sung at this instant is the group it is crossing. Teal and 2px, because it is
        that line and not another one. */
