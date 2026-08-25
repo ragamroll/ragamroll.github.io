@@ -1,8 +1,8 @@
 V=2
-Raga=mela_65
+Raga=mela_65,4
 Tala=adi,16
 T333
-O=5
+O=4
 %LANES {"sw":115,"sa":115,"grow":{"sw":{},"sa":{"4":8.36,"9":0.57,"11":7.86,"14":11.86,"16":11.86,"23":7.86,"26":3.86,"28":3.86,"44":3.1,"46":4}},"ins":{"sw":[],"sa":[[5,"-"],[12,"-"],[15,"-"],[17,"-"],[24,"-"],[27,"-"],[29,"-"],[37,"-"],[38,"-"],[45,"-"],[47,"-"]]},"ab":[null,null]}
 % Varnam Raagam-Kalyaani Thalam-Aadhi.  Composer - Raamanaathapuram Srinivasa Iyyangaar
 % Pallavi

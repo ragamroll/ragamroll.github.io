@@ -90,6 +90,10 @@ const LS_FLASH = 'ragamroll.noteFlash';      // whether a note lights up as it i
 // it has always been: a little above centre, so what is coming has more room than what has
 // gone. Near the top is for filming — the line sits just under the pitch names and the whole
 // window is what happens next.
+// How big the sung lanes are set. A scale rather than a size: the rail's width follows it too,
+// since a bigger font in the same column is only more ellipsis.
+const LS_LANE_SCALE = 'ragamroll.laneScale';
+const LANE_SCALE_MIN = 1, LANE_SCALE_MAX = 2, LANE_SCALE_DEFAULT = 1;
 const LS_HEAD_POS = 'ragamroll.playheadPos';
 const HEAD_POS_DEFAULT = 0.4, HEAD_POS_MIN = 0.05, HEAD_POS_MAX = 0.6;
 const DEFAULT_NAME = 'ragamroll';
@@ -1165,6 +1169,20 @@ function App({ examples }) {
   const [labelComma, setLabelComma] = useState(() => localStorage.getItem(LS_LABEL_COMMA) !== '0');
   const onLabelOct = useCallback((on) => { localStorage.setItem(LS_LABEL_OCT, on ? '1' : '0'); setLabelOct(on); }, []);
   const onLabelComma = useCallback((on) => { localStorage.setItem(LS_LABEL_COMMA, on ? '1' : '0'); setLabelComma(on); }, []);
+  const [laneScale, setLaneScale] = useState(() => {
+    const v = Number(localStorage.getItem(LS_LANE_SCALE));
+    return v >= LANE_SCALE_MIN && v <= LANE_SCALE_MAX ? v : LANE_SCALE_DEFAULT;
+  });
+  const onLaneScale = useCallback((v) => {
+    const n = Math.min(LANE_SCALE_MAX, Math.max(LANE_SCALE_MIN, Number(v) || LANE_SCALE_DEFAULT));
+    localStorage.setItem(LS_LANE_SCALE, String(n));
+    setLaneScale(n);
+  }, []);
+  // On the ROOT, because the rail's width and its font both read it and neither is rendered
+  // here. The rail re-measures itself off its own box, so nothing else has to be told.
+  useEffect(() => {
+    document.documentElement.style.setProperty('--lane-scale', String(laneScale));
+  }, [laneScale]);
   const [flash, setFlash] = useState(() => localStorage.getItem(LS_FLASH) !== '0');
   const onFlash = useCallback((on) => { localStorage.setItem(LS_FLASH, on ? '1' : '0'); setFlash(on); }, []);
   const onCloseDialog = useCallback(() => setDialog(null), []);
@@ -1332,6 +1350,7 @@ function App({ examples }) {
                                                       onLabelOct=${onLabelOct} onLabelComma=${onLabelComma}
                                                       flash=${flash} onFlash=${onFlash}
                                                       headPos=${headPos} onHeadPos=${onHeadPos}
+                                                      laneScale=${laneScale} onLaneScale=${onLaneScale}
                                                       onClose=${onCloseDialog} />`}
     <${Diagnostics} items=${model.diagnostics} />
     <div class="workspace" ref=${wsRef}>

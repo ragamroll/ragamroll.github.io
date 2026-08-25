@@ -487,7 +487,11 @@
     /* The lane rail: what is sung, against the notes it is sung on. It does NOT scroll —
        it holds one tall inner div translated by the roll's own scrollTop, so the two axes
        cannot drift and there is no second scrollbar to reconcile. */
-    .lanes-rail { flex:0 0 auto; width:5.6rem; min-width:0; overflow:hidden; position:relative;
+    /* HOW BIG THE SUNG TEXT IS, and the rail grows with it: 11px of swara in a 5.6rem column
+       is right at arm's length and small on a phone held at reading distance. One scale drives
+       both, because a bigger font in the same width is just more ellipsis. */
+    :root { --lane-scale: 1; }
+    .lanes-rail { flex:0 0 auto; width:calc(5.6rem * var(--lane-scale)); min-width:0; overflow:hidden; position:relative;
       background:var(--panel2); border-radius:4px; }
     .lanes-rail.left { margin-right:.25rem; } .lanes-rail.right { margin-left:.25rem; }
     .lanes-clip { position:absolute; left:0; right:0; bottom:0; overflow:hidden; }
@@ -512,7 +516,7 @@
        (The lane editor runs time left to right, where its text already starts at the
        leading edge — the same claim, in that orientation.) */
     .lane-box { position:absolute; border-radius:3px; overflow:hidden; padding:1px 3px 0;
-      display:flex; align-items:flex-start; font:11px/1.05 var(--mono); color:var(--ink);
+      display:flex; align-items:flex-start; font:calc(11px * var(--lane-scale))/1.05 var(--mono); color:var(--ink);
       border:1px solid var(--hair); }
     .lane-box.w { left:2px; width:calc(50% - 3px); background:color-mix(in srgb, var(--teal) 22%, var(--panel)); }
     .lane-box.s { left:50%; width:calc(50% - 3px); background:color-mix(in srgb, var(--terra) 22%, var(--panel)); }

@@ -22,7 +22,7 @@ import { pitchLabel } from '../core/roll-model.js';
 const SAMPLE = [['S', 4], ['R2b', 4], ['M1a', 5], ['N3a', 5]];
 
 export function SettingsDialog({ labelOct, labelComma, onLabelOct, onLabelComma, flash, onFlash,
-  headPos, onHeadPos, onClose }) {
+  headPos, onHeadPos, laneScale, onLaneScale, onClose }) {
   const close = (e) => { if (e.target === e.currentTarget) onClose(); };
   const opts = { octave: labelOct, comma: labelComma };
 
@@ -70,6 +70,15 @@ export function SettingsDialog({ labelOct, labelComma, onLabelOct, onLabelComma,
           A little above centre by default, so what is coming has more room than what has gone.
           Near the top — just under the pitch names, which is as high as it will go — the whole
           window is what happens next, which is what a recording wants.</span>
+        </label>
+
+        <label class="set-row">
+          <input class="set-range" type="range" min="1" max="2" step="0.1" value=${laneScale}
+                 onInput=${(e) => onLaneScale(Number(e.target.value))} />
+          <span class="set-name">Lane text ${Math.round(laneScale * 100)}%</span>
+          <span class="instr-hint">How big the sung swaras and syllables are, when a piece
+          carries them. The rail widens with the text — a larger font in the same column would
+          only be more of it cut off — so the roll gives up some width for it.</span>
         </label>
 
         <p class="instr-hint instr-foot">On the axis, that reads:
