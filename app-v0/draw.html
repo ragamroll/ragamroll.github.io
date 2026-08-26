@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RagaM-Roll</title>
+<!--
+  THE STUB THAT SHIPS AS draw.html, so links written by the gamaka page still open.
+
+  The page itself is gone: its roll, its gestures and its commit path moved into core/ and
+  the app hosts them. But a link is forever, and this one was in the wild — draw.html was
+  published for a while and deleted on 2026-08-12, since when every
+  .../app-v0/draw.html#pako:... anyone had sent or bookmarked has 404'd.
+
+  A share token is the WHOLE piece — compressed notation, and on the older shapes a mix and
+  gamaka curves keyed by note index. The app reads all three (core/share.js
+  parseSharedPayload), so the only thing standing between an old link and the piece it
+  carries is the filename it points at. That is what this file fixes.
+
+  THE HASH IS THE PAYLOAD, and it is carried across untouched. The query is carried too: a
+  couple of link shapes put the raga there. The hop is a REPLACE rather than an assignment,
+  so Back goes where the reader came from instead of bouncing off this page again.
+
+  The build greps this file for the redirect line itself — see build-app-v0.sh. Written as
+  one unmistakable expression on purpose: the check used to match the phrase in this comment,
+  which meant a stub with its script gutted still passed.
+
+  No script, no module, no fetch — a stub that needs the network to redirect is a stub that
+  fails exactly when the app is offline and cached.
+-->
+<style>
+  html { color-scheme: dark light; }
+  body { margin: 0; display: grid; place-items: center; min-height: 100vh;
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: #15140f; color: #ece7d9; }
+  @media (prefers-color-scheme: light) { body { background: #f4f0e6; color: #2a2418; } }
+  main { max-width: 32rem; padding: 1.5rem; text-align: center; }
+  a { color: #46c39a; }
+  @media (prefers-color-scheme: light) { a { color: #177f5e; } }
+</style>
+<script>
+  (function () {
+    // Same directory: this file ships beside index.html and moves with it.
+    try { location.replace('./index.html' + location.search + location.hash); }
+    catch (_) { location.href = './index.html' + location.search + location.hash; }
+  })();
+</script>
+</head>
+<body>
+<main>
+  <p><strong>The gamaka page is now part of RagaM-Roll itself.</strong></p>
+  <p>If this page does not move on its own,
+    <a id="go" href="./index.html">open the app</a> — your link's music comes with it.</p>
+  <script>
+    // The manual way out carries the payload too, for a browser that refused the replace.
+    document.getElementById('go').href = './index.html' + location.search + location.hash;
+  </script>
+</main>
+</body>
+</html>
