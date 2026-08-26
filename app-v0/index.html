@@ -608,6 +608,17 @@
       margin:.5rem 0; cursor:pointer; }
     .set-row .set-name { font-weight:600; }
     .set-range { width:5.5rem; }
+    /* One line about the edit just made, and the one thing you might want done about it.
+       Above the controls rather than over the roll: the roll is what you are looking at to
+       judge the edit, and a message that covers it is a message asking you to guess. */
+    .toast { position:fixed; left:50%; transform:translateX(-50%); bottom:5.2rem; z-index:60;
+      display:flex; align-items:center; gap:.5rem; max-width:min(30rem, 94vw);
+      background:var(--panel2); color:var(--ink); border:1px solid var(--hair);
+      border-radius:8px; padding:.4rem .5rem .4rem .7rem; font-size:.86rem;
+      box-shadow:0 6px 20px rgba(0,0,0,.35); }
+    .toast-msg { flex:1 1 auto; }
+    .toast-act { flex:0 0 auto; border-color:var(--teal); color:var(--teal); }
+    .toast-x { flex:0 0 auto; padding:.1rem .35rem; color:var(--muted); }
     .set-row code { background:var(--hair2); border-radius:3px; padding:.05rem .25rem; }
     .instr-foot code { background:var(--hair2); border-radius:3px; padding:.05rem .3rem; margin-right:.2rem; }
     /* The chrome, drawn a row at a time from the layout. Row 1 is pinned under the roll. */

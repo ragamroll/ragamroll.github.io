@@ -20,6 +20,7 @@ import { Toolbar } from './components/Toolbar.js';
 import { readTheme, applyTheme, nextTheme, resolveTheme, THEME_KEY } from './core/theme.js';
 import { EditorDrawer } from './components/EditorDrawer.js';
 import { Diagnostics } from './components/Diagnostics.js';
+import { Toast } from './components/Toast.js';
 import { RagaDialog } from './components/RagaDialog.js';
 import { InstrumentDialog } from './components/InstrumentDialog.js';
 import { TalaDialog } from './components/TalaDialog.js';
@@ -658,6 +659,32 @@ function App({ examples }) {
   const onPasteGamakaAt = useCallback((i) => pasteGamakaOnto(noteAt(i)), [pasteGamakaOnto]);
 
   const intentLog = useRef([]);       // headless guards read this; nothing else does
+  // WHAT THE LAST EDIT DECIDED FOR YOU, and the way to decide otherwise. Ported from the
+  // gamaka page: moving a note that carries an ornament takes the rule from a setting made
+  // before the drag, and the rule is easier to judge after seeing it than before.
+  //
+  // It carries the note's token and the interval it moved, because flipping is a SHIFT of
+  // that curve by that interval — not a re-run of the drag, which is gone.
+  const [toast, setToast] = useState(null);
+  const toastId = useRef(0);
+  const onToastClose = useCallback(() => setToast(null), []);
+  const onToastAction = useCallback(() => {
+    setToast((t) => {
+      if (!t || !t.tok) return null;
+      const r = rollApiRef.current; if (!r) return null;
+      const n = r.model().notes.find((x) => x.tok === t.tok);
+      // The note may be gone — undone, deleted, or the piece replaced. The offer simply
+      // stops being one; it does not throw and does not half-apply.
+      if (!n || !n.curve || !n.curve.length) return null;
+      // Toward 'move with note' the curve gains the interval; toward 'preserve pitch' it
+      // gives it back. The curve is stored ABSOLUTE, which is what makes both a shift.
+      const by = t.to === 'move-with-note' ? t.dStep : -t.dStep;
+      n.curve = n.curve.map(([u, sv]) => [u, sv + by]);
+      commitRoll({ changed: new Set([t.tok]), deriveOctave: false });
+      return null;
+    });
+  }, [commitRoll]);
+
   const onRollIntent = useCallback((it) => {
     const r = rollApiRef.current; if (!r) return;
     intentLog.current.push({ ...it }); if (intentLog.current.length > 200) intentLog.current.shift();
@@ -702,8 +729,22 @@ function App({ examples }) {
     // The curve is stored ABSOLUTE, so 'preserve pitch' means leaving it alone — the
     // notation emits shifted relative deltas — and 'move with note' shifts it by the
     // same interval, so the deltas stay verbatim and the ornament rides the note.
-    const { deriveOctave } = applyMove(n, it.from, ctxOf(), gmoveRef.current);
+    const hadCurve = !!(n.curve && n.curve.length);
+    const mode = gmoveRef.current;
+    const { deriveOctave, dStep } = applyMove(n, it.from, ctxOf(), mode);
     commitRoll({ changed: new Set([it.tok]), deriveOctave });
+    // Only when there was an ornament to decide about, and only when it actually moved: a
+    // drag that lands on the pitch it started from decided nothing.
+    if (hadCurve && dStep) {
+      const kept = mode === 'preserve-pitch';
+      toastId.current += 1;
+      setToast({
+        id: toastId.current, tok: it.tok, dStep,
+        to: kept ? 'move-with-note' : 'preserve-pitch',
+        text: `Gamaka: ${kept ? 'pitch preserved' : 'moved with the note'}`,
+        action: `switch to ${kept ? 'move with note' : 'preserve pitch'}`,
+      });
+    } else setToast(null);
   }, [commitRoll]);
   const playheadRef = useRef(null);
   const rafRef = useRef(0);
@@ -1353,6 +1394,7 @@ function App({ examples }) {
                                                       laneScale=${laneScale} onLaneScale=${onLaneScale}
                                                       onClose=${onCloseDialog} />`}
     <${Diagnostics} items=${model.diagnostics} />
+    <${Toast} toast=${toast} onAction=${onToastAction} onClose=${onToastClose} />
     <div class="workspace" ref=${wsRef}>
       <div class=${'cols' + (stacked ? ' stacked' : '')} ref=${colsRef}
            style=${`flex:1 1 0; grid-template-rows:1fr; grid-template-columns:` + (stacked ? '1fr'
